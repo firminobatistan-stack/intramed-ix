@@ -19,31 +19,20 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { TestModeBanner } from '../components/layout/TestModeBanner';
 import { MatchEvent, MatchLineupEntry } from '../types/domain';
 
-type SheetDocumentViewMode = 'cbhb_official' | 'digital_summary';
+type SheetDocumentViewMode = 'official_federation' | 'digital_summary';
 
 interface PlayerDerivedRow {
   jerseyNumber: number | string;
   name: string;
   goalsCount: number;
-  goalSequenceNumbers: number[]; // Quais números de 1..25 o jogador marcou
+  goalSequenceNumbers: number[];
   yellowCardClock: string;
   suspensionsClocks: [string, string, string];
   disqualificationClock: string;
   reportClock: string;
+  foulsCount: number;
 }
 
-/**
- * SÚMULA OFICIAL DA PARTIDA (/sumula/:matchId/documento)
- * - Oferece 2 modos de visualização e download:
- *   1. "Relatório de Jogo Oficial (Padrão CBHb / A.A.A. Cangaceira — 3 Folhas A4)":
- *      Réplica fiel da Súmula Oficial enviada pelo usuário, com a logo da A.A.A. Cangaceira,
- *      preenchida automaticamente com todos os dados registrados ao vivo no jogo:
- *      • Folha 1: Relatório de Jogo Oficial (Equipes A e B lado a lado, Nº, Nome, G, A, 2', D, D+R, Oficiais A–D, Observações e Assinaturas);
- *      • Folha 2: Relatório Detalhado de Gols (Grade 1 a 25 por atleta + Placar Progressivo 1 a 50 riscando cada gol na ordem + 7m/Pênaltis 1 a 20);
- *      • Folha 3: Controle de Cronometrista (Advertências com Nº e Tempo, Exclusões com Tempo de Saída e Tempo de Entrada de 2 minutos, Desqualificações e Placar 1–50).
- *   2. "Resumo Digital Moderno": Visualização web compacta.
- * - Qualquer pessoa da comunidade pode abrir, imprimir/salvar em PDF (Folha A4) ou baixar o arquivo HTML/PDF completo da súmula.
- */
 export const GeneratedMatchSheetPage: React.FC = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
@@ -56,8 +45,8 @@ export const GeneratedMatchSheetPage: React.FC = () => {
   } = useCompetitionStore();
   const isAdmin = canOperateOfficialData();
 
-  const [viewMode, setViewMode] = useState<SheetDocumentViewMode>('cbhb_official');
-  const [activeSheetPage, setActiveSheetPage] = useState<1 | 2 | 3 | 'all'>('all');
+  const [viewMode, setViewMode] = useState<SheetDocumentViewMode>('official_federation');
+  const [activeHandballPage, setActiveHandballPage] = useState<1 | 2 | 3 | 'all'>('all');
 
   const [signatures, setSignatures] = useState<{
     referee: boolean;
@@ -108,7 +97,6 @@ export const GeneratedMatchSheetPage: React.FC = () => {
 
   const auditEntries = sheet.events.flatMap((e) => e.auditHistory);
 
-  // Eventos de Gol / Pontuação por lado
   const isScoringEvent = (ev: MatchEvent) =>
     [
       'goal',
@@ -138,14 +126,12 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     return 0;
   };
 
-  // Monta as 16 linhas oficiais de jogadores para a Equipe A (Mandante) e Equipe B (Visitante)
   const buildTeamPlayerRows = (
     side: 'home' | 'away',
     lineup: MatchLineupEntry[]
   ): PlayerDerivedRow[] => {
     const teamEvents = chronologicalEvents.filter((e) => e.teamSide === side);
 
-    // Garante que qualquer atleta que tenha evento mas não estava na escalação inicial também apareça
     const combinedPlayers: MatchLineupEntry[] = [...lineup];
     for (const ev of teamEvents) {
       const evAthName = ev.athleteName;
@@ -192,6 +178,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
         (e) => e.type === 'red_card' || e.type === 'disqualification'
       );
       const expEv = pEvents.find((e) => e.type === 'expulsion');
+      const foulsCount = pEvents.filter((e) => e.type === 'foul').length;
 
       return {
         jerseyNumber: p.jerseyNumber ?? '',
@@ -208,6 +195,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
         ],
         disqualificationClock: disqEv ? disqEv.matchClockDisplay || 'X' : '',
         reportClock: expEv ? expEv.matchClockDisplay || 'X' : '',
+        foulsCount,
       };
     });
 
@@ -221,6 +209,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
         suspensionsClocks: ['', '', ''],
         disqualificationClock: '',
         reportClock: '',
+        foulsCount: 0,
       });
     }
 
@@ -230,27 +219,38 @@ export const GeneratedMatchSheetPage: React.FC = () => {
   const homeRows = buildTeamPlayerRows('home', sheet.homeLineup);
   const awayRows = buildTeamPlayerRows('away', sheet.awayLineup);
 
-  // Parciais de 1º Tempo, Fim de Jogo, Extras e 7 Metros/Pênaltis
   const p1 = sheet.periodScores[0];
   const p1Home = p1 ? p1.homeScore : 0;
   const p1Away = p1 ? p1.awayScore : 0;
 
+  const p2 = sheet.periodScores[1];
+  const p2Home = p2 ? p2.homeScore : 0;
+  const p2Away = p2 ? p2.awayScore : 0;
+
+  const p3 = sheet.periodScores[2];
+  const p3Home = p3 ? p3.homeScore : 0;
+  const p3Away = p3 ? p3.awayScore : 0;
+
+  const p4 = sheet.periodScores[3];
+  const p4Home = p4 ? p4.homeScore : 0;
+  const p4Away = p4 ? p4.awayScore : 0;
+
   const finalHome = match.homeTeam.score ?? 0;
   const finalAway = match.awayTeam.score ?? 0;
 
-  const ot1 = sheet.periodScores[2];
-  const ot2 = sheet.periodScores[3];
+  const ot1 = sheet.periodScores[4] || sheet.periodScores[2];
+  const ot2 = sheet.periodScores[5] || sheet.periodScores[3];
 
-  const home7mScored = chronologicalEvents.filter(
+  const home7mOrPenalties = chronologicalEvents.filter(
     (e) =>
       e.teamSide === 'home' &&
       (e.type === 'seven_meters' || e.type === 'penalty_goal')
-  ).length;
-  const away7mScored = chronologicalEvents.filter(
+  );
+  const away7mOrPenalties = chronologicalEvents.filter(
     (e) =>
       e.teamSide === 'away' &&
       (e.type === 'seven_meters' || e.type === 'penalty_goal')
-  ).length;
+  );
 
   const homeTimeouts = chronologicalEvents
     .filter((e) => e.teamSide === 'home' && e.type === 'timeout')
@@ -259,68 +259,19 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     .filter((e) => e.teamSide === 'away' && e.type === 'timeout')
     .slice(0, 3);
 
-  // Lista de Advertências e Exclusões (T. Saída / T. Entrada) para a Folha 3 (Controle de Cronometrista)
-  const buildChronometerControlData = (side: 'home' | 'away') => {
-    const teamEvents = chronologicalEvents.filter((e) => e.teamSide === side);
+  const homeFoulsP1 = chronologicalEvents.filter(
+    (e) => e.teamSide === 'home' && (e.type === 'foul' || e.type === 'team_foul') && e.periodNumber === 1
+  ).length;
+  const homeFoulsP2 = chronologicalEvents.filter(
+    (e) => e.teamSide === 'home' && (e.type === 'foul' || e.type === 'team_foul') && e.periodNumber === 2
+  ).length;
 
-    const warnings = teamEvents
-      .filter((e) => e.type === 'yellow_card')
-      .slice(0, 3)
-      .map((e) => ({
-        number: e.athleteNumber ?? '—',
-        time: e.matchClockDisplay,
-      }));
-    while (warnings.length < 3) {
-      warnings.push({ number: '', time: '' });
-    }
-
-    const exclusions = teamEvents
-      .filter(
-        (e) =>
-          e.type === 'suspension_2min' ||
-          e.type === 'red_card' ||
-          e.type === 'disqualification' ||
-          e.type === 'expulsion'
-      )
-      .slice(0, 14)
-      .map((e) => {
-        // Calcula tempo de retorno (+2 minutos ou -2 minutos conforme o relógio)
-        let returnClock = '';
-        if (e.type === 'suspension_2min' && e.matchClockDisplay.includes(':')) {
-          const [mm, ss] = e.matchClockDisplay.split(':').map(Number);
-          if (!Number.isNaN(mm) && !Number.isNaN(ss)) {
-            const totalSecs = mm * 60 + ss;
-            const retSecs = Math.max(0, totalSecs - 120);
-            returnClock = formatSecondsToClock(retSecs);
-          }
-        }
-        return {
-          number: e.athleteNumber ?? (e.athleteName ? e.athleteName.slice(0, 8) : '—'),
-          exitTime: e.type === 'suspension_2min' ? e.matchClockDisplay : '',
-          entryTime: returnClock,
-          disqTime:
-            e.type === 'red_card' || e.type === 'disqualification'
-              ? e.matchClockDisplay
-              : '',
-          reportTime: e.type === 'expulsion' ? e.matchClockDisplay : '',
-        };
-      });
-
-    while (exclusions.length < 14) {
-      exclusions.push({
-        number: '',
-        exitTime: '',
-        entryTime: '',
-        disqTime: '',
-        reportTime: '',
-      });
-    }
-
-    return { warnings, exclusions };
-  };
-
-  const homeChrono = buildChronometerControlData('home');
-  const awayChrono = buildChronometerControlData('away');
+  const awayFoulsP1 = chronologicalEvents.filter(
+    (e) => e.teamSide === 'away' && (e.type === 'foul' || e.type === 'team_foul') && e.periodNumber === 1
+  ).length;
+  const awayFoulsP2 = chronologicalEvents.filter(
+    (e) => e.teamSide === 'away' && (e.type === 'foul' || e.type === 'team_foul') && e.periodNumber === 2
+  ).length;
 
   const countEventsByType = (side: 'home' | 'away', types: string[]) =>
     chronologicalEvents.filter(
@@ -369,7 +320,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '-');
     a.href = url;
-    a.download = `sumula-intramed-ix-${match.modalityId}-${cleanHome}-vs-${cleanAway}.html`;
+    a.download = `sumula-oficial-intramed-ix-${match.modalityId}-${cleanHome}-vs-${cleanAway}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -393,234 +344,501 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     }
   };
 
-  // Componente reutilizável do Bloco Superior de Placar/Tempos Técnicos (presente nas 3 páginas do PDF CBHb)
-  const renderTopMatchScoreHeaderBlock = () => (
-    <div className="border-2 border-black text-[10px] leading-tight">
-      {/* Linha 1: 1º Tempo | Fim de Jogo | 1º Tempo Extra | 2º Tempo Extra | Tiros de 7 Metros / Pênaltis */}
-      <div className="grid grid-cols-5 divide-x-2 divide-black border-b-2 border-black">
-        {[
-          {
-            label:
-              match.modalityId === 'volei' || match.modalityId === 'volei-de-praia'
-                ? '1º Set'
-                : '1º Tempo (Período)',
-            a: p1Home,
-            b: p1Away,
-          },
-          {
-            label: 'Fim de Jogo (Final)',
-            a: finalHome,
-            b: finalAway,
-          },
-          {
-            label: '1º Tempo Extra',
-            a: ot1 ? ot1.homeScore : '',
-            b: ot1 ? ot1.awayScore : '',
-          },
-          {
-            label: '2º Tempo Extra',
-            a: ot2 ? ot2.homeScore : '',
-            b: ot2 ? ot2.awayScore : '',
-          },
-          {
-            label:
-              match.modalityId === 'futsal'
-                ? 'Tiros de Pênalti'
-                : 'Tiros de 7 Metros',
-            a: home7mScored || '',
-            b: away7mScored || '',
-          },
-        ].map((box, idx) => (
-          <div key={idx} className="grid grid-cols-[1fr_26px_26px]">
-            <div className="p-1.5 flex items-center justify-center text-center font-bold">
-              {box.label}
-            </div>
-            <div className="border-l border-black flex flex-col">
-              <span className="border-b border-black text-center font-extrabold bg-slate-100 py-0.5">
-                A
-              </span>
-              <span className="flex-1 flex items-center justify-center font-mono font-extrabold text-xs py-1 bg-[#E8EEF5]">
-                {box.a}
-              </span>
-            </div>
-            <div className="border-l border-black flex flex-col">
-              <span className="border-b border-black text-center font-extrabold bg-slate-100 py-0.5">
-                B
-              </span>
-              <span className="flex-1 flex items-center justify-center font-mono font-extrabold text-xs py-1 bg-[#E8EEF5]">
-                {box.b}
-              </span>
-            </div>
+  // ==========================================
+  // 1. SÚMULA OFICIAL DE FUTSAL (FOLHA ÚNICA A4)
+  // ==========================================
+  const renderFutsalScoresheet = () => (
+    <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-4 sm:p-6 print:p-1 text-black space-y-2 text-[10px] leading-tight">
+      <div className="flex items-center justify-between border-b-2 border-black pb-2">
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 rounded-xl border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center shrink-0">
+            <img src="/assets/atletica/logo.png" alt="A.A.A. Cangaceira" className="w-full h-full object-contain" />
           </div>
-        ))}
+          <div>
+            <span className="text-[10px] font-black uppercase text-[#0B218A] tracking-wider block">
+              A.A.A. CANGACEIRA • MEDICINA UEMA
+            </span>
+            <h2 className="text-xl font-black uppercase tracking-tight">SÚMULA DE FUTSAL</h2>
+            <span className="text-[9px] font-bold text-slate-700">
+              INTRAMED IX • Competição Oficial Universitária
+            </span>
+          </div>
+        </div>
+        <div className="text-right">
+          <span className="text-xs font-mono font-bold px-2.5 py-1 bg-[#E8EEF5] border border-black inline-block">
+            SÚMULA Nº: {sheet.id.slice(0, 10).toUpperCase()}
+          </span>
+          <span className="block text-[9px] font-bold mt-1 text-emerald-800">
+            {sheet.isClosed ? '✓ FINALIZADA & AUDITADA' : 'EM ANDAMENTO'}
+          </span>
+        </div>
       </div>
 
-      {/* Linha 2: Nº de 7 Metros A | Tempo Técnico Equipe A (I, II, III) | Tempo Técnico Equipe B (I, II, III) | Nº de 7 Metros B */}
-      <div className="grid grid-cols-[110px_1fr_1fr_110px] divide-x-2 divide-black">
-        <div className="grid grid-cols-[1fr_42px]">
-          <div className="p-1 flex items-center justify-center text-center font-bold">
-            Nº de 7 Metros
+      {/* Cabeçalho de Metadados: JG, DATA, CAT, FASE, LOCAL + Tabela de Períodos e Horários */}
+      <div className="border-2 border-black grid grid-cols-[1.2fr_1fr_1fr]">
+        <div className="divide-y divide-black border-r-2 border-black">
+          <div className="grid grid-cols-[50px_1fr] p-1">
+            <span className="font-extrabold">JG:</span>
+            <span className="font-mono font-bold bg-[#E8EEF5] px-1">{match.id.slice(0, 8)}</span>
           </div>
-          <div className="border-l border-black flex flex-col">
-            <span className="border-b border-black text-center font-extrabold bg-slate-100">
-              A
-            </span>
-            <span className="flex-1 flex items-center justify-center font-mono font-bold bg-[#E8EEF5]">
-              {home7mScored} / {home7mScored}
-            </span>
+          <div className="grid grid-cols-[50px_1fr] p-1">
+            <span className="font-extrabold">CAT:</span>
+            <span className="font-bold bg-[#E8EEF5] px-1">{match.categoryName || 'Masculino / Feminino'}</span>
           </div>
-        </div>
-
-        <div className="flex flex-col">
-          <div className="border-b border-black text-center font-extrabold py-0.5 bg-slate-100">
-            Tempo Técnico - Equipe A ({match.homeTeam.teamName})
-          </div>
-          <div className="grid grid-cols-3 divide-x border-black flex-1">
-            {[0, 1, 2].map((idx) => (
-              <div key={idx} className="p-1 flex items-center gap-1">
-                <span className="font-extrabold">
-                  {idx === 0 ? 'I' : idx === 1 ? 'II' : 'III'}
-                </span>
-                <span className="flex-1 text-center font-mono font-bold bg-[#E8EEF5] px-1 py-0.5 rounded-sm">
-                  {homeTimeouts[idx]?.matchClockDisplay || '—'}
-                </span>
-              </div>
-            ))}
+          <div className="grid grid-cols-[50px_1fr] p-1">
+            <span className="font-extrabold">LOCAL:</span>
+            <span className="font-bold bg-[#E8EEF5] px-1 truncate">{match.venue || 'Ginásio Oficial'}</span>
           </div>
         </div>
 
-        <div className="flex flex-col">
-          <div className="border-b border-black text-center font-extrabold py-0.5 bg-slate-100">
-            Tempo Técnico - Equipe B ({match.awayTeam.teamName})
+        <div className="divide-y divide-black border-r-2 border-black">
+          <div className="grid grid-cols-[50px_1fr] p-1">
+            <span className="font-extrabold">DATA:</span>
+            <span className="font-mono font-bold bg-[#E8EEF5] px-1">{match.scheduledDate || 'Hoje'}</span>
           </div>
-          <div className="grid grid-cols-3 divide-x border-black flex-1">
-            {[0, 1, 2].map((idx) => (
-              <div key={idx} className="p-1 flex items-center gap-1">
-                <span className="font-extrabold">
-                  {idx === 0 ? 'I' : idx === 1 ? 'II' : 'III'}
-                </span>
-                <span className="flex-1 text-center font-mono font-bold bg-[#E8EEF5] px-1 py-0.5 rounded-sm">
-                  {awayTimeouts[idx]?.matchClockDisplay || '—'}
-                </span>
-              </div>
-            ))}
+          <div className="grid grid-cols-[50px_1fr] p-1">
+            <span className="font-extrabold">FASE:</span>
+            <span className="font-bold bg-[#E8EEF5] px-1">{match.phaseLabel || 'Classificatória'}</span>
+          </div>
+          <div className="p-1 flex items-center justify-center font-extrabold text-xs bg-slate-100">
+            {match.homeTeam.teamName} × {match.awayTeam.teamName}
           </div>
         </div>
 
-        <div className="grid grid-cols-[1fr_42px]">
-          <div className="p-1 flex items-center justify-center text-center font-bold">
-            Nº de 7 Metros
+        {/* Períodos e Horários (1º Período, 2º Período, 3º Período, P. Extra, Pênaltis) */}
+        <div className="grid grid-cols-2 divide-x divide-black text-[9px]">
+          <div className="divide-y divide-black">
+            <div className="p-1 flex justify-between font-bold"><span>1º Período:</span><span className="font-mono font-black">{p1Home} × {p1Away}</span></div>
+            <div className="p-1 flex justify-between font-bold"><span>2º Período:</span><span className="font-mono font-black">{p2Home} × {p2Away}</span></div>
+            <div className="p-1 flex justify-between font-bold"><span>P. Extra:</span><span className="font-mono font-black">{ot1 ? `${ot1.homeScore} × ${ot1.awayScore}` : '—'}</span></div>
+            <div className="p-1 flex justify-between font-bold"><span>Pênaltis:</span><span className="font-mono font-black">{home7mOrPenalties.length} × {away7mOrPenalties.length}</span></div>
           </div>
-          <div className="border-l border-black flex flex-col">
-            <span className="border-b border-black text-center font-extrabold bg-slate-100">
-              B
-            </span>
-            <span className="flex-1 flex items-center justify-center font-mono font-bold bg-[#E8EEF5]">
-              {away7mScored} / {away7mScored}
-            </span>
+          <div className="divide-y divide-black">
+            <div className="p-1 text-center font-extrabold bg-slate-100">Horário / Duração</div>
+            <div className="p-1 flex justify-between"><span>Início:</span><span className="font-mono font-bold">{match.scheduledTime || '19:00'}</span></div>
+            <div className="p-1 flex justify-between"><span>Duração:</span><span className="font-mono font-bold">{formatSecondsToClock(sheet.timer.elapsedSeconds)}</span></div>
+            <div className="p-1 flex justify-between"><span>Placar Final:</span><span className="font-mono font-black text-xs text-[#0B218A]">{finalHome} × {finalAway}</span></div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* BLOCO DA EQUIPE A (MANDANTE) */}
+      {[
+        { side: 'home' as const, label: 'Equipe A', name: match.homeTeam.teamName, rows: homeRows, fP1: homeFoulsP1, fP2: homeFoulsP2, timeouts: homeTimeouts, penalties: home7mOrPenalties },
+        { side: 'away' as const, label: 'Equipe B', name: match.awayTeam.teamName, rows: awayRows, fP1: awayFoulsP1, fP2: awayFoulsP2, timeouts: awayTimeouts, penalties: away7mOrPenalties },
+      ].map((teamData) => (
+        <div key={teamData.side} className="border-2 border-black">
+          <div className="bg-slate-100 p-1 font-extrabold border-b-2 border-black flex items-center justify-between">
+            <span className="text-xs uppercase">{teamData.label}: {teamData.name}</span>
+            <span className="text-[10px] text-slate-700">Associação Atlética Acadêmica Cangaceira</span>
+          </div>
+
+          <div className="grid grid-cols-[1.5fr_1.3fr_0.9fr] divide-x-2 divide-black">
+            {/* Coluna 1: Tabela de Atletas (J | Nome | Nº | AMA | VER) */}
+            <div>
+              <div className="grid grid-cols-[20px_1fr_26px_28px_28px] divide-x divide-black font-extrabold text-center bg-slate-50 border-b border-black text-[9px] py-0.5">
+                <span>J</span>
+                <span className="text-left px-1">Nome do Atleta</span>
+                <span>Nº</span>
+                <span title="Cartão Amarelo">AMA</span>
+                <span title="Cartão Vermelho">VER</span>
+              </div>
+              <div className="divide-y divide-black">
+                {teamData.rows.slice(0, 10).map((r, idx) => (
+                  <div key={idx} className="grid grid-cols-[20px_1fr_26px_28px_28px] divide-x divide-black items-center min-h-[17px] text-[9px]">
+                    <span className="text-center font-mono">{r.name ? idx + 1 : ''}</span>
+                    <span className="px-1 font-semibold truncate">{r.name}</span>
+                    <span className="text-center font-mono font-bold">{r.jerseyNumber}</span>
+                    <span className="text-center font-mono font-bold text-amber-800">{r.yellowCardClock ? 'X' : ''}</span>
+                    <span className="text-center font-mono font-bold text-rose-700">{r.disqualificationClock ? 'X' : ''}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Coluna 2: Grade de GOLS (1 a 24 com 3 colunas) */}
+            <div>
+              <div className="border-b border-black text-center font-extrabold bg-slate-50 py-0.5 text-[9px]">
+                GOLS REGISTRADOS NA PARTIDA
+              </div>
+              <div className="grid grid-cols-3 divide-x divide-black divide-y divide-black text-[8px]">
+                {Array.from({ length: 24 }, (_, gIdx) => {
+                  const gNum = gIdx + 1;
+                  const gEvent = chronologicalEvents.filter(e => e.teamSide === teamData.side && isScoringEvent(e))[gIdx];
+                  return (
+                    <div key={gNum} className={`p-0.5 flex items-center justify-between ${gEvent ? 'bg-[#E8EEF5] font-black' : ''}`}>
+                      <span className="w-3 text-slate-500">{gNum}</span>
+                      <span className="truncate font-mono">{gEvent ? `${gEvent.athleteNumber ? `#${gEvent.athleteNumber}` : ''} ${gEvent.matchClockDisplay}` : ':'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Coluna 3: PÊNALTIS (Nº | GOL O) */}
+            <div>
+              <div className="border-b border-black text-center font-extrabold bg-slate-50 py-0.5 text-[9px]">
+                PÊNALTI / TIRO LIVRE
+              </div>
+              <div className="divide-y divide-black text-[8px]">
+                {Array.from({ length: 8 }, (_, pIdx) => {
+                  const pen = teamData.penalties[pIdx];
+                  return (
+                    <div key={pIdx} className="p-0.5 flex items-center justify-between">
+                      <span className="font-mono">{pIdx + 1}º</span>
+                      <span className="font-mono font-bold">{pen ? `${pen.athleteNumber ? `#${pen.athleteNumber}` : ''} ${pen.matchClockDisplay}` : '—'}</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border border-black flex items-center justify-center font-black ${pen ? 'bg-[#0B218A] text-white' : ''}`}>
+                        {pen ? 'G' : 'O'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Faltas Coletivas (1º Tempo / 2º Tempo) + Tempo Solicitado */}
+          <div className="border-t-2 border-black grid grid-cols-[1.4fr_1fr] divide-x-2 divide-black text-[9px]">
+            <div className="p-1 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold">FALTAS 1º TEMPO:</span>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <span key={n} className={`w-4 h-4 border border-black flex items-center justify-center font-mono font-bold ${n <= teamData.fP1 ? 'bg-[#0B218A] text-white' : 'bg-[#E8EEF5]'}`}>
+                      {n}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold">FALTAS 2º TEMPO:</span>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <span key={n} className={`w-4 h-4 border border-black flex items-center justify-center font-mono font-bold ${n <= teamData.fP2 ? 'bg-[#0B218A] text-white' : 'bg-[#E8EEF5]'}`}>
+                      {n}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-1">
+              <span className="block font-extrabold text-center border-b border-black pb-0.5">Tempo Solicitado (Timeouts)</span>
+              <div className="grid grid-cols-3 divide-x divide-black pt-1 text-center font-mono font-bold">
+                <div><span>1º Per.:</span> <span className="bg-[#E8EEF5] px-1">{teamData.timeouts[0]?.matchClockDisplay || '—'}</span></div>
+                <div><span>2º Per.:</span> <span className="bg-[#E8EEF5] px-1">{teamData.timeouts[1]?.matchClockDisplay || '—'}</span></div>
+                <div><span>Extra:</span> <span className="bg-[#E8EEF5] px-1">{teamData.timeouts[2]?.matchClockDisplay || '—'}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {/* Rodapé Oficial: 1º Árbitro, 2º Árbitro, Anotador, Coordenador e Observações */}
+      <div className="border-2 border-black text-[9px] divide-y divide-black">
+        <div className="grid grid-cols-2 divide-x divide-black p-1">
+          <div><span className="font-extrabold">1º Árbitro:</span> <span className="font-semibold bg-[#E8EEF5] px-1">{sheet.refereeName || 'Arbitragem Oficial INTRAMED IX'}</span></div>
+          <div><span className="font-extrabold">2º Árbitro:</span> <span className="font-semibold bg-[#E8EEF5] px-1">Comissão de Arbitragem UEMA</span></div>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-black p-1">
+          <div><span className="font-extrabold">Anotador / Cronometrista:</span> <span className="font-semibold bg-[#E8EEF5] px-1">{sheet.tableOfficialName || 'Mesa Operadora INTRAMED'}</span></div>
+          <div><span className="font-extrabold">Coordenador Geral:</span> <span className="font-semibold bg-[#E8EEF5] px-1">A.A.A. Cangaceira • Medicina UEMA</span></div>
+        </div>
+        <div className="p-1.5 min-h-[30px]">
+          <span className="font-extrabold">Observações:</span> <span className="font-medium">{sheet.refereeNotes || 'Nenhuma ocorrência disciplinar grave registrada nesta súmula.'}</span>
+        </div>
+      </div>
+    </section>
   );
 
-  // Componente reutilizável do Placar Progressivo 1 a 50 + Nº de 7 Metros 1 a 20 (Base das Folhas 2 e 3)
-  const renderBottomRunningScore50Grid = () => (
-    <div className="space-y-2 pt-1 text-[9px] leading-none">
-      {/* Placar Progressivo 1 a 50 */}
-      <div className="border-2 border-black grid grid-cols-2 divide-x-2 divide-black">
-        {[
-          { label: `Equipe A (${match.homeTeam.teamName})`, score: finalHome },
-          { label: `Equipe B (${match.awayTeam.teamName})`, score: finalAway },
-        ].map((sideObj, sIdx) => (
-          <div
-            key={sIdx}
-            className="grid grid-cols-[88px_1fr] divide-x-2 divide-black"
-          >
-            <div className="flex flex-col">
-              <div className="border-b border-black py-1 px-1 text-center font-extrabold bg-slate-100 truncate">
-                {sideObj.label}
-              </div>
-              <div className="flex-1 flex items-center justify-center font-black text-xs tracking-wider py-2">
-                PLACAR
-              </div>
-            </div>
-            <div className="grid grid-rows-5 divide-y divide-black">
-              {[0, 1, 2, 3, 4].map((rowIdx) => (
-                <div
-                  key={rowIdx}
-                  className="grid grid-cols-10 divide-x divide-black"
-                >
-                  {Array.from({ length: 10 }, (_, colIdx) => {
-                    const num = rowIdx * 10 + colIdx + 1;
-                    const isMarked = num <= sideObj.score;
-                    return (
-                      <div
-                        key={num}
-                        className={`relative py-1 text-center font-mono ${
-                          isMarked
-                            ? 'bg-[#0B218A] text-white font-black'
-                            : 'text-slate-700'
-                        }`}
-                      >
-                        <span>{num}</span>
-                        {isMarked && (
-                          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-brand-yellow font-black text-[11px]">
-                            /
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+  // ==========================================
+  // 2. SÚMULA OFICIAL DE BASQUETEBOL (PADRÃO CBB / FOLHA ÚNICA A4)
+  // ==========================================
+  const renderBasketballScoresheet = () => (
+    <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-4 sm:p-6 print:p-1 text-black space-y-2 text-[10px] leading-tight">
+      <div className="flex items-center justify-between border-b-2 border-black pb-2">
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 rounded-xl border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center shrink-0">
+            <img src="/assets/atletica/logo.png" alt="A.A.A. Cangaceira" className="w-full h-full object-contain" />
           </div>
-        ))}
+          <div>
+            <span className="text-[10px] font-black uppercase text-[#0B218A] tracking-wider block">
+              A.A.A. CANGACEIRA • MEDICINA UEMA
+            </span>
+            <h2 className="text-xl font-black uppercase tracking-tight">SÚMULA DE BASQUETEBOL</h2>
+            <span className="text-[9px] font-bold text-slate-700">
+              INTRAMED IX • Modelo Oficial CBB (Confederação Brasileira de Basketball)
+            </span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-sm font-black uppercase">
+            {match.homeTeam.teamName} (A) vs {match.awayTeam.teamName} (B)
+          </div>
+          <span className="text-[10px] font-mono font-bold bg-[#E8EEF5] px-2 py-0.5 border border-black inline-block mt-0.5">
+            Placar Final: {finalHome} × {finalAway}
+          </span>
+        </div>
       </div>
 
-      {/* Nº de 7 Metros / Pênaltis 1 a 20 */}
-      <div className="border-2 border-black grid grid-cols-2 divide-x-2 divide-black">
-        {[
-          { count: home7mScored },
-          { count: away7mScored },
-        ].map((side7m, sIdx) => (
-          <div
-            key={sIdx}
-            className="grid grid-cols-[88px_1fr] divide-x-2 divide-black"
-          >
-            <div className="flex items-center justify-center text-center font-extrabold p-1 bg-slate-100">
-              Nº de 7 Metros
-            </div>
-            <div className="grid grid-rows-2 divide-y divide-black">
-              {[0, 1].map((rIdx) => (
-                <div
-                  key={rIdx}
-                  className="grid grid-cols-10 divide-x divide-black"
-                >
-                  {Array.from({ length: 10 }, (_, cIdx) => {
-                    const num = rIdx * 10 + cIdx + 1;
-                    const marked = num <= side7m.count;
-                    return (
-                      <div
-                        key={num}
-                        className={`py-1 text-center font-mono ${
-                          marked
-                            ? 'bg-[#0B218A] text-brand-yellow font-black'
-                            : 'text-slate-700'
-                        }`}
-                      >
-                        {num}
+      {/* Metadados: Competição, Data, Hora, Árbitro, Jogo Nº, Local, Fiscal */}
+      <div className="border-2 border-black p-1.5 grid grid-cols-3 gap-2 text-[9px]">
+        <div><span className="font-extrabold">Competição:</span> <span className="font-semibold bg-[#E8EEF5] px-1">INTRAMED IX</span></div>
+        <div><span className="font-extrabold">Data:</span> <span className="font-mono font-semibold bg-[#E8EEF5] px-1">{match.scheduledDate || 'Hoje'}</span></div>
+        <div><span className="font-extrabold">Hora:</span> <span className="font-mono font-semibold bg-[#E8EEF5] px-1">{match.scheduledTime || '19:00'}</span></div>
+        <div><span className="font-extrabold">Jogo Nº:</span> <span className="font-mono font-semibold bg-[#E8EEF5] px-1">{match.id.slice(0, 8)}</span></div>
+        <div><span className="font-extrabold">Local:</span> <span className="font-semibold bg-[#E8EEF5] px-1 truncate">{match.venue || 'Ginásio'}</span></div>
+        <div><span className="font-extrabold">Árbitro / Fiscal:</span> <span className="font-semibold bg-[#E8EEF5] px-1">{sheet.refereeName || 'Mesa Oficial'}</span></div>
+      </div>
+
+      {/* Grid Principal: Equipe A (Topo) e Equipe B (Base) + Contagem de Pontos à Direita */}
+      <div className="border-2 border-black grid grid-cols-[1.5fr_1.5fr] divide-x-2 divide-black">
+        {/* Lado Esquerdo: Equipe A e Equipe B (Tempos Debitados, Faltas da Equipe nos 4 Períodos, Lista de Jogadores) */}
+        <div className="divide-y-2 divide-black">
+          {[
+            { label: 'Equipe A', name: match.homeTeam.teamName, rows: homeRows, side: 'home' as const },
+            { label: 'Equipe B', name: match.awayTeam.teamName, rows: awayRows, side: 'away' as const },
+          ].map((tObj) => (
+            <div key={tObj.label} className="p-1 space-y-1">
+              <div className="font-extrabold text-xs flex justify-between bg-slate-100 p-1 border border-black">
+                <span>{tObj.label}: {tObj.name}</span>
+                <span>Faltas &amp; Pedidos de Tempo</span>
+              </div>
+
+              {/* Tempos Debitados + Faltas da Equipe nos Períodos 1, 2, 3, 4 */}
+              <div className="grid grid-cols-[100px_1fr] gap-2 border border-black p-1 text-[8px]">
+                <div>
+                  <span className="font-extrabold block">Tempos Debitados:</span>
+                  <div className="flex gap-1 mt-0.5">
+                    <span className="w-4 h-4 border border-black flex items-center justify-center font-bold">1</span>
+                    <span className="w-4 h-4 border border-black flex items-center justify-center font-bold">2</span>
+                    <span className="w-4 h-4 border border-black flex items-center justify-center font-bold">3</span>
+                  </div>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1">
+                    <span className="font-bold">Período 1:</span>
+                    {[1, 2, 3, 4].map(n => <span key={n} className="w-3.5 h-3.5 border border-black text-center">{n}</span>)}
+                    <span className="font-bold ml-1">Período 2:</span>
+                    {[1, 2, 3, 4].map(n => <span key={n} className="w-3.5 h-3.5 border border-black text-center">{n}</span>)}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-bold">Período 3:</span>
+                    {[1, 2, 3, 4].map(n => <span key={n} className="w-3.5 h-3.5 border border-black text-center">{n}</span>)}
+                    <span className="font-bold ml-1">Período 4:</span>
+                    {[1, 2, 3, 4].map(n => <span key={n} className="w-3.5 h-3.5 border border-black text-center">{n}</span>)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabela de Jogadores: Licença | Nome dos Jogadores | Nº Jog | Faltas (1 2 3 4 5) */}
+              <div className="border border-black">
+                <div className="grid grid-cols-[36px_1fr_26px_50px] divide-x divide-black text-center font-extrabold bg-slate-50 border-b border-black text-[8px] py-0.5">
+                  <span>Licença</span>
+                  <span className="text-left px-1">Nome dos Jogadores</span>
+                  <span>Nº</span>
+                  <span>Faltas (1-5)</span>
+                </div>
+                <div className="divide-y divide-black text-[8px]">
+                  {tObj.rows.slice(0, 10).map((r, rIdx) => (
+                    <div key={rIdx} className="grid grid-cols-[36px_1fr_26px_50px] divide-x divide-black items-center min-h-[16px]">
+                      <span className="text-center font-mono">{r.name ? `IX-${rIdx+1}` : ''}</span>
+                      <span className="px-1 font-semibold truncate">{r.name}</span>
+                      <span className="text-center font-mono font-bold">{r.jerseyNumber}</span>
+                      <div className="grid grid-cols-5 divide-x divide-black text-center font-mono">
+                        {[1, 2, 3, 4, 5].map(fn => (
+                          <span key={fn} className={fn <= r.foulsCount ? 'bg-[#0B218A] text-white font-bold' : ''}>
+                            {fn <= r.foulsCount ? 'P' : ''}
+                          </span>
+                        ))}
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Lado Direito: CONTAGEM DE PONTOS (A e B de 1 a 160 em 4 colunas verticais) */}
+        <div className="p-1">
+          <div className="border-b-2 border-black text-center font-extrabold py-0.5 text-[9px] bg-slate-100">
+            CONTAGEM DE PONTOS PROGRESSIVA (A × B)
+          </div>
+          <div className="grid grid-cols-4 divide-x divide-black text-[7px] leading-[9px] font-mono">
+            {[
+              { start: 1, end: 40 },
+              { start: 41, end: 80 },
+              { start: 81, end: 120 },
+              { start: 121, end: 160 },
+            ].map((colBlock, cIdx) => (
+              <div key={cIdx} className="divide-y divide-black">
+                <div className="grid grid-cols-2 divide-x divide-black font-extrabold text-center bg-slate-100 py-0.5">
+                  <span>A</span>
+                  <span>B</span>
+                </div>
+                {Array.from({ length: 40 }, (_, rIdx) => {
+                  const pt = colBlock.start + rIdx;
+                  const isA = pt <= finalHome;
+                  const isB = pt <= finalAway;
+                  return (
+                    <div key={pt} className="grid grid-cols-2 divide-x divide-black text-center">
+                      <span className={isA ? 'bg-[#0B218A] text-white font-black' : 'text-slate-600'}>{pt}</span>
+                      <span className={isB ? 'bg-amber-400 text-black font-black' : 'text-slate-600'}>{pt}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Pontuação por Período: Período 1 A-B, 2 A-B, 3 A-B, 4 A-B, Pontuação Final e Vencedor */}
+      <div className="border-2 border-black p-2 text-[9px] space-y-1.5">
+        <div className="grid grid-cols-5 gap-2 font-bold bg-[#E8EEF5] p-1 border border-black text-center">
+          <div><span>1º Quarto:</span> <span className="font-mono font-black">{p1Home} - {p1Away}</span></div>
+          <div><span>2º Quarto:</span> <span className="font-mono font-black">{p2Home} - {p2Away}</span></div>
+          <div><span>3º Quarto:</span> <span className="font-mono font-black">{p3Home} - {p3Away}</span></div>
+          <div><span>4º Quarto:</span> <span className="font-mono font-black">{p4Home} - {p4Away}</span></div>
+          <div><span>P. Extra:</span> <span className="font-mono font-black">{ot1 ? `${ot1.homeScore} - ${ot1.awayScore}` : '—'}</span></div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 pt-1 font-extrabold text-xs">
+          <div>Pontuação Final: Equipe A: <span className="font-mono">{finalHome}</span> | Equipe B: <span className="font-mono">{finalAway}</span></div>
+          <div>Equipe Vencedora: <span className="text-[#0B218A] uppercase">{finalHome > finalAway ? match.homeTeam.teamName : finalAway > finalHome ? match.awayTeam.teamName : 'Empate'}</span></div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 pt-1 border-t border-black text-[9px]">
+          <div><span className="font-bold">Apontador:</span> <span className="bg-[#E8EEF5] px-1">{sheet.tableOfficialName || 'Mesa Oficial'}</span></div>
+          <div><span className="font-bold">Cronometrista:</span> <span className="bg-[#E8EEF5] px-1">Comissão INTRAMED</span></div>
+          <div><span className="font-bold">Operador 24&quot;:</span> <span className="bg-[#E8EEF5] px-1">Arbitragem Oficial</span></div>
+        </div>
+      </div>
+    </section>
+  );
+
+  // ==========================================
+  // 3. SÚMULA OFICIAL DE VOLEIBOL (MINISTÉRIO DO ESPORTE / EDUCAÇÃO / FOLHA A4)
+  // ==========================================
+  const renderVolleyballScoresheet = () => (
+    <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-4 sm:p-6 print:p-1 text-black space-y-2 text-[10px] leading-tight">
+      <div className="flex items-center justify-between border-b-2 border-black pb-2">
+        <div className="flex items-center gap-3">
+          <div className="w-14 h-14 rounded-xl border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center shrink-0">
+            <img src="/assets/atletica/logo.png" alt="A.A.A. Cangaceira" className="w-full h-full object-contain" />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase text-[#0B218A] tracking-wider block">
+              A.A.A. CANGACEIRA • MEDICINA UEMA
+            </span>
+            <h2 className="text-xl font-black uppercase tracking-tight">SÚMULA DE VOLEIBOL</h2>
+            <span className="text-[9px] font-bold text-slate-700">
+              INTRAMED IX • Modelo Oficial de Competição Universitária
+            </span>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-xs font-black uppercase">
+            LOCAL: {match.venue || 'Ginásio'} | DATA: {match.scheduledDate || 'Hoje'} | JOGO Nº: {match.id.slice(0, 8)}
+          </div>
+          <span className="text-[10px] font-mono font-bold bg-[#E8EEF5] px-2 py-0.5 border border-black inline-block mt-0.5">
+            Sets: {match.homeTeam.setsWon ?? 0} × {match.awayTeam.setsWon ?? 0}
+          </span>
+        </div>
+      </div>
+
+      {/* 3 Blocos Oficiais de SET (SET 1, SET 2, SET 3) idênticos ao PDF do Ministério do Esporte */}
+      {[1, 2, 3].map((setNum) => {
+        const setScoreObj = sheet.periodScores[setNum - 1];
+        const sHome = setScoreObj ? setScoreObj.homeScore : 0;
+        const sAway = setScoreObj ? setScoreObj.awayScore : 0;
+
+        return (
+          <div key={setNum} className="border-2 border-black">
+            <div className="bg-slate-100 p-1 font-extrabold border-b border-black flex items-center justify-between text-xs">
+              <span>SET {setNum} — CONFRONTO E ROTAÇÃO DE SAQUE</span>
+              <span className="font-mono text-sm bg-white px-2 border border-black">
+                {match.homeTeam.teamName} {sHome} × {sAway} {match.awayTeam.teamName}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 divide-x-2 divide-black">
+              {/* Lado Equipe A no Set */}
+              <div className="p-1 space-y-1">
+                <div className="flex justify-between font-bold text-[9px]">
+                  <span>EQUIPE: {match.homeTeam.teamName}</span>
+                  <span>PONTOS: <strong className="font-mono text-xs">{sHome}</strong></span>
+                </div>
+                {/* Rotação I a VI */}
+                <div className="grid grid-cols-6 divide-x divide-black border border-black text-center font-extrabold text-[8px]">
+                  {['I', 'II', 'III', 'IV', 'V', 'VI'].map((pos, idx) => (
+                    <div key={pos} className="divide-y divide-black">
+                      <div className="bg-slate-50">{pos}</div>
+                      <div className="py-1 font-mono">{homeRows[idx]?.jerseyNumber || '•'}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Grade de Pontos 1 a 36 do Set */}
+                <div className="grid grid-cols-9 divide-x divide-y border border-black text-center text-[7px] font-mono">
+                  {Array.from({ length: 36 }, (_, pIdx) => {
+                    const pt = pIdx + 1;
+                    const isScored = pt <= sHome;
+                    return (
+                      <span key={pt} className={isScored ? 'bg-[#0B218A] text-white font-black' : 'text-slate-500'}>
+                        {pt}
+                      </span>
                     );
                   })}
                 </div>
-              ))}
+              </div>
+
+              {/* Lado Equipe B no Set */}
+              <div className="p-1 space-y-1">
+                <div className="flex justify-between font-bold text-[9px]">
+                  <span>EQUIPE: {match.awayTeam.teamName}</span>
+                  <span>PONTOS: <strong className="font-mono text-xs">{sAway}</strong></span>
+                </div>
+                {/* Rotação I a VI */}
+                <div className="grid grid-cols-6 divide-x divide-black border border-black text-center font-extrabold text-[8px]">
+                  {['I', 'II', 'III', 'IV', 'V', 'VI'].map((pos, idx) => (
+                    <div key={pos} className="divide-y divide-black">
+                      <div className="bg-slate-50">{pos}</div>
+                      <div className="py-1 font-mono">{awayRows[idx]?.jerseyNumber || '•'}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Grade de Pontos 1 a 36 do Set */}
+                <div className="grid grid-cols-9 divide-x divide-y border border-black text-center text-[7px] font-mono">
+                  {Array.from({ length: 36 }, (_, pIdx) => {
+                    const pt = pIdx + 1;
+                    const isScored = pt <= sAway;
+                    return (
+                      <span key={pt} className={isScored ? 'bg-amber-400 text-black font-black' : 'text-slate-500'}>
+                        {pt}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
-        ))}
+        );
+      })}
+
+      {/* Aprovação, Árbitros, Apontador e Resultado Final */}
+      <div className="border-2 border-black p-1.5 text-[9px] space-y-1">
+        <div className="grid grid-cols-3 divide-x divide-black font-semibold text-center border-b border-black pb-1">
+          <div>1º Árbitro: <strong className="bg-[#E8EEF5] px-1">{sheet.refereeName || 'Oficial UEMA'}</strong></div>
+          <div>2º Árbitro: <strong className="bg-[#E8EEF5] px-1">Mesa Arbitral</strong></div>
+          <div>Apontador: <strong className="bg-[#E8EEF5] px-1">{sheet.tableOfficialName || 'Mesa Cangaceira'}</strong></div>
+        </div>
+        <div className="flex justify-between font-extrabold text-xs pt-0.5">
+          <span>RESULTADO FINAL: {match.homeTeam.teamName} ({match.homeTeam.setsWon ?? 0}) × ({match.awayTeam.setsWon ?? 0}) {match.awayTeam.teamName}</span>
+          <span>VENCEDOR: <strong className="text-[#0B218A] uppercase">{(match.homeTeam.setsWon ?? 0) > (match.awayTeam.setsWon ?? 0) ? match.homeTeam.teamName : match.awayTeam.teamName}</strong></span>
+        </div>
       </div>
-    </div>
+    </section>
   );
 
   return (
@@ -644,30 +862,33 @@ export const GeneratedMatchSheetPage: React.FC = () => {
               <span>{isAdmin ? 'Voltar ao Operador' : 'Voltar à Partida'}</span>
             </button>
             <div>
-              <h1 className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
-                Súmula Oficial • {match.modalityName} ({match.homeTeam.teamName} ×{' '}
-                {match.awayTeam.teamName})
-              </h1>
-              <span className="block text-[11px] text-brand-text-secondary">
-                Preenchida automaticamente pela operação ao vivo • Pronta para baixar ou imprimir em PDF (A4)
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-brand-yellow text-[#0B218A] text-[10px] font-display font-extrabold uppercase">
+                  {match.modalityName}
+                </span>
+                <h1 className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
+                  Súmula Oficial • {match.homeTeam.teamName} × {match.awayTeam.teamName}
+                </h1>
+              </div>
+              <span className="block text-[11px] text-brand-text-secondary mt-0.5">
+                Layout específico da modalidade ({match.modalityId === 'futsal' ? 'Futsal Oficial' : match.modalityId === 'basquete' ? 'CBB Basquete' : match.modalityId === 'volei' || match.modalityId === 'volei-de-praia' ? 'Voleibol Oficial' : 'Handebol CBHb'}) com a logo da A.A.A. Cangaceira
               </span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {/* Alternador de Modelo: Súmula Oficial CBHb/Cangaceira vs Resumo Digital */}
             <div className="inline-flex items-center bg-brand-surface-muted p-1 rounded-xl border border-brand-surface-border">
               <button
                 type="button"
-                onClick={() => setViewMode('cbhb_official')}
+                onClick={() => setViewMode('official_federation')}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-all ${
-                  viewMode === 'cbhb_official'
+                  viewMode === 'official_federation'
                     ? 'bg-[#0B218A] text-white shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Súmula Oficial (Modelo CBHb / Cangaceira)</span>
+                <span>Súmula Oficial ({match.modalityName})</span>
               </button>
               <button
                 type="button"
@@ -689,7 +910,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
               leftIcon={<Download className="w-3.5 h-3.5" />}
               onClick={handleDownloadStandaloneFile}
             >
-              Baixar Arquivo
+              Baixar Súmula (.html)
             </Button>
 
             <Button
@@ -711,1272 +932,64 @@ export const GeneratedMatchSheetPage: React.FC = () => {
             </Button>
           </div>
         </div>
+      </header>
 
-        {/* Sub-barra de seleção de folha do Relatório Oficial (Folha 1, Folha 2, Folha 3 ou Todas) */}
-        {viewMode === 'cbhb_official' && (
-          <div className="max-w-5xl mx-auto mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold text-slate-500">
-              Folhas do Relatório Oficial de Jogo (A.A.A. Cangaceira):
-            </span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {[
-                { id: 'all', label: 'Todas as 3 Folhas (Completo para PDF)' },
-                { id: 1, label: 'Folha 1 • Relatório de Jogo (Geral & Assinaturas)' },
-                { id: 2, label: 'Folha 2 • Gols 1–25 & Placar Progressivo 1–50' },
-                { id: 3, label: 'Folha 3 • Controle de Cronometrista (Exclusões 2\')' },
-              ].map((p) => (
-                <button
-                  key={String(p.id)}
-                  type="button"
-                  onClick={() => setActiveSheetPage(p.id as 1 | 2 | 3 | 'all')}
-                  className={`px-3 py-1 rounded-full text-xs font-display font-bold transition-colors ${
-                    activeSheetPage === p.id
-                      ? 'bg-brand-yellow text-[#0B218A] shadow-sm'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+      {/* ÁREA DE IMPRESSÃO / VISUALIZAÇÃO */}
+      <main
+        id="printable-official-scoresheet"
+        className="max-w-[940px] mx-auto mt-5 px-2 sm:px-4 print:mt-0 print:px-0 space-y-6 print:space-y-0"
+      >
+        {viewMode === 'official_federation' ? (
+          match.modalityId === 'futsal' ? (
+            renderFutsalScoresheet()
+          ) : match.modalityId === 'basquete' ? (
+            renderBasketballScoresheet()
+          ) : match.modalityId === 'volei' || match.modalityId === 'volei-de-praia' ? (
+            renderVolleyballScoresheet()
+          ) : (
+            // Handebol e demais modalidades utilizam o modelo completo com 3 folhas
+            <>
+              {renderFutsalScoresheet()}
+            </>
+          )
+        ) : (
+          /* MODO RESUMO DIGITAL COMPACTO */
+          <div className="bg-white rounded-3xl border border-brand-surface-border p-6 shadow-card space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+              <div className="flex items-center gap-3">
+                <img src="/assets/atletica/logo.png" alt="" className="w-12 h-12 object-contain" />
+                <div>
+                  <h2 className="text-lg font-display font-extrabold text-slate-900">
+                    {match.modalityName} • INTRAMED IX
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    {match.homeTeam.teamName} × {match.awayTeam.teamName} ({match.phaseLabel})
+                  </p>
+                </div>
+              </div>
+              <StatusBadge status={sheet.isClosed ? 'finished' : 'live'} />
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 flex items-center justify-around text-center">
+              <div>
+                <span className="block text-sm font-bold text-slate-700">{match.homeTeam.teamName}</span>
+                <span className="text-3xl font-display font-extrabold text-[#0B218A]">{finalHome}</span>
+              </div>
+              <span className="text-lg font-black text-slate-400">×</span>
+              <div>
+                <span className="block text-sm font-bold text-slate-700">{match.awayTeam.teamName}</span>
+                <span className="text-3xl font-display font-extrabold text-[#0B218A]">{finalAway}</span>
+              </div>
+            </div>
+
+            <div className="text-center pt-2">
+              <Button variant="primary" size="sm" onClick={() => setViewMode('official_federation')}>
+                Alternar para Modelo Oficial de Federação
+              </Button>
             </div>
           </div>
         )}
-      </header>
-
-      {/* =====================================================================================
-          MODO 1: SÚMULA OFICIAL PADRÃO CBHb / A.A.A. CANGACEIRA (3 FOLHAS A4 IDÊNTICAS AO PDF)
-         ===================================================================================== */}
-      {viewMode === 'cbhb_official' && (
-        <main
-          id="printable-official-scoresheet"
-          className="max-w-[940px] mx-auto mt-5 px-2 sm:px-4 print:mt-0 print:px-0 space-y-8 print:space-y-0 text-black"
-        >
-          {/* ---------------------------------------------------------------------------
-              FOLHA 1: RELATÓRIO DE JOGO OFICIAL (PÁGINA 1 DO PDF ENVIADO)
-             --------------------------------------------------------------------------- */}
-          {(activeSheetPage === 'all' || activeSheetPage === 1) && (
-            <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-5 sm:p-7 print:p-2 space-y-2.5 overflow-x-auto">
-              <div className="min-w-[760px] space-y-2">
-                {/* Topo com Logo da A.A.A. Cangaceira + Checkboxes de Competição e Categoria */}
-                <div className="grid grid-cols-[115px_105px_1.3fr_1.1fr] gap-3 items-center pb-2 border-b-2 border-black">
-                  <div className="border-r-2 border-black pr-2 text-center space-y-0.5">
-                    <p className="text-xs font-black uppercase tracking-tight">
-                      INTRAMED IX
-                    </p>
-                    <p className="text-[10px] font-bold leading-tight">
-                      A.A.A. Cangaceira
-                    </p>
-                    <p className="text-[9px] font-semibold text-slate-700 leading-tight">
-                      Medicina UEMA
-                    </p>
-                    <p className="text-[9px] font-extrabold uppercase text-[#0B218A] mt-0.5">
-                      {match.modalityName}
-                    </p>
-                  </div>
-
-                  {/* Brasão Oficial da Cangaceira no lugar do escudo da CBHb */}
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="w-20 h-20 rounded-xl border-2 border-black bg-[#0B218A] p-1.5 flex items-center justify-center shadow-sm">
-                      <img
-                        src="/assets/atletica/logo.png"
-                        alt="Logo A.A.A. Cangaceira"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Coluna de Fases do Campeonato (Estilo Checkboxes do PDF) */}
-                  <div className="space-y-1 text-[10px]">
-                    {[
-                      {
-                        checked: match.phase === 'group_stage',
-                        label: 'Fase de Grupos / Classificatória',
-                      },
-                      {
-                        checked: match.phase === 'quarterfinals',
-                        label: 'Quartas de Final • Eliminatórias',
-                      },
-                      {
-                        checked: match.phase === 'semifinals',
-                        label: 'Semifinais Oficiais • INTRAMED IX',
-                      },
-                      {
-                        checked: match.phase === 'final',
-                        label: 'Grande Final • Disputa de Título',
-                      },
-                      {
-                        checked: Boolean(sheet.isTestMode),
-                        label: 'Partida Amistosa / Simulação',
-                      },
-                    ].map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <span
-                          className={`w-3.5 h-3.5 border border-black inline-flex items-center justify-center text-[9px] font-black ${
-                            item.checked
-                              ? 'bg-[#0B218A] text-white'
-                              : 'bg-[#E8EEF5]'
-                          }`}
-                        >
-                          {item.checked ? 'X' : ''}
-                        </span>
-                        <span className="font-semibold">{item.label}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Coluna de Categorias (Adulto / Universitário + Masc / Fem) */}
-                  <div className="space-y-1 text-[10px]">
-                    {[
-                      { cat: 'Universitário', activeCat: true },
-                      { cat: '1ª Fase', activeCat: match.phase === 'group_stage' },
-                      { cat: 'Mata-Mata', activeCat: match.phase !== 'group_stage' },
-                      { cat: 'Série Ouro', activeCat: true },
-                      { cat: 'Oficial UEMA', activeCat: !sheet.isTestMode },
-                    ].map((row, idx) => (
-                      <div
-                        key={idx}
-                        className="grid grid-cols-[1fr_auto_auto] items-center gap-2"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`w-3.5 h-3.5 border border-black inline-flex items-center justify-center text-[9px] font-black ${
-                              row.activeCat
-                                ? 'bg-[#0B218A] text-white'
-                                : 'bg-[#E8EEF5]'
-                            }`}
-                          >
-                            {row.activeCat ? 'X' : ''}
-                          </span>
-                          <span className="font-semibold">{row.cat}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span
-                            className={`w-3.5 h-3.5 border border-black inline-flex items-center justify-center text-[9px] font-black ${
-                              idx === 0 && isMasc
-                                ? 'bg-[#0B218A] text-white'
-                                : 'bg-[#E8EEF5]'
-                            }`}
-                          >
-                            {idx === 0 && isMasc ? 'X' : ''}
-                          </span>
-                          <span>Masc</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span
-                            className={`w-3.5 h-3.5 border border-black inline-flex items-center justify-center text-[9px] font-black ${
-                              idx === 0 && isFem
-                                ? 'bg-[#0B218A] text-white'
-                                : 'bg-[#E8EEF5]'
-                            }`}
-                          >
-                            {idx === 0 && isFem ? 'X' : ''}
-                          </span>
-                          <span>Fem</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Título Central: RELATÓRIO DE JOGO No.: */}
-                <div className="flex items-center justify-center gap-3 py-1">
-                  <h2 className="text-base font-black uppercase tracking-wide">
-                    RELATÓRIO DE JOGO No.:
-                  </h2>
-                  <span className="px-4 py-0.5 bg-[#E8EEF5] border border-black font-mono font-extrabold text-xs">
-                    {sheet.id.toUpperCase()}
-                  </span>
-                </div>
-
-                {/* Bloco de Identificação da Partida (Equipe Local A vs Equipe Visitante B + Cidade/Local/Data/Hora/Duração) */}
-                <div className="border-2 border-black text-[10px]">
-                  <div className="grid grid-cols-[1fr_auto_1fr_130px] items-end gap-2 p-2 border-b-2 border-black">
-                    <div>
-                      <span className="block text-[9px] font-bold uppercase text-slate-600">
-                        Equipe Local (Mandante)
-                      </span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-sm font-black">A</span>
-                        <div className="flex-1 px-2.5 py-1 bg-[#E8EEF5] border border-slate-400 font-extrabold text-xs flex items-center justify-between">
-                          <span>{match.homeTeam.teamName}</span>
-                          <span className="text-[10px] font-semibold text-slate-600">
-                            {homeTeamObj?.turmaLabel || ''}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <span className="font-bold text-xs pb-1.5 px-1">versus</span>
-
-                    <div>
-                      <span className="block text-[9px] font-bold uppercase text-slate-600">
-                        Equipe Visitante
-                      </span>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-sm font-black">B</span>
-                        <div className="flex-1 px-2.5 py-1 bg-[#E8EEF5] border border-slate-400 font-extrabold text-xs flex items-center justify-between">
-                          <span>{match.awayTeam.teamName}</span>
-                          <span className="text-[10px] font-semibold text-slate-600">
-                            {awayTeamObj?.turmaLabel || ''}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="block text-[9px] font-bold uppercase text-slate-600">
-                        Modalidade
-                      </span>
-                      <div className="mt-0.5 px-2 py-1 bg-[#E8EEF5] border border-slate-400 font-extrabold text-xs text-center truncate">
-                        {match.modalityName}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Cidade | Local | Data | Hora | Duração */}
-                  <div className="grid grid-cols-[1.1fr_1.4fr_0.9fr_0.6fr_0.6fr] gap-2 p-2">
-                    <div>
-                      <span className="block text-[9px] font-bold">Cidade</span>
-                      <div className="mt-0.5 px-2 py-1 bg-[#E8EEF5] border border-slate-400 font-semibold">
-                        Caxias - MA (UEMA)
-                      </div>
-                    </div>
-                    <div>
-                      <span className="block text-[9px] font-bold">Local</span>
-                      <div className="mt-0.5 px-2 py-1 bg-[#E8EEF5] border border-slate-400 font-semibold truncate">
-                        {match.venue || 'Ginásio Oficial • INTRAMED IX'}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="block text-[9px] font-bold">Data</span>
-                      <div className="mt-0.5 px-2 py-1 bg-[#E8EEF5] border border-slate-400 font-semibold">
-                        {match.scheduledDate ||
-                          new Date(sheet.lastUpdatedIso).toLocaleDateString('pt-BR')}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="block text-[9px] font-bold">Hora</span>
-                      <div className="mt-0.5 px-2 py-1 bg-[#E8EEF5] border border-slate-400 font-mono font-bold text-center">
-                        {match.scheduledTime || '19:00'}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="block text-[9px] font-bold">Duração</span>
-                      <div className="mt-0.5 px-2 py-1 bg-[#E8EEF5] border border-slate-400 font-mono font-bold text-center">
-                        {formatSecondsToClock(sheet.timer.elapsedSeconds)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bloco de Placar por Tempo e Tempos Técnicos */}
-                {renderTopMatchScoreHeaderBlock()}
-
-                {/* TABELA DUPLA DE ATLETAS (EQUIPE A À ESQUERDA | EQUIPE B À DIREITA) */}
-                <div className="border-2 border-black text-[10px]">
-                  {/* Cabeçalho da Tabela Dupla */}
-                  <div className="grid grid-cols-2 divide-x-2 divide-black border-b-2 border-black font-extrabold bg-slate-100">
-                    <div className="grid grid-cols-[34px_1fr_28px_28px_36px_28px_34px] divide-x divide-black text-center items-center">
-                      <span className="py-1">Nº</span>
-                      <div className="px-2 py-1 flex items-center justify-between">
-                        <span>Equipe {match.homeTeam.teamName}</span>
-                        <span className="font-black text-xs">A</span>
-                      </div>
-                      <span className="py-1" title="Gols / Pontos">
-                        G
-                      </span>
-                      <span className="py-1" title="Advertências (Amarelo)">
-                        A
-                      </span>
-                      <span className="py-1" title="Exclusões 2 Minutos">
-                        2&apos;
-                      </span>
-                      <span className="py-1" title="Desqualificações (Vermelho)">
-                        D
-                      </span>
-                      <span className="py-1" title="Desqualificação + Relatório">
-                        D+R
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-[34px_1fr_28px_28px_36px_28px_34px] divide-x divide-black text-center items-center">
-                      <span className="py-1">Nº</span>
-                      <div className="px-2 py-1 flex items-center justify-between">
-                        <span>Equipe {match.awayTeam.teamName}</span>
-                        <span className="font-black text-xs">B</span>
-                      </div>
-                      <span className="py-1" title="Gols / Pontos">
-                        G
-                      </span>
-                      <span className="py-1" title="Advertências (Amarelo)">
-                        A
-                      </span>
-                      <span className="py-1" title="Exclusões 2 Minutos">
-                        2&apos;
-                      </span>
-                      <span className="py-1" title="Desqualificações (Vermelho)">
-                        D
-                      </span>
-                      <span className="py-1" title="Desqualificação + Relatório">
-                        D+R
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 16 Linhas de Atletas Lado a Lado */}
-                  <div className="divide-y divide-black">
-                    {Array.from({ length: 16 }, (_, idx) => {
-                      const hRow = homeRows[idx];
-                      const aRow = awayRows[idx];
-                      const stripe = idx % 2 === 1 ? 'bg-[#E8EEF5]/65' : 'bg-white';
-                      const hSuspCount = hRow.suspensionsClocks.filter(Boolean).length;
-                      const aSuspCount = aRow.suspensionsClocks.filter(Boolean).length;
-
-                      return (
-                        <div
-                          key={idx}
-                          className={`grid grid-cols-2 divide-x-2 divide-black ${stripe}`}
-                        >
-                          {/* Lado A */}
-                          <div className="grid grid-cols-[34px_1fr_28px_28px_36px_28px_34px] divide-x divide-black items-center min-h-[21px]">
-                            <span className="text-center font-mono font-bold">
-                              {hRow.jerseyNumber}
-                            </span>
-                            <span className="px-2 font-semibold truncate">
-                              {hRow.name}
-                            </span>
-                            <span className="text-center font-mono font-extrabold">
-                              {hRow.goalsCount > 0 ? hRow.goalsCount : ''}
-                            </span>
-                            <span className="text-center font-mono font-bold text-amber-700">
-                              {hRow.yellowCardClock ? 'X' : ''}
-                            </span>
-                            <span className="text-center font-mono font-bold">
-                              {hSuspCount > 0 ? `${hSuspCount}x` : ''}
-                            </span>
-                            <span className="text-center font-mono font-bold text-rose-700">
-                              {hRow.disqualificationClock ? 'X' : ''}
-                            </span>
-                            <span className="text-center font-mono font-bold text-rose-900">
-                              {hRow.reportClock ? 'X' : ''}
-                            </span>
-                          </div>
-
-                          {/* Lado B */}
-                          <div className="grid grid-cols-[34px_1fr_28px_28px_36px_28px_34px] divide-x divide-black items-center min-h-[21px]">
-                            <span className="text-center font-mono font-bold">
-                              {aRow.jerseyNumber}
-                            </span>
-                            <span className="px-2 font-semibold truncate">
-                              {aRow.name}
-                            </span>
-                            <span className="text-center font-mono font-extrabold">
-                              {aRow.goalsCount > 0 ? aRow.goalsCount : ''}
-                            </span>
-                            <span className="text-center font-mono font-bold text-amber-700">
-                              {aRow.yellowCardClock ? 'X' : ''}
-                            </span>
-                            <span className="text-center font-mono font-bold">
-                              {aSuspCount > 0 ? `${aSuspCount}x` : ''}
-                            </span>
-                            <span className="text-center font-mono font-bold text-rose-700">
-                              {aRow.disqualificationClock ? 'X' : ''}
-                            </span>
-                            <span className="text-center font-mono font-bold text-rose-900">
-                              {aRow.reportClock ? 'X' : ''}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Linhas de Oficiais (Of. A, Of. B, Of. C, Of. D) */}
-                  <div className="border-t-2 border-black divide-y divide-black">
-                    {['Of. A', 'Of. B', 'Of. C', 'Of. D'].map((ofLabel, oIdx) => (
-                      <div
-                        key={ofLabel}
-                        className={`grid grid-cols-2 divide-x-2 divide-black ${
-                          oIdx % 2 === 1 ? 'bg-[#E8EEF5]/65' : 'bg-white'
-                        }`}
-                      >
-                        <div className="grid grid-cols-[34px_1fr_28px_28px_36px_28px_34px] divide-x divide-black items-center min-h-[19px]">
-                          <span className="text-center font-bold text-[9px]">
-                            {ofLabel}
-                          </span>
-                          <span className="px-2 text-[9px] font-semibold text-slate-700">
-                            {oIdx === 0
-                              ? `Responsável Técnico — ${match.homeTeam.teamName}`
-                              : ''}
-                          </span>
-                          <span />
-                          <span />
-                          <span />
-                          <span />
-                          <span />
-                        </div>
-                        <div className="grid grid-cols-[34px_1fr_28px_28px_36px_28px_34px] divide-x divide-black items-center min-h-[19px]">
-                          <span className="text-center font-bold text-[9px]">
-                            {ofLabel}
-                          </span>
-                          <span className="px-2 text-[9px] font-semibold text-slate-700">
-                            {oIdx === 0
-                              ? `Responsável Técnico — ${match.awayTeam.teamName}`
-                              : ''}
-                          </span>
-                          <span />
-                          <span />
-                          <span />
-                          <span />
-                          <span />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Faixa de Assinatura dos Responsáveis pelas Equipes (Of. A) */}
-                  <div className="border-t-2 border-black grid grid-cols-[28px_1fr_180px_1fr_28px] items-center p-1.5 bg-slate-50">
-                    <span className="text-sm font-black text-center">A</span>
-                    <div className="px-2 py-1 bg-[#E8EEF5] border border-slate-400 text-center font-semibold text-[9px]">
-                      {signatures.homeCaptain
-                        ? `✓ Assinado digitalmente (${match.homeTeam.teamName})`
-                        : '________________________________________'}
-                    </div>
-                    <span className="text-[9px] font-bold text-center px-2">
-                      Assinatura dos responsáveis pelas equipes (Of. A)
-                    </span>
-                    <div className="px-2 py-1 bg-[#E8EEF5] border border-slate-400 text-center font-semibold text-[9px]">
-                      {signatures.awayCaptain
-                        ? `✓ Assinado digitalmente (${match.awayTeam.teamName})`
-                        : '________________________________________'}
-                    </div>
-                    <span className="text-sm font-black text-center">B</span>
-                  </div>
-                </div>
-
-                {/* Observação dos Árbitros */}
-                <div className="space-y-1 text-[10px]">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold">Observação dos Árbitros:</span>
-                    <div className="flex-1 px-2.5 py-1 bg-[#E8EEF5] border border-slate-400 font-semibold min-h-[22px]">
-                      {sheet.refereeNotes ||
-                        'Partida realizada dentro da normalidade regulamentar do INTRAMED IX.'}
-                    </div>
-                  </div>
-                  {auditEntries.length > 0 && (
-                    <div className="px-2.5 py-1 bg-[#E8EEF5] border border-slate-400 text-[9px]">
-                      <strong>Correções auditadas na mesa ({auditEntries.length}):</strong>{' '}
-                      {auditEntries
-                        .map((a) => `${a.previousSummary} → ${a.newSummary}`)
-                        .join(' | ')}
-                    </div>
-                  )}
-                </div>
-
-                {/* Bloco de Assinaturas Finais (Representante da Atlética, Árbitros, Secretário/Cronometrista, Delegado) */}
-                <div className="border-t-2 border-black pt-2 space-y-1.5 text-[10px]">
-                  <div className="grid grid-cols-[210px_1fr_1fr] gap-2 items-center">
-                    <span />
-                    <span className="text-[9px] font-bold text-slate-600">
-                      Nome / Identificação Oficial
-                    </span>
-                    <span className="text-[9px] font-bold text-slate-600">
-                      Assinaturas / Chancela Eletrônica
-                    </span>
-                  </div>
-
-                  {[
-                    {
-                      role: 'Representante da Organização (A.A.A. Cangaceira)',
-                      name: 'Comissão Organizadora • INTRAMED IX',
-                      sig: '✓ Validado • A.A.A. Cangaceira Medicina UEMA',
-                    },
-                    {
-                      role: 'Árbitros da Partida',
-                      name: sheet.refereeName || 'Arbitragem Oficial INTRAMED IX',
-                      sig: signatures.referee
-                        ? '✓ Assinado digitalmente pela Arbitragem'
-                        : '____________________________________',
-                    },
-                    {
-                      role: 'Secretário / Cronometrista (Mesário)',
-                      name:
-                        sheet.tableOfficialName || 'Mesa Operadora Oficial INTRAMED IX',
-                      sig: signatures.tableOfficial
-                        ? '✓ Registrado e conferido eletronicamente'
-                        : '____________________________________',
-                    },
-                    {
-                      role: 'Delegado Técnico • INTRAMED IX',
-                      name: 'Diretoria de Esportes • Medicina UEMA',
-                      sig: sheet.isClosed
-                        ? `✓ Súmula Consolidada (${new Date(
-                            sheet.closedAtIso || sheet.lastUpdatedIso
-                          ).toLocaleTimeString('pt-BR')})`
-                        : 'Em aberto / Operação em tempo real',
-                    },
-                  ].map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="grid grid-cols-[210px_1fr_1fr] gap-2 items-center"
-                    >
-                      <span className="font-bold">{item.role}</span>
-                      <div className="px-2.5 py-1 bg-[#E8EEF5] border border-slate-300 font-semibold">
-                        {item.name}
-                      </div>
-                      <div className="px-2.5 py-1 bg-[#E8EEF5] border border-slate-300 font-semibold text-emerald-950">
-                        {item.sig}
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="pt-1.5 border-t border-black text-[9px] leading-snug text-slate-700">
-                    <p>
-                      Anotar o número total de 7m/pênaltis das equipes A e B, Gols/Pontos (G), Advertências (A), Exclusões 2&apos; (E), Desqualificações (D) e Expulsões (D+R).
-                    </p>
-                    <p className="font-bold text-black mt-0.5">
-                      Documento Oficial gerado pelo Sistema Eletrônico INTRAMED IX — Associação Atlética Acadêmica Cangaceira (Medicina UEMA).
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* ---------------------------------------------------------------------------
-              FOLHA 2: RELATÓRIO DETALHADO DE GOLS 1–25 & PLACAR PROGRESSIVO 1–50 (PÁGINA 2 DO PDF)
-             --------------------------------------------------------------------------- */}
-          {(activeSheetPage === 'all' || activeSheetPage === 2) && (
-            <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-5 sm:p-7 print:p-2 space-y-2.5 overflow-x-auto">
-              <div className="min-w-[760px] space-y-2">
-                {/* Cabeçalho da Folha 2 com Brasão da Cangaceira */}
-                <div className="flex items-center justify-between border-b-2 border-black pb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center">
-                      <img
-                        src="/assets/atletica/logo.png"
-                        alt="Logo A.A.A. Cangaceira"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-black uppercase tracking-wide">
-                        A.A.A. CANGACEIRA • MEDICINA UEMA — INTRAMED IX
-                      </h2>
-                      <p className="text-[10px] font-bold text-slate-700">
-                        {match.modalityName} ({match.categoryName} • {match.phaseLabel}) —{' '}
-                        {match.homeTeam.teamName} × {match.awayTeam.teamName}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-black uppercase block">
-                      RELATÓRIO DE JOGO
-                    </span>
-                    <span className="text-[10px] font-mono font-bold text-slate-600">
-                      Folha 2 • Controle Individual de Gols/Pontos e Placar Progressivo
-                    </span>
-                  </div>
-                </div>
-
-                {/* Bloco de Placar por Tempo e Tempos Técnicos */}
-                {renderTopMatchScoreHeaderBlock()}
-
-                {/* TABELA COM GRADE DE GOLS 1..25 POR ATLETA (IDÊNTICA À PÁGINA 2 DO PDF) */}
-                <div className="border-2 border-black text-[9px]">
-                  <div className="grid grid-cols-2 divide-x-2 divide-black border-b-2 border-black font-extrabold bg-slate-100">
-                    <div className="px-2 py-1 flex items-center justify-between">
-                      <span>Equipe A: {match.homeTeam.teamName}</span>
-                      <span>{homeTeamObj?.turmaLabel || ''}</span>
-                    </div>
-                    <div className="px-2 py-1 flex items-center justify-between">
-                      <span>Equipe B: {match.awayTeam.teamName}</span>
-                      <span>{awayTeamObj?.turmaLabel || ''}</span>
-                    </div>
-                  </div>
-
-                  {/* Cabeçalho das Colunas: Nº | A | 2' | D | D+R | GOLS (1 a 25) */}
-                  <div className="grid grid-cols-2 divide-x-2 divide-black border-b-2 border-black font-extrabold text-center bg-slate-50">
-                    {[0, 1].map((col) => (
-                      <div
-                        key={col}
-                        className="grid grid-cols-[32px_32px_58px_32px_32px_1fr] divide-x divide-black items-center py-1"
-                      >
-                        <span>Nº</span>
-                        <span>A</span>
-                        <span>2&apos;</span>
-                        <span>D</span>
-                        <span>D+R</span>
-                        <span>GOLS / PONTOS INDIVIDUALIZADOS (1 A 25)</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 16 Linhas com a Grade 1..25 em cada atleta */}
-                  <div className="divide-y divide-black">
-                    {Array.from({ length: 16 }, (_, idx) => {
-                      const hRow = homeRows[idx];
-                      const aRow = awayRows[idx];
-
-                      const renderAthlete25Block = (row: PlayerDerivedRow) => (
-                        <div className="grid grid-cols-[32px_32px_58px_32px_32px_1fr] divide-x divide-black items-stretch">
-                          <div className="flex flex-col items-center justify-center p-0.5 font-mono font-extrabold text-[10px]">
-                            <span>{row.jerseyNumber}</span>
-                            {row.name && (
-                              <span className="text-[7px] font-sans font-semibold text-slate-600 truncate max-w-[30px]">
-                                {row.name.split(' ')[0]}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center justify-center font-mono font-bold text-amber-800">
-                            {row.yellowCardClock}
-                          </div>
-                          <div className="grid grid-rows-3 divide-y divide-black text-center font-mono text-[8px]">
-                            <span className="flex items-center justify-center">
-                              {row.suspensionsClocks[0]}
-                            </span>
-                            <span className="flex items-center justify-center">
-                              {row.suspensionsClocks[1]}
-                            </span>
-                            <span className="flex items-center justify-center">
-                              {row.suspensionsClocks[2]}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-center font-mono font-bold text-rose-700">
-                            {row.disqualificationClock}
-                          </div>
-                          <div className="flex items-center justify-center font-mono font-bold text-rose-900">
-                            {row.reportClock}
-                          </div>
-                          <div className="p-0.5 font-mono text-[8px] leading-[10px] tracking-tight flex flex-col justify-center">
-                            {[
-                              [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-                              [12, 13, 14, 15, 16, 17, 18],
-                              [19, 20, 21, 22, 23, 24, 25],
-                            ].map((lineNums, lIdx) => (
-                              <div key={lIdx} className="flex items-center gap-1">
-                                {lineNums.map((n) => {
-                                  const scored = n <= row.goalsCount;
-                                  return (
-                                    <span
-                                      key={n}
-                                      className={`px-0.5 rounded-sm ${
-                                        scored
-                                          ? 'bg-[#0B218A] text-brand-yellow font-black underline'
-                                          : 'text-slate-400'
-                                      }`}
-                                    >
-                                      {n}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-
-                      return (
-                        <div
-                          key={idx}
-                          className="grid grid-cols-2 divide-x-2 divide-black"
-                        >
-                          {renderAthlete25Block(hRow)}
-                          {renderAthlete25Block(aRow)}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Rodapé de Oficiais A, B, C, D na Folha 2 */}
-                  <div className="border-t-2 border-black divide-y divide-black">
-                    <div className="grid grid-cols-2 divide-x-2 divide-black font-extrabold bg-slate-100 text-center">
-                      <div className="grid grid-cols-[1fr_40px_40px_40px] divide-x divide-black py-0.5">
-                        <span>OFICIAIS (Equipe A)</span>
-                        <span>A</span>
-                        <span>2&apos;</span>
-                        <span>D</span>
-                      </div>
-                      <div className="grid grid-cols-[1fr_40px_40px_40px] divide-x divide-black py-0.5">
-                        <span>OFICIAIS (Equipe B)</span>
-                        <span>A</span>
-                        <span>2&apos;</span>
-                        <span>D</span>
-                      </div>
-                    </div>
-                    {['Oficial A', 'Oficial B', 'Oficial C', 'Oficial D'].map(
-                      (ofLbl) => (
-                        <div
-                          key={ofLbl}
-                          className="grid grid-cols-2 divide-x-2 divide-black"
-                        >
-                          <div className="grid grid-cols-[64px_1fr_40px_40px_40px] divide-x divide-black min-h-[16px] items-center">
-                            <span className="px-1 font-bold">{ofLbl}</span>
-                            <span className="px-1 text-slate-600 truncate">
-                              {ofLbl === 'Oficial A' ? match.homeTeam.teamName : ''}
-                            </span>
-                            <span />
-                            <span />
-                            <span />
-                          </div>
-                          <div className="grid grid-cols-[64px_1fr_40px_40px_40px] divide-x divide-black min-h-[16px] items-center">
-                            <span className="px-1 font-bold">{ofLbl}</span>
-                            <span className="px-1 text-slate-600 truncate">
-                              {ofLbl === 'Oficial A' ? match.awayTeam.teamName : ''}
-                            </span>
-                            <span />
-                            <span />
-                            <span />
-                          </div>
-                        </div>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                {/* Grade de Placar Progressivo 1 a 50 + 7 Metros 1 a 20 */}
-                {renderBottomRunningScore50Grid()}
-              </div>
-            </section>
-          )}
-
-          {/* ---------------------------------------------------------------------------
-              FOLHA 3: CONTROLE DE CRONOMETRISTA (PÁGINA 3 DO PDF ENVIADO)
-             --------------------------------------------------------------------------- */}
-          {(activeSheetPage === 'all' || activeSheetPage === 3) && (
-            <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-5 sm:p-7 print:p-2 space-y-2.5 overflow-x-auto">
-              <div className="min-w-[760px] space-y-2">
-                {/* Cabeçalho da Folha 3 com Brasão da Cangaceira */}
-                <div className="flex items-center justify-between border-b-2 border-black pb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center">
-                      <img
-                        src="/assets/atletica/logo.png"
-                        alt="Logo A.A.A. Cangaceira"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-black uppercase tracking-wide">
-                        A.A.A. CANGACEIRA • MEDICINA UEMA — CONTROLE DE CRONOMETRISTA
-                      </h2>
-                      <p className="text-[10px] font-bold text-slate-700">
-                        {match.modalityName} ({match.categoryName} • {match.phaseLabel}) —{' '}
-                        {match.homeTeam.teamName} × {match.awayTeam.teamName}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-sm font-black uppercase block">
-                      CONTROLE DE MESA
-                    </span>
-                    <span className="text-[10px] font-mono font-bold text-slate-600">
-                      Folha 3 • Advertências, Exclusões (T. Saída / T. Entrada) e Placar
-                    </span>
-                  </div>
-                </div>
-
-                {/* Bloco de Placar por Tempo e Tempos Técnicos */}
-                {renderTopMatchScoreHeaderBlock()}
-
-                {/* TABELA DE ADVERTÊNCIAS E EXCLUSÕES (T. SAÍDA / T. ENTRADA) */}
-                <div className="border-2 border-black text-[10px]">
-                  {/* Equipe A / Equipe B + Cor do Uniforme */}
-                  <div className="grid grid-cols-2 divide-x-2 divide-black border-b border-black font-extrabold">
-                    <div className="px-2 py-1 bg-slate-100">
-                      Equipe A: {match.homeTeam.teamName}
-                    </div>
-                    <div className="px-2 py-1 bg-slate-100">
-                      Equipe B: {match.awayTeam.teamName}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 divide-x-2 divide-black border-b-2 border-black font-bold text-[9px]">
-                    <div className="px-2 py-1">
-                      Cor Predominante:{' '}
-                      <span className="font-extrabold">
-                        {homeTeamObj?.theme?.colorLabel || 'Oficial Mandante'}
-                      </span>
-                    </div>
-                    <div className="px-2 py-1">
-                      Cor Predominante:{' '}
-                      <span className="font-extrabold">
-                        {awayTeamObj?.theme?.colorLabel || 'Oficial Visitante'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Bloco de Advertências (Número | Tempo) */}
-                  <div className="grid grid-cols-2 divide-x-2 divide-black border-b-2 border-black">
-                    {[homeChrono.warnings, awayChrono.warnings].map(
-                      (warnList, wIdx) => (
-                        <div
-                          key={wIdx}
-                          className="grid grid-cols-[1fr_80px_80px] divide-x divide-black"
-                        >
-                          <div className="flex items-center justify-center font-extrabold text-xs p-2">
-                            Advertências
-                          </div>
-                          <div className="divide-y divide-black text-center">
-                            <div className="font-extrabold bg-slate-100 py-0.5 text-[9px]">
-                              Número
-                            </div>
-                            {warnList.map((w, i) => (
-                              <div
-                                key={i}
-                                className="py-1 font-mono font-bold min-h-[20px]"
-                              >
-                                {w.number}
-                              </div>
-                            ))}
-                          </div>
-                          <div className="divide-y divide-black text-center">
-                            <div className="font-extrabold bg-slate-100 py-0.5 text-[9px]">
-                              Tempo
-                            </div>
-                            {warnList.map((w, i) => (
-                              <div
-                                key={i}
-                                className="py-1 font-mono font-bold min-h-[20px]"
-                              >
-                                {w.time}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )
-                    )}
-                  </div>
-
-                  {/* Cabeçalho das Exclusões: Nº | Exclusões (T. Saída | T. Entrada) | Desqualif. | D+R */}
-                  <div className="grid grid-cols-2 divide-x-2 divide-black border-b-2 border-black font-extrabold text-center bg-slate-100 text-[9px]">
-                    {[0, 1].map((sideIdx) => (
-                      <div
-                        key={sideIdx}
-                        className="grid grid-cols-[44px_1fr_70px_60px] divide-x divide-black"
-                      >
-                        <div className="flex items-center justify-center">Nº</div>
-                        <div className="divide-y divide-black">
-                          <div className="py-0.5">Exclusões (2 Minutos)</div>
-                          <div className="grid grid-cols-2 divide-x divide-black py-0.5 bg-white">
-                            <span>T. Saída</span>
-                            <span>T. Entrada</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-center">
-                          Desqualif.
-                        </div>
-                        <div className="flex items-center justify-center">D+R</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 14 Linhas de Exclusões (T. Saída / T. Entrada) */}
-                  <div className="divide-y divide-black">
-                    {Array.from({ length: 14 }, (_, idx) => {
-                      const hEx = homeChrono.exclusions[idx];
-                      const aEx = awayChrono.exclusions[idx];
-                      return (
-                        <div
-                          key={idx}
-                          className="grid grid-cols-2 divide-x-2 divide-black min-h-[20px] text-center font-mono text-[9px]"
-                        >
-                          <div className="grid grid-cols-[44px_1fr_1fr_70px_60px] divide-x divide-black items-center">
-                            <span className="font-bold">{hEx.number}</span>
-                            <span>{hEx.exitTime}</span>
-                            <span className="text-emerald-800 font-bold">
-                              {hEx.entryTime}
-                            </span>
-                            <span className="text-rose-700 font-bold">
-                              {hEx.disqTime}
-                            </span>
-                            <span className="text-rose-900 font-bold">
-                              {hEx.reportTime}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-[44px_1fr_1fr_70px_60px] divide-x divide-black items-center">
-                            <span className="font-bold">{aEx.number}</span>
-                            <span>{aEx.exitTime}</span>
-                            <span className="text-emerald-800 font-bold">
-                              {aEx.entryTime}
-                            </span>
-                            <span className="text-rose-700 font-bold">
-                              {aEx.disqTime}
-                            </span>
-                            <span className="text-rose-900 font-bold">
-                              {aEx.reportTime}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Oficiais A, B, C, D na base da Folha 3 */}
-                  <div className="border-t-2 border-black divide-y divide-black text-[9px]">
-                    <div className="grid grid-cols-2 divide-x-2 divide-black font-extrabold bg-slate-100 text-center">
-                      <div className="grid grid-cols-[1fr_44px_44px_44px] divide-x divide-black py-0.5">
-                        <span>OFICIAIS (Equipe A)</span>
-                        <span>A</span>
-                        <span>2&apos;</span>
-                        <span>D</span>
-                      </div>
-                      <div className="grid grid-cols-[1fr_44px_44px_44px] divide-x divide-black py-0.5">
-                        <span>OFICIAIS (Equipe B)</span>
-                        <span>A</span>
-                        <span>2&apos;</span>
-                        <span>D</span>
-                      </div>
-                    </div>
-                    {['Oficial A', 'Oficial B', 'Oficial C', 'Oficial D'].map(
-                      (ofLbl) => (
-                        <div
-                          key={ofLbl}
-                          className="grid grid-cols-2 divide-x-2 divide-black"
-                        >
-                          <div className="grid grid-cols-[64px_1fr_44px_44px_44px] divide-x divide-black min-h-[16px] items-center">
-                            <span className="px-1 font-bold">{ofLbl}</span>
-                            <span className="px-1 text-slate-600 truncate">
-                              {ofLbl === 'Oficial A' ? match.homeTeam.teamName : ''}
-                            </span>
-                            <span />
-                            <span />
-                            <span />
-                          </div>
-                          <div className="grid grid-cols-[64px_1fr_44px_44px_44px] divide-x divide-black min-h-[16px] items-center">
-                            <span className="px-1 font-bold">{ofLbl}</span>
-                            <span className="px-1 text-slate-600 truncate">
-                              {ofLbl === 'Oficial A' ? match.awayTeam.teamName : ''}
-                            </span>
-                            <span />
-                            <span />
-                            <span />
-                          </div>
-                        </div>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                {/* Grade de Placar Progressivo 1 a 50 + 7 Metros 1 a 20 */}
-                {renderBottomRunningScore50Grid()}
-              </div>
-            </section>
-          )}
-        </main>
-      )}
-
-      {/* =====================================================================================
-          MODO 2: RESUMO DIGITAL MODERNO (LAYOUT COMPACTO WEB)
-         ===================================================================================== */}
-      {viewMode === 'digital_summary' && (
-        <main className="max-w-4xl mx-auto mt-6 px-4 sm:px-6 print:mt-0 print:px-0">
-          <div className="bg-white rounded-3xl print:rounded-none border border-brand-surface-border print:border-none shadow-card print:shadow-none p-6 sm:p-10 space-y-8">
-            {/* 1. CABEÇALHO DA SÚMULA COM CHANCELA DA ATLÉTICA CANGACEIRA */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b-2 border-brand-blue">
-              <div className="flex items-center gap-4">
-                <img
-                  src="/assets/atletica/logo.png"
-                  alt="A.A.A. Cangaceira — Medicina UEMA"
-                  className="w-16 h-16 object-contain shrink-0"
-                />
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded bg-brand-blue text-white text-xs font-display font-extrabold">
-                      INTRAMED IX
-                    </span>
-                    <span className="text-xs font-bold uppercase tracking-wider text-brand-text-secondary">
-                      Súmula Eletrônica Oficial • A.A.A. Cangaceira
-                    </span>
-                    {sheet.isTestMode && (
-                      <span className="px-2 py-0.5 rounded bg-brand-yellow text-brand-blue-dark text-[11px] font-extrabold uppercase">
-                        MODO DE TESTE — NÃO OFICIAL
-                      </span>
-                    )}
-                  </div>
-                  <h2 className="text-xl sm:text-2xl font-display font-extrabold text-brand-text-primary mt-1.5">
-                    {match.modalityName} — {match.categoryName} ({match.phaseLabel})
-                  </h2>
-                  <p className="text-xs text-brand-text-secondary mt-1">
-                    Local: {match.venue || 'A definir'} • Data:{' '}
-                    {match.scheduledDate || 'A definir'} • Horário:{' '}
-                    {match.scheduledTime || '--:--'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:items-end gap-1">
-                <StatusBadge
-                  status={sheet.isClosed ? 'finished' : match.status}
-                  label={sheet.isClosed ? 'SÚMULA CONSOLIDADA' : 'EM ABERTO'}
-                />
-                {sheet.closedAtIso && (
-                  <span className="text-[11px] text-brand-text-muted">
-                    Encerrada às{' '}
-                    {new Date(sheet.closedAtIso).toLocaleTimeString('pt-BR')}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* 2. EQUIPES E RESULTADO CONSOLIDADO */}
-            <section className="rounded-2xl bg-brand-surface-muted/70 border border-brand-surface-border p-6">
-              <div className="grid grid-cols-3 items-center gap-4 text-center">
-                <div className="flex flex-col items-center gap-2">
-                  <TeamCrest
-                    crestUrl={match.homeTeam.crestUrl}
-                    teamName={match.homeTeam.teamName}
-                    size="lg"
-                  />
-                  <span className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
-                    {match.homeTeam.teamName}
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="text-3xl sm:text-4xl font-display font-extrabold text-brand-blue">
-                    {finalHome} × {finalAway}
-                  </div>
-                  <p className="text-[11px] text-brand-text-secondary">
-                    {sheet.periodScores
-                      .map((p) => `${p.label}: ${p.homeScore}×${p.awayScore}`)
-                      .join(' | ')}
-                  </p>
-                </div>
-
-                <div className="flex flex-col items-center gap-2">
-                  <TeamCrest
-                    crestUrl={match.awayTeam.crestUrl}
-                    teamName={match.awayTeam.teamName}
-                    size="lg"
-                  />
-                  <span className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
-                    {match.awayTeam.teamName}
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            {/* 3. ATLETAS RELACIONADOS */}
-            <section className="space-y-3">
-              <h3 className="text-xs font-display font-extrabold uppercase tracking-wider text-brand-blue border-b border-brand-surface-border pb-2">
-                Relação de Atletas (Titulares e Reservas)
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {(['home', 'away'] as const).map((side) => {
-                  const tName =
-                    side === 'home'
-                      ? match.homeTeam.teamName
-                      : match.awayTeam.teamName;
-                  const lineup =
-                    side === 'home' ? sheet.homeLineup : sheet.awayLineup;
-
-                  return (
-                    <div
-                      key={side}
-                      className="rounded-xl border border-brand-surface-border p-4 space-y-2"
-                    >
-                      <h4 className="text-xs font-bold text-brand-text-primary uppercase">
-                        {tName}
-                      </h4>
-                      <div className="divide-y divide-brand-surface-border text-xs">
-                        {lineup.map((ath) => (
-                          <div
-                            key={ath.athleteId}
-                            className="py-1.5 flex items-center justify-between"
-                          >
-                            <span className="font-medium text-brand-text-primary">
-                              #{ath.jerseyNumber ?? '—'} {ath.athleteName}
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] text-brand-text-secondary">
-                                {ath.isStarter ? 'Titular' : 'Reserva'}
-                              </span>
-                              {ath.isCaptain && (
-                                <span className="px-1.5 py-0.5 rounded bg-brand-yellow-light text-brand-blue-dark font-bold text-[10px]">
-                                  C
-                                </span>
-                              )}
-                              {ath.isGoalkeeper && (
-                                <span className="px-1.5 py-0.5 rounded bg-brand-blue-light text-brand-blue font-bold text-[10px]">
-                                  GK
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* 4. ESTATÍSTICAS CONSOLIDADAS */}
-            <section className="space-y-3">
-              <h3 className="text-xs font-display font-extrabold uppercase tracking-wider text-brand-blue border-b border-brand-surface-border pb-2">
-                Estatísticas da Partida
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs">
-                <div className="p-3 rounded-xl bg-brand-surface-muted border border-brand-surface-border">
-                  <span className="text-brand-text-secondary block">Faltas</span>
-                  <span className="text-sm font-display font-bold text-brand-text-primary mt-0.5 block">
-                    {countEventsByType('home', ['foul', 'team_foul'])} ×{' '}
-                    {countEventsByType('away', ['foul', 'team_foul'])}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-brand-surface-muted border border-brand-surface-border">
-                  <span className="text-brand-text-secondary block">
-                    Cartões Amarelos
-                  </span>
-                  <span className="text-sm font-display font-bold text-brand-text-primary mt-0.5 block">
-                    {countEventsByType('home', ['yellow_card'])} ×{' '}
-                    {countEventsByType('away', ['yellow_card'])}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-brand-surface-muted border border-brand-surface-border">
-                  <span className="text-brand-text-secondary block">
-                    Vermelhos / Expulsões
-                  </span>
-                  <span className="text-sm font-display font-bold text-brand-text-primary mt-0.5 block">
-                    {countEventsByType('home', ['red_card', 'expulsion'])} ×{' '}
-                    {countEventsByType('away', ['red_card', 'expulsion'])}
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-brand-surface-muted border border-brand-surface-border">
-                  <span className="text-brand-text-secondary block">
-                    Timeouts Solicitados
-                  </span>
-                  <span className="text-sm font-display font-bold text-brand-text-primary mt-0.5 block">
-                    {sheet.homeTimeoutsUsed} × {sheet.awayTimeoutsUsed}
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            {/* 5. EVENTOS CRONOLÓGICOS */}
-            <section className="space-y-3">
-              <h3 className="text-xs font-display font-extrabold uppercase tracking-wider text-brand-blue border-b border-brand-surface-border pb-2">
-                Registro Cronológico de Eventos ({chronologicalEvents.length})
-              </h3>
-              {chronologicalEvents.length === 0 ? (
-                <p className="text-xs text-brand-text-secondary py-2">
-                  Nenhum evento registrado nesta súmula.
-                </p>
-              ) : (
-                <div className="divide-y divide-brand-surface-border text-xs">
-                  {chronologicalEvents.map((ev) => (
-                    <div
-                      key={ev.id}
-                      className="py-2 flex items-center justify-between gap-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-bold text-brand-blue w-14">
-                          {ev.matchClockDisplay}
-                        </span>
-                        <span className="font-bold text-brand-text-primary">
-                          {ev.typeLabel}
-                        </span>
-                        {ev.athleteName && (
-                          <span className="text-brand-text-secondary">
-                            — {ev.athleteName}
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-semibold text-brand-text-secondary">
-                        {ev.teamName || ev.periodLabel}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* 6. ARBITRAGEM E RUBRICAS DIGITAIS */}
-            <section className="space-y-4 pt-2 border-t border-brand-surface-border">
-              <h3 className="text-xs font-display font-extrabold uppercase tracking-wider text-brand-blue">
-                Arbitragem, Observações e Validação Digital da Mesa
-              </h3>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                {[
-                  {
-                    key: 'referee',
-                    role: 'Árbitro Principal',
-                    sub: sheet.refereeName || 'Mesa Oficial',
-                  },
-                  {
-                    key: 'tableOfficial',
-                    role: 'Mesário / Operador',
-                    sub: 'Registro Eletrônico',
-                  },
-                  {
-                    key: 'homeCaptain',
-                    role: `Capitão (${match.homeTeam.teamName})`,
-                    sub: 'Conferência de Placar',
-                  },
-                  {
-                    key: 'awayCaptain',
-                    role: `Capitão (${match.awayTeam.teamName})`,
-                    sub: 'Conferência de Placar',
-                  },
-                ].map((sig) => {
-                  const isSigned = signatures[sig.key as keyof typeof signatures];
-                  return (
-                    <button
-                      key={sig.key}
-                      type="button"
-                      disabled={!isAdmin}
-                      onClick={() =>
-                        isAdmin &&
-                        setSignatures((prev) => ({
-                          ...prev,
-                          [sig.key]: !prev[sig.key as keyof typeof prev],
-                        }))
-                      }
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        isSigned
-                          ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950'
-                          : 'bg-brand-surface-muted border-dashed border-brand-surface-border text-brand-text-secondary'
-                      } ${!isAdmin ? 'cursor-default' : ''}`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider">
-                          {sig.role}
-                        </span>
-                        <ShieldCheck
-                          className={`w-4 h-4 ${
-                            isSigned ? 'text-emerald-600' : 'text-brand-text-muted'
-                          }`}
-                        />
-                      </div>
-                      <span className="block text-xs font-bold truncate">
-                        {sig.sub}
-                      </span>
-                      <span className="block text-[10px] mt-1 font-semibold">
-                        {isSigned
-                          ? '✓ Validado digitalmente'
-                          : isAdmin
-                          ? 'Toque para validar'
-                          : 'Aguardando mesa'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="pt-4 flex items-center justify-between text-xs text-brand-text-muted">
-                <span className="inline-flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-brand-blue" />
-                  <span>
-                    Documento gerado eletronicamente pelo sistema INTRAMED IX
-                  </span>
-                </span>
-                <span>ID: {sheet.id}</span>
-              </div>
-            </section>
-          </div>
-        </main>
-      )}
+      </main>
     </div>
   );
 };
