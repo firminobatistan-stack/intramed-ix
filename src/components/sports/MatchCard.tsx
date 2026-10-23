@@ -47,7 +47,8 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   className = '',
 }) => {
   const navigate = useNavigate();
-  const { getSheetByMatchId } = useCompetitionStore();
+  const { getSheetByMatchId, canOperateOfficialData } = useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
 
   const sheet = match ? getSheetByMatchId(match.id) : undefined;
   const scoringEvents = (sheet?.events || []).filter(
@@ -252,7 +253,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
 
-          {showOperatorActions && (
+          {showOperatorActions && isAdmin && (
             <>
               <span className="text-slate-200">|</span>
               <button
@@ -261,21 +262,21 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 className="inline-flex items-center gap-1 text-xs font-display font-bold text-[#0B218A] hover:underline"
               >
                 <Play className="w-3 h-3" />
-                <span>Abrir Súmula</span>
+                <span>Abrir Súmula (Mesa)</span>
               </button>
-              {isFinished && (
-                <>
-                  <span className="text-slate-200">|</span>
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/sumula/${match.id}/documento`)}
-                    className="inline-flex items-center gap-1 text-xs font-display font-bold text-amber-600 hover:underline"
-                  >
-                    <FileText className="w-3 h-3" />
-                    <span>Documento</span>
-                  </button>
-                </>
-              )}
+            </>
+          )}
+          {isFinished && (
+            <>
+              <span className="text-slate-200">|</span>
+              <button
+                type="button"
+                onClick={() => navigate(`/sumula/${match.id}/documento`)}
+                className="inline-flex items-center gap-1 text-xs font-display font-bold text-amber-600 hover:underline"
+              >
+                <FileText className="w-3 h-3" />
+                <span>Súmula Oficial</span>
+              </button>
             </>
           )}
         </div>

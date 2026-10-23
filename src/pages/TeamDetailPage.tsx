@@ -47,7 +47,9 @@ export const TeamDetailPage: React.FC = () => {
     favoriteTeamIds,
     toggleFavoriteTeam,
     updateTeamCrest,
+    canOperateOfficialData,
   } = useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
 
   const [activeTab, setActiveTab] = useState<TeamTabId>('overview');
   const [selectedModality, setSelectedModality] = useState<ModalitySlug | 'all'>(
@@ -292,23 +294,26 @@ export const TeamDetailPage: React.FC = () => {
                 )}
               </div>
 
-              {/* Input oculto para trocar/enviar escudo (especialmente útil para a Tormenta pré-pronta) */}
-              <input
-                ref={crestInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleCrestUpload}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => crestInputRef.current?.click()}
-                title="Enviar ou atualizar escudo oficial desta equipe"
-                style={{ backgroundColor: accentHex }}
-                className="absolute -right-2 -bottom-2 w-9 h-9 rounded-full text-slate-950 border-2 border-white shadow-lg flex items-center justify-center hover:scale-105 transition-transform"
-              >
-                <Camera className="w-4 h-4" />
-              </button>
+              {isAdmin && (
+                <>
+                  <input
+                    ref={crestInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCrestUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => crestInputRef.current?.click()}
+                    title="Enviar ou atualizar escudo oficial desta equipe (Apenas Admin)"
+                    style={{ backgroundColor: accentHex }}
+                    className="absolute -right-2 -bottom-2 w-9 h-9 rounded-full text-slate-950 border-2 border-white shadow-lg flex items-center justify-center hover:scale-105 transition-transform"
+                  >
+                    <Camera className="w-4 h-4" />
+                  </button>
+                </>
+              )}
             </div>
 
             <h2 className="mt-4 text-2xl sm:text-4xl font-display font-black uppercase tracking-tight text-white drop-shadow">
@@ -322,23 +327,6 @@ export const TeamDetailPage: React.FC = () => {
                 {resolvedTeam?.turmaLabel || 'Medicina UEMA'}
               </span>
             </p>
-
-            {/* Banner especial quando estiver na página pré-pronta da TORMENTA sem escudo */}
-            {resolvedTeam?.id === 'tormenta' && !resolvedTeam.crestUrl && (
-              <div className="mt-4 inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 rounded-2xl bg-white/10 border border-white/20 text-xs">
-                <span className="text-white/90 font-medium">
-                  Página da <strong>Tormenta</strong> já está pré-pronta!
-                </span>
-                <button
-                  type="button"
-                  onClick={() => crestInputRef.current?.click()}
-                  style={{ backgroundColor: accentHex }}
-                  className="px-3 py-1 rounded-full text-slate-950 font-display font-extrabold text-[11px] shadow"
-                >
-                  Adicionar Logo da Tormenta
-                </button>
-              </div>
-            )}
 
             {crestFeedback && (
               <p className="mt-3 px-3.5 py-1 rounded-full bg-black/40 text-xs font-bold text-white">
@@ -665,15 +653,17 @@ export const TeamDetailPage: React.FC = () => {
             >
               Elenco Oficial • {resolvedTeam?.name}
             </div>
-            <button
-              type="button"
-              onClick={() => navigate('/admin')}
-              style={{ backgroundColor: primaryHex }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-white text-xs font-display font-bold shadow-sm hover:opacity-95"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>Inscrever Atleta na {resolvedTeam?.name}</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => navigate('/admin')}
+                style={{ backgroundColor: primaryHex }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-white text-xs font-display font-bold shadow-sm hover:opacity-95"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Inscrever Atleta na {resolvedTeam?.name}</span>
+              </button>
+            )}
           </div>
 
           {teamSquad.length > 0 ? (

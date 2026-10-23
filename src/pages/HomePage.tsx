@@ -45,7 +45,9 @@ export const HomePage: React.FC = () => {
     getModalityStandings,
     isTestMode,
     setTestMode,
+    canOperateOfficialData,
   } = useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
   const [selectedSportFilter, setSelectedSportFilter] = useState<string>('todas');
   const [timeFilter, setTimeFilter] = useState<HomeTimeFilter>('all');
   const [dayIndex, setDayIndex] = useState<number>(0);
@@ -144,14 +146,16 @@ export const HomePage: React.FC = () => {
               <span>Acompanhar Ao Vivo</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => navigate('/admin')}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-display font-bold text-xs transition-colors"
-            >
-              <ClipboardList className="w-3.5 h-3.5 text-brand-yellow" />
-              <span>Operar Súmula</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => navigate('/admin')}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-display font-bold text-xs transition-colors"
+              >
+                <ClipboardList className="w-3.5 h-3.5 text-brand-yellow" />
+                <span>Operar Súmula</span>
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -257,7 +261,7 @@ export const HomePage: React.FC = () => {
             })}
           </div>
 
-          {!isTestMode && (
+          {!isTestMode && isAdmin && (
             <button
               type="button"
               onClick={() => setTestMode(true)}

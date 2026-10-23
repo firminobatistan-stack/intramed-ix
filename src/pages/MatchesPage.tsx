@@ -32,7 +32,9 @@ const TOURNAMENT_DAYS = [
  */
 export const MatchesPage: React.FC = () => {
   const navigate = useNavigate();
-  const { visibleMatches, isTestMode, setTestMode } = useCompetitionStore();
+  const { visibleMatches, isTestMode, setTestMode, canOperateOfficialData } =
+    useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
 
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('todos');
   const [dayIdx, setDayIdx] = useState<number>(0);
@@ -192,7 +194,7 @@ export const MatchesPage: React.FC = () => {
             </button>
           )}
 
-          {!isTestMode && (
+          {!isTestMode && isAdmin && (
             <button
               type="button"
               onClick={() => setTestMode(true)}
@@ -203,14 +205,16 @@ export const MatchesPage: React.FC = () => {
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => navigate('/admin')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0B218A] text-white text-xs font-display font-bold hover:bg-blue-900 transition-colors"
-          >
-            <ClipboardList className="w-3.5 h-3.5 text-brand-yellow" />
-            <span>Central de Súmulas</span>
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate('/admin')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0B218A] text-white text-xs font-display font-bold hover:bg-blue-900 transition-colors"
+            >
+              <ClipboardList className="w-3.5 h-3.5 text-brand-yellow" />
+              <span>Central de Súmulas</span>
+            </button>
+          )}
         </div>
       </div>
 

@@ -34,14 +34,24 @@ export const FavoritesPage: React.FC = () => {
   const navigate = useNavigate();
   const {
     favoriteModalityIds,
+    favoriteTeamIds,
+    favoriteAthleteIds,
     toggleFavoriteModality,
+    toggleFavoriteTeam,
+    toggleFavoriteAthlete,
     visibleMatches,
+    visibleTeams,
+    visibleAthletes,
+    getTeamById,
   } = useCompetitionStore();
 
   const [activeTab, setActiveTab] = useState<FavTabId>('modalidades');
 
-  const relatedMatches = visibleMatches.filter((m) =>
-    favoriteModalityIds.includes(m.modalityId)
+  const relatedMatches = visibleMatches.filter(
+    (m) =>
+      favoriteModalityIds.includes(m.modalityId) ||
+      (m.homeTeam.teamId && favoriteTeamIds.includes(m.homeTeam.teamId)) ||
+      (m.awayTeam.teamId && favoriteTeamIds.includes(m.awayTeam.teamId))
   );
 
   return (
@@ -69,7 +79,10 @@ export const FavoritesPage: React.FC = () => {
 
         <div className="relative z-10 flex items-center gap-2">
           <span className="px-3.5 py-2 rounded-2xl bg-white/10 border border-white/15 text-xs font-display font-extrabold text-brand-yellow">
-            {favoriteModalityIds.length} modalidade(s) seguida(s)
+            {favoriteModalityIds.length +
+              favoriteTeamIds.length +
+              favoriteAthleteIds.length}{' '}
+            favorito(s) salvo(s)
           </span>
         </div>
       </div>
@@ -194,40 +207,192 @@ export const FavoritesPage: React.FC = () => {
       )}
 
       {activeTab === 'equipes' && (
-        <EmptyState
-          variant="teams"
-          title="Nenhuma equipe / período cadastrado"
-          message="Assim que as turmas e períodos de Medicina forem cadastrados oficialmente pela A.A.A. Cangaceira, você poderá favoritá-los aqui."
-          action={
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<Compass className="w-4 h-4" />}
-              onClick={() => navigate('/equipe')}
-            >
-              Visualizar Estrutura da Página de Equipe
-            </Button>
-          }
-        />
+        <div className="rounded-3xl bg-white border border-brand-surface-border p-5 sm:p-6 shadow-card space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
+                Escolha sua Atlética / Período Favorito
+              </h3>
+              <p className="text-xs text-brand-text-secondary">
+                Siga sua turma (Colossal, Soberana, Sanguinária, Predadora ou Tormenta) para destacar seus jogos.
+              </p>
+            </div>
+            <Shield className="w-5 h-5 text-brand-blue shrink-0" />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {visibleTeams.map((team) => {
+              const isFav = favoriteTeamIds.includes(team.id);
+              const primaryHex = team.theme?.primaryHex || '#0B218A';
+              const secondaryHex = team.theme?.secondaryHex || '#061356';
+              const accentHex = team.theme?.accentHex || '#FACC15';
+              return (
+                <div
+                  key={team.id}
+                  style={
+                    isFav
+                      ? {
+                          background: `linear-gradient(135deg, ${primaryHex} 0%, ${secondaryHex} 100%)`,
+                        }
+                      : undefined
+                  }
+                  className={`rounded-2xl p-4 border transition-all flex items-center justify-between gap-3 ${
+                    isFav
+                      ? 'text-white border-transparent shadow-md'
+                      : 'bg-brand-surface-muted/70 text-brand-text-primary border-brand-surface-border hover:border-brand-blue/30'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/equipe/${team.id}`)}
+                    className="flex items-center gap-3 text-left min-w-0 flex-1"
+                  >
+                    <div
+                      style={{ borderColor: isFav ? accentHex : undefined }}
+                      className="w-12 h-12 rounded-2xl bg-slate-900 border-2 overflow-hidden flex items-center justify-center shrink-0 shadow"
+                    >
+                      {team.crestUrl ? (
+                        <img
+                          src={team.crestUrl}
+                          alt={team.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Shield className="w-5 h-5 text-brand-yellow" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block text-sm font-display font-extrabold truncate">
+                        {team.name}
+                      </span>
+                      <span
+                        className={`block text-[11px] truncate ${
+                          isFav ? 'text-white/85' : 'text-brand-text-muted'
+                        }`}
+                      >
+                        {team.turmaLabel || 'Medicina UEMA'}
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleFavoriteTeam(team.id)}
+                    aria-label={
+                      isFav
+                        ? `Remover ${team.name} dos favoritos`
+                        : `Favoritar ${team.name}`
+                    }
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                      isFav
+                        ? 'bg-brand-yellow text-brand-blue-dark'
+                        : 'bg-white border border-brand-surface-border text-brand-text-muted hover:text-brand-blue'
+                    }`}
+                  >
+                    {isFav ? (
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                    ) : (
+                      <Heart className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
-      {activeTab === 'atletas' && (
-        <EmptyState
-          variant="teams"
-          title="Nenhum atleta cadastrado"
-          message="Quando a relação oficial de atletas de cada período estiver disponível, você poderá seguir atletas específicos."
-          action={
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<User className="w-4 h-4" />}
-              onClick={() => navigate('/atleta')}
-            >
-              Visualizar Estrutura do Perfil de Atleta
-            </Button>
-          }
-        />
-      )}
+      {activeTab === 'atletas' &&
+        (visibleAthletes.length > 0 ? (
+          <div className="rounded-3xl bg-white border border-brand-surface-border p-5 sm:p-6 shadow-card space-y-4">
+            <div>
+              <h3 className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
+                Atletas Inscritos ({visibleAthletes.length})
+              </h3>
+              <p className="text-xs text-brand-text-secondary">
+                Siga seus atletas favoritos para acessar rapidamente suas fichas e estatísticas.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {visibleAthletes.map((ath) => {
+                const isFav = favoriteAthleteIds.includes(ath.id);
+                const team = getTeamById(ath.teamId);
+                return (
+                  <div
+                    key={ath.id}
+                    className={`rounded-2xl p-3.5 border transition-all flex items-center justify-between gap-3 ${
+                      isFav
+                        ? 'bg-brand-blue text-white border-brand-blue shadow-sm'
+                        : 'bg-brand-surface-muted/70 text-brand-text-primary border-brand-surface-border'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/atleta/${ath.id}`)}
+                      className="flex items-center gap-3 text-left min-w-0 flex-1"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center shrink-0 overflow-hidden">
+                        {ath.avatarUrl ? (
+                          <img
+                            src={ath.avatarUrl}
+                            alt={ath.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <User className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-xs font-display font-extrabold truncate">
+                          #{ath.jerseyNumber || '•'} {ath.name}
+                        </span>
+                        <span
+                          className={`block text-[11px] truncate ${
+                            isFav ? 'text-brand-yellow' : 'text-brand-text-muted'
+                          }`}
+                        >
+                          {team?.name || 'Medicina UEMA'}
+                        </span>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleFavoriteAthlete(ath.id)}
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                        isFav
+                          ? 'bg-brand-yellow text-brand-blue-dark'
+                          : 'bg-white border border-brand-surface-border text-brand-text-muted hover:text-brand-blue'
+                      }`}
+                    >
+                      {isFav ? (
+                        <Check className="w-4 h-4 stroke-[2.5]" />
+                      ) : (
+                        <Heart className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <EmptyState
+            variant="teams"
+            title="Nenhum atleta cadastrado ainda"
+            message="Quando a relação oficial de atletas de cada período estiver disponível, você poderá seguir atletas específicos."
+            action={
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Compass className="w-4 h-4" />}
+                onClick={() => navigate('/atleta')}
+              >
+                Visualizar Estrutura do Perfil de Atleta
+              </Button>
+            }
+          />
+        ))}
     </div>
   );
 };

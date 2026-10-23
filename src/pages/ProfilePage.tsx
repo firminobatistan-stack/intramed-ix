@@ -31,42 +31,11 @@ export const ProfilePage: React.FC = () => {
   const {
     currentUser,
     setCurrentUser,
-    visibleAthletes,
-    getTeamById,
+    canOperateOfficialData,
   } = useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
 
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-
-  const handleActivateAdmin = () => {
-    setCurrentUser({
-      id: 'usr-admin-intramed',
-      name: 'Comissão Organizadora • A.A.A. Cangaceira',
-      email: 'organizacao@intramed.uema.br',
-      avatarUrl: '/assets/atletica/logo.png',
-      teamId: null,
-      teamName: 'Organização Oficial INTRAMED IX',
-      modalityIds: [],
-      role: 'administrador',
-      linkedAthleteId: null,
-    });
-  };
-
-  const handleLinkAthlete = (athleteId: string) => {
-    const ath = visibleAthletes.find((a) => a.id === athleteId);
-    if (!ath) return;
-    const team = getTeamById(ath.teamId);
-    setCurrentUser({
-      id: `usr-${ath.id}`,
-      name: ath.name,
-      email: `${ath.id}@medicina.uema.br`,
-      avatarUrl: ath.avatarUrl,
-      teamId: ath.teamId,
-      teamName: team?.name || 'Período Medicina UEMA',
-      modalityIds: ath.modalityIds,
-      role: 'atleta',
-      linkedAthleteId: ath.id,
-    });
-  };
 
   const roleLabel =
     currentUser?.role === 'administrador' || currentUser?.role === 'organizacao'
@@ -148,70 +117,49 @@ export const ProfilePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Seletor Rápido de Papel / Vínculo para Testar Permissões (Atleta vs Admin vs Visitante) */}
+      {/* Permissões de Acesso por Papel */}
       <div className="all-sports-card p-5 sm:p-6 space-y-4">
         <div className="all-sports-section-pill">
-          Controle de Acesso &amp; Vínculo com Perfil de Atleta
+          Nível de Permissão &amp; Segurança da Sessão
         </div>
 
         <p className="text-xs text-slate-500 leading-relaxed">
-          Cada atleta autenticado pode editar apenas a <strong>própria foto e dados pessoais permitidos</strong>, enquanto estatísticas oficiais vêm exclusivamente das súmulas validadas pela mesa/administração.
+          No INTRAMED IX, o <strong>público e os atletas</strong> têm acesso de consulta a todas as partidas, chaves, equipes e estatísticas. Apenas <strong>Administradores / Mesários autenticados</strong> podem operar o cronômetro, lançar gols/pontos ao vivo ou alterar cadastros oficiais.
         </p>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => setCurrentUser(null)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-display font-bold border transition-all ${
-              !currentUser
-                ? 'bg-[#0B218A] text-white border-[#0B218A]'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            Modo Visitante (Apenas Leitura)
-          </button>
-
-          <button
-            type="button"
-            onClick={handleActivateAdmin}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-bold border transition-all ${
-              currentUser?.role === 'administrador' ||
-              currentUser?.role === 'organizacao'
-                ? 'bg-[#0B218A] text-white border-[#0B218A]'
-                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <ShieldAlert className="w-3.5 h-3.5 text-brand-yellow" />
-            <span>Comissão / Administrador</span>
-          </button>
+          {!currentUser ? (
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<LogIn className="w-4 h-4" />}
+              onClick={() => navigate('/login')}
+            >
+              Entrar como Atleta ou Mesário / Admin
+            </Button>
+          ) : (
+            <>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin')}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B218A] text-white text-xs font-display font-bold shadow-sm hover:bg-blue-900 transition-colors"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-brand-yellow" />
+                  <span>Abrir Central de Súmulas &amp; Cadastros</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setCurrentUser(null)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-display font-bold transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Encerrar Sessão Atual</span>
+              </button>
+            </>
+          )}
         </div>
-
-        {visibleAthletes.length > 0 && (
-          <div className="pt-3 border-t border-slate-100 space-y-2">
-            <span className="block text-xs font-bold text-slate-600">
-              Ou vincular sessão a um Atleta específico (para testar upload de foto do próprio atleta):
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {visibleAthletes.slice(0, 8).map((ath) => {
-                const isLinked = currentUser?.linkedAthleteId === ath.id;
-                return (
-                  <button
-                    key={ath.id}
-                    type="button"
-                    onClick={() => handleLinkAthlete(ath.id)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-display font-bold transition-all ${
-                      isLinked
-                        ? 'bg-emerald-600 text-white shadow-sm'
-                        : 'bg-[#F3F4F9] text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    #{ath.jerseyNumber || '•'} {ath.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Grid de Informações Esportivas: Equipe + Modalidades */}

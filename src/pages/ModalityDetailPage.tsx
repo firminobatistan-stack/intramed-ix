@@ -66,7 +66,9 @@ export const ModalityDetailPage: React.FC = () => {
     getModalityStandings,
     getModalityLeaderboard,
     isTestMode,
+    canOperateOfficialData,
   } = useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
   const [activeTab, setActiveTab] = useState<ModalityTabId>('jogos');
 
   const modality = OFFICIAL_MODALITIES.find((m) => m.id === modalityId);
@@ -146,7 +148,7 @@ export const ModalityDetailPage: React.FC = () => {
         </div>
 
         <div className="relative z-10 flex items-center gap-2 self-start sm:self-center">
-          {isTestMode && (
+          {isTestMode && isAdmin && (
             <Button
               variant="accent"
               size="sm"
@@ -214,6 +216,7 @@ export const ModalityDetailPage: React.FC = () => {
         {activeTab === 'chaveamento' && (
           <BracketView
             bracket={modalityBracket}
+            modalityId={modality.id}
             modalityName={modality.name}
           />
         )}

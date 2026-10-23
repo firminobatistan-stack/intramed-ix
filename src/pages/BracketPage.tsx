@@ -51,6 +51,7 @@ export const BracketPage: React.FC = () => {
       {/* Componente de Chaveamento */}
       <BracketView
         bracket={currentBracket}
+        modalityId={currentModality.id}
         modalityName={currentModality.name}
       />
     </div>

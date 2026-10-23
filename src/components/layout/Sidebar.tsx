@@ -15,6 +15,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { BrandMark } from './BrandMark';
+import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 
 interface SidebarItem {
   to: string;
@@ -64,6 +65,8 @@ const PRIMARY_ITEMS: SidebarItem[] = [
 export const Sidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { currentUser, canOperateOfficialData } = useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
 
   return (
     <aside
@@ -125,28 +128,30 @@ export const Sidebar: React.FC = () => {
           </nav>
         </div>
 
-        {/* Estrutura Esportiva & Operação de Partida */}
+        {/* Estrutura Esportiva & Transmissão */}
         <div>
           <p className="px-3 mb-2.5 text-[11px] font-bold uppercase tracking-wider text-white/45">
-            Operação & Transmissão
+            Competição &amp; Ao Vivo
           </p>
           <div className="space-y-1">
-            <NavLink
-              to="/admin"
-              className={({ isActive }) =>
-                `group flex items-center justify-between gap-3 px-3.5 py-3 rounded-2xl text-sm transition-all duration-150 ${
-                  isActive
-                    ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
-                    : 'text-white/75 hover:text-white hover:bg-white/10 font-medium'
-                }`
-              }
-            >
-              <span className="flex items-center gap-3">
-                <ClipboardList className="w-5 h-5 shrink-0 text-brand-yellow group-hover:text-brand-yellow" />
-                <span>Súmula ao Vivo / Admin</span>
-              </span>
-              <span className="w-2 h-2 rounded-full bg-brand-yellow" />
-            </NavLink>
+            {isAdmin && (
+              <NavLink
+                to="/admin"
+                className={({ isActive }) =>
+                  `group flex items-center justify-between gap-3 px-3.5 py-3 rounded-2xl text-sm transition-all duration-150 ${
+                    isActive
+                      ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
+                      : 'text-white/75 hover:text-white hover:bg-white/10 font-medium'
+                  }`
+                }
+              >
+                <span className="flex items-center gap-3">
+                  <ClipboardList className="w-5 h-5 shrink-0 text-brand-yellow group-hover:text-brand-yellow" />
+                  <span>Súmula ao Vivo / Admin</span>
+                </span>
+                <span className="w-2 h-2 rounded-full bg-brand-yellow" />
+              </NavLink>
+            )}
 
             <NavLink
               to="/placar"
@@ -230,14 +235,16 @@ export const Sidebar: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => navigate('/login')}
+          onClick={() => navigate(currentUser ? '/perfil' : '/login')}
           className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-brand-yellow hover:bg-brand-yellow-dark text-xs font-display font-extrabold text-brand-blue-dark shadow-sm transition-all"
         >
-          <span className="flex items-center gap-2">
-            <LogIn className="w-4 h-4" />
-            <span>Acesso à Conta</span>
+          <span className="flex items-center gap-2 truncate">
+            <LogIn className="w-4 h-4 shrink-0" />
+            <span className="truncate">
+              {currentUser ? currentUser.name : 'Entrar (Atleta / Admin)'}
+            </span>
           </span>
-          <span className="w-2 h-2 rounded-full bg-brand-blue-dark" aria-hidden="true" />
+          <span className="w-2 h-2 rounded-full bg-brand-blue-dark shrink-0" aria-hidden="true" />
         </button>
       </div>
     </aside>

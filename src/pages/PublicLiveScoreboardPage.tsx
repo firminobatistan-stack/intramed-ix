@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CircleDot,
   Clock,
+  FileText,
   FlaskConical,
   Maximize2,
   Minimize2,
@@ -65,7 +66,9 @@ export const PublicLiveScoreboardPage: React.FC = () => {
     getMatchById,
     getSheetByMatchId,
     getModalityStandings,
+    canOperateOfficialData,
   } = useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
 
   const [activeTab, setActiveTab] = useState<MatchInfoTab>('details');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -188,7 +191,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {resolvedMatch && (
+            {resolvedMatch && isAdmin && (
               <button
                 type="button"
                 onClick={() => navigate(`/sumula/${resolvedMatch.id}`)}
@@ -196,6 +199,18 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               >
                 <Play className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Operar Súmula</span>
+              </button>
+            )}
+
+            {resolvedMatch && (
+              <button
+                type="button"
+                onClick={() => navigate(`/sumula/${resolvedMatch.id}/documento`)}
+                title="Visualizar Documento da Súmula"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-display font-bold transition-colors"
+              >
+                <FileText className="w-3.5 h-3.5 text-brand-yellow" />
+                <span className="hidden sm:inline">Súmula Oficial</span>
               </button>
             )}
 
@@ -262,7 +277,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           </span>
         </div>
 
-        {!resolvedMatch && !isTestMode && (
+        {!resolvedMatch && !isTestMode && isAdmin && (
           <div className="mt-3 flex justify-center">
             <button
               type="button"
@@ -702,6 +717,19 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {resolvedMatch && (
+                <div className="pt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/sumula/${resolvedMatch.id}/documento`)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#F3F4F9] hover:bg-blue-50 border border-slate-200 text-xs font-display font-bold text-[#0B218A] transition-colors"
+                  >
+                    <FileText className="w-4 h-4 text-[#1D63FF]" />
+                    <span>Abrir Documento da Súmula Oficial (PDF / Impressão)</span>
+                  </button>
+                </div>
+              )}
             </section>
           </>
         )}

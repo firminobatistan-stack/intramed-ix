@@ -1,23 +1,74 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GitBranch, Trophy, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { BracketStructure, BracketMatchSlot } from '../../types/domain';
 import { TeamCrest } from './TeamCrest';
 import { StatusBadge } from '../ui/StatusBadge';
+import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 
 interface BracketViewProps {
   bracket?: BracketStructure | null;
+  modalityId?: string;
   modalityName?: string;
 }
 
 /**
  * Componente de Chaveamento Oficial (Quartas de final → Semifinais → Final).
- * Com controles de Zoom interativo e filtro de fase (estilo Copa Fácil / Challonge).
+ * Com controles de Zoom interativo e sincronização em tempo real com partidas criadas no Painel Admin.
  */
-export const BracketView: React.FC<BracketViewProps> = ({ bracket, modalityName }) => {
+export const BracketView: React.FC<BracketViewProps> = ({
+  bracket,
+  modalityId,
+  modalityName,
+}) => {
+  const navigate = useNavigate();
+  const { visibleMatches } = useCompetitionStore();
   const [zoomPercent, setZoomPercent] = useState<number>(100);
   const [mobileStageFilter, setMobileStageFilter] = useState<
     'all' | 'quarterfinals' | 'semifinals' | 'final'
   >('all');
+
+  const targetModalityId = modalityId || bracket?.modalityId;
+  const modalityKnockoutMatches = targetModalityId
+    ? visibleMatches.filter((m) => m.modalityId === targetModalityId)
+    : [];
+
+  const qfMatches = modalityKnockoutMatches.filter(
+    (m) => m.phase === 'quarterfinals'
+  );
+  const sfMatches = modalityKnockoutMatches.filter(
+    (m) => m.phase === 'semifinals'
+  );
+  const finalMatches = modalityKnockoutMatches.filter(
+    (m) => m.phase === 'final'
+  );
+
+  const dynamicQuarterfinals: BracketMatchSlot[] = [0, 1, 2, 3].map((idx) => ({
+    id: `dyn-qf-${idx}`,
+    orderIndex: idx,
+    phase: 'quarterfinals',
+    match: qfMatches[idx] || bracket?.quarterfinals?.[idx]?.match || null,
+  }));
+
+  const dynamicSemifinals: BracketMatchSlot[] = [0, 1].map((idx) => ({
+    id: `dyn-sf-${idx}`,
+    orderIndex: idx,
+    phase: 'semifinals',
+    match: sfMatches[idx] || bracket?.semifinals?.[idx]?.match || null,
+  }));
+
+  const dynamicFinal: BracketMatchSlot = {
+    id: 'dyn-final-0',
+    orderIndex: 0,
+    phase: 'final',
+    match: finalMatches[0] || bracket?.final?.match || null,
+  };
+
+  const hasAnyKnockoutMatch =
+    qfMatches.length > 0 ||
+    sfMatches.length > 0 ||
+    finalMatches.length > 0 ||
+    Boolean(bracket && bracket.isConfigured);
 
   const renderEmptySlotCard = (phaseLabel: string, index: number, isFinal = false) => (
     <div
@@ -74,10 +125,11 @@ export const BracketView: React.FC<BracketViewProps> = ({ bracket, modalityName 
     return (
       <div
         key={slot.id}
-        className={`rounded-2xl bg-white border ${
+        onClick={() => navigate(`/placar/${match.id}`)}
+        className={`cursor-pointer rounded-2xl bg-white border transition-all hover:-translate-y-0.5 ${
           isFinal
             ? 'border-brand-yellow ring-2 ring-brand-yellow/20 shadow-card-hover'
-            : 'border-brand-surface-border shadow-card'
+            : 'border-brand-surface-border hover:border-brand-blue/50 shadow-card'
         } p-3.5 w-full`}
       >
         <div className="flex items-center justify-between gap-2 pb-2.5 mb-2.5 border-b border-brand-surface-border">
@@ -141,7 +193,7 @@ export const BracketView: React.FC<BracketViewProps> = ({ bracket, modalityName 
     );
   };
 
-  const isConfigured = Boolean(bracket && bracket.isConfigured);
+  const isConfigured = hasAnyKnockoutMatch;
 
   return (
     <div className="space-y-5">
@@ -304,20 +356,16 @@ export const BracketView: React.FC<BracketViewProps> = ({ bracket, modalityName 
             {(mobileStageFilter === 'all' ||
               mobileStageFilter === 'quarterfinals') && (
               <div className="flex flex-col justify-between gap-4">
-                {isConfigured && bracket?.quarterfinals.length
-                  ? bracket.quarterfinals.map((slot) =>
-                      renderPopulatedSlotCard(slot, 'Quartas de Final')
-                    )
-                  : [0, 1, 2, 3].map((idx) =>
-                      renderEmptySlotCard('Quartas de Final', idx)
-                    )}
+                {dynamicQuarterfinals.map((slot) =>
+                  renderPopulatedSlotCard(slot, 'Quartas de Final')
+                )}
               </div>
             )}
 
             {(mobileStageFilter === 'all' ||
               mobileStageFilter === 'semifinals') && (
               <div className="flex flex-col justify-around gap-8 relative">
-                {[0, 1].map((semiIdx) => (
+                {dynamicSemifinals.map((slot, semiIdx) => (
                   <div key={semiIdx} className="relative flex items-center">
                     {mobileStageFilter === 'all' && (
                       <>
@@ -332,12 +380,7 @@ export const BracketView: React.FC<BracketViewProps> = ({ bracket, modalityName 
                       </>
                     )}
 
-                    {isConfigured && bracket?.semifinals[semiIdx]
-                      ? renderPopulatedSlotCard(
-                          bracket.semifinals[semiIdx],
-                          'Semifinal'
-                        )
-                      : renderEmptySlotCard('Semifinal', semiIdx)}
+                    {renderPopulatedSlotCard(slot, 'Semifinal')}
 
                     {mobileStageFilter === 'all' && (
                       <div
@@ -366,9 +409,7 @@ export const BracketView: React.FC<BracketViewProps> = ({ bracket, modalityName 
                     </>
                   )}
 
-                  {isConfigured && bracket?.final
-                    ? renderPopulatedSlotCard(bracket.final, 'Final', true)
-                    : renderEmptySlotCard('Final', 0, true)}
+                  {renderPopulatedSlotCard(dynamicFinal, 'Final', true)}
                 </div>
               </div>
             )}

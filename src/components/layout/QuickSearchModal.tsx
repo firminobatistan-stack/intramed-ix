@@ -12,7 +12,6 @@ import {
   Clock,
   Shield,
   User,
-  Layers,
 } from 'lucide-react';
 import { OFFICIAL_MODALITIES } from '../../data/officialData';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
@@ -28,13 +27,19 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
   onClose,
 }) => {
   const navigate = useNavigate();
-  const { visibleMatches } = useCompetitionStore();
+  const { visibleMatches, visibleTeams, visibleAthletes, canOperateOfficialData } =
+    useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
   const [query, setQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>([
+    'Colossal',
+    'Soberana',
+    'Sanguinária',
+    'Predadora',
+    'Tormenta',
     'Futsal',
     'Basquete',
     'Natação',
-    'Chaveamento',
   ]);
 
   useEffect(() => {
@@ -49,6 +54,20 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
 
   const matchingModalities = OFFICIAL_MODALITIES.filter((m) =>
     m.name.toLowerCase().includes(q)
+  );
+
+  const matchingTeams = visibleTeams.filter(
+    (t) =>
+      t.name.toLowerCase().includes(q) ||
+      (t.shortName || '').toLowerCase().includes(q) ||
+      (t.turmaLabel || '').toLowerCase().includes(q) ||
+      (t.mascotLabel || '').toLowerCase().includes(q)
+  );
+
+  const matchingAthletes = visibleAthletes.filter(
+    (a) =>
+      a.name.toLowerCase().includes(q) ||
+      String(a.jerseyNumber || '').includes(q)
   );
 
   const matchingMatches = visibleMatches.filter(
@@ -134,14 +153,16 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
               Páginas e Ferramentas do Ecossistema
             </span>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => handleGo('/admin')}
-                className="flex items-center gap-2 p-2.5 rounded-xl bg-brand-surface-muted hover:bg-brand-blue-light/60 text-left text-xs font-semibold text-brand-text-primary transition-colors"
-              >
-                <ClipboardList className="w-4 h-4 text-brand-blue shrink-0" />
-                <span>Súmulas</span>
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => handleGo('/admin')}
+                  className="flex items-center gap-2 p-2.5 rounded-xl bg-brand-surface-muted hover:bg-brand-blue-light/60 text-left text-xs font-semibold text-brand-text-primary transition-colors"
+                >
+                  <ClipboardList className="w-4 h-4 text-brand-blue shrink-0" />
+                  <span>Súmulas &amp; Admin</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleGo('/placar')}
@@ -176,14 +197,80 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => handleGo('/design-system')}
+                onClick={() => handleGo('/jogos')}
                 className="flex items-center gap-2 p-2.5 rounded-xl bg-brand-surface-muted hover:bg-brand-blue-light/60 text-left text-xs font-semibold text-brand-text-primary transition-colors"
               >
-                <Layers className="w-4 h-4 text-brand-blue shrink-0" />
-                <span>UI Case & 30 Telas</span>
+                <Calendar className="w-4 h-4 text-brand-blue shrink-0" />
+                <span>Calendário de Jogos</span>
               </button>
             </div>
           </div>
+
+          {/* As 5 Equipes Oficiais */}
+          {matchingTeams.length > 0 && (
+            <div>
+              <span className="px-2 text-[11px] font-bold uppercase tracking-wider text-brand-text-muted block mb-2">
+                Equipes Oficiais ({matchingTeams.length})
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {matchingTeams.map((team) => (
+                  <button
+                    key={team.id}
+                    type="button"
+                    onClick={() => handleGo(`/equipe/${team.id}`)}
+                    className="flex items-center justify-between px-3 py-2 rounded-xl hover:bg-brand-surface-muted border border-brand-surface-border/70 text-left transition-colors group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-slate-900 overflow-hidden flex items-center justify-center shrink-0">
+                        {team.crestUrl ? (
+                          <img
+                            src={team.crestUrl}
+                            alt={team.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Shield className="w-4 h-4 text-brand-yellow" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="block text-xs font-display font-extrabold text-brand-text-primary truncate">
+                          {team.name}
+                        </span>
+                        <span className="block text-[10px] font-semibold text-brand-text-secondary truncate">
+                          {team.turmaLabel || 'Medicina UEMA'}
+                        </span>
+                      </div>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-brand-text-muted group-hover:text-brand-blue shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Atletas Inscritos (quando houver) */}
+          {q && matchingAthletes.length > 0 && (
+            <div>
+              <span className="px-2 text-[11px] font-bold uppercase tracking-wider text-brand-text-muted block mb-2">
+                Atletas ({matchingAthletes.length})
+              </span>
+              <div className="space-y-1">
+                {matchingAthletes.slice(0, 6).map((ath) => (
+                  <button
+                    key={ath.id}
+                    type="button"
+                    onClick={() => handleGo(`/atleta/${ath.id}`)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-brand-surface-muted text-left transition-colors"
+                  >
+                    <span className="text-xs font-display font-bold text-brand-text-primary">
+                      #{ath.jerseyNumber || '•'} {ath.name}
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5 text-brand-text-muted" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Modalidades Oficiais */}
           <div>

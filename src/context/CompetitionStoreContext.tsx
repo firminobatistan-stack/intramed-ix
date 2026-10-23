@@ -755,12 +755,22 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     return () => clearInterval(interval);
   }, []);
 
+  const isUserAdmin = (user: UserProfile | null): boolean => {
+    if (!user) return false;
+    return (
+      user.role === 'administrador' ||
+      user.role === 'organizacao' ||
+      user.role === 'moderador'
+    );
+  };
+
   const updateMatchAndSheet = useCallback(
     (
       matchId: string,
       updater: (match: Match, sheet: MatchSheet) => { match: Match; sheet: MatchSheet }
     ) => {
       setState((prev) => {
+        if (!isUserAdmin(prev.currentUser)) return prev;
         const isTest = matchId.startsWith('test-');
         const matchesList = isTest ? [...prev.testMatches] : [...prev.officialMatches];
         const sheetsMap = isTest ? { ...prev.testSheets } : { ...prev.officialSheets };
@@ -794,21 +804,27 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   );
 
   const setTestMode = useCallback((enabled: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      isTestMode: enabled,
-    }));
+    setState((prev) => {
+      if (enabled && !isUserAdmin(prev.currentUser)) return prev;
+      return {
+        ...prev,
+        isTestMode: enabled,
+      };
+    });
   }, []);
 
   const resetTestEnvironment = useCallback(() => {
     const fresh = buildInitialTestWorkbench();
-    setState((prev) => ({
-      ...prev,
-      testTeams: fresh.teams,
-      testAthletes: fresh.athletes,
-      testMatches: fresh.matches,
-      testSheets: fresh.sheets,
-    }));
+    setState((prev) => {
+      if (!isUserAdmin(prev.currentUser)) return prev;
+      return {
+        ...prev,
+        testTeams: fresh.teams,
+        testAthletes: fresh.athletes,
+        testMatches: fresh.matches,
+        testSheets: fresh.sheets,
+      };
+    });
   }, []);
 
   const visibleMatches = state.isTestMode ? state.testMatches : state.officialMatches;
@@ -2222,6 +2238,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   const updateTeamCrest = useCallback((teamId: string, crestDataUrl: string) => {
     setState((prev) => {
+      if (!isUserAdmin(prev.currentUser)) return prev;
       const updateTeams = (list: Team[]) =>
         list.map((t) => (t.id === teamId ? { ...t, crestUrl: crestDataUrl } : t));
       const updateMatches = (list: Match[]) =>
@@ -2301,6 +2318,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       };
 
       setState((prev) => {
+        if (!isUserAdmin(prev.currentUser)) return prev;
         if (prev.isTestMode) {
           return {
             ...prev,
@@ -2327,6 +2345,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       avatarUrl?: string | null;
       modalityIds: ModalitySlug[];
     }): { ok: boolean; error?: string; athlete?: Athlete } => {
+      if (!isUserAdmin(state.currentUser)) {
+        return {
+          ok: false,
+          error: 'Apenas Administradores ou Mesários autenticados podem cadastrar atletas.',
+        };
+      }
       const cleanName = payload.name.trim();
       if (!cleanName || !payload.teamId) {
         return { ok: false, error: 'Informe o nome do atleta e o período/equipe.' };
@@ -2429,7 +2453,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       return { ok: true, athlete: newAthlete };
     },
-    [state.isTestMode, state.testAthletes, state.officialAthletes]
+    [state.isTestMode, state.testAthletes, state.officialAthletes, state.currentUser]
   );
 
   const createOfficialMatch = useCallback(
@@ -2444,6 +2468,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       scheduledTime?: string;
       venue?: string;
     }): Match | null => {
+      if (!isUserAdmin(state.currentUser)) return null;
       const teamsPool = state.isTestMode ? state.testTeams : state.officialTeams;
       const athletesPool = state.isTestMode
         ? state.testAthletes
@@ -2587,7 +2612,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       return newMatch;
     },
-    [state.isTestMode, state.testTeams, state.officialTeams, state.testAthletes, state.officialAthletes]
+    [state.isTestMode, state.testTeams, state.officialTeams, state.testAthletes, state.officialAthletes, state.currentUser]
   );
 
   return (

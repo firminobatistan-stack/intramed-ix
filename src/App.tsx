@@ -9,6 +9,7 @@ import {
 import { CompetitionStoreProvider } from './context/CompetitionStoreContext';
 import { SplashScreen } from './components/layout/SplashScreen';
 import { AppShell } from './components/layout/AppShell';
+import { AdminRouteGuard } from './components/layout/AdminRouteGuard';
 import { HomePage } from './pages/HomePage';
 import { CompetitionsPage } from './pages/CompetitionsPage';
 import { ModalityDetailPage } from './pages/ModalityDetailPage';
@@ -55,7 +56,14 @@ const RoutedApp: React.FC = () => {
   if (location.pathname.startsWith('/sumula/')) {
     return (
       <Routes>
-        <Route path="/sumula/:matchId" element={<LiveMatchSheetOperatorPage />} />
+        <Route
+          path="/sumula/:matchId"
+          element={
+            <AdminRouteGuard title="Operação de Súmula Eletrônica Ao Vivo">
+              <LiveMatchSheetOperatorPage />
+            </AdminRouteGuard>
+          }
+        />
       </Routes>
     );
   }
@@ -92,7 +100,14 @@ const RoutedApp: React.FC = () => {
     <AppShell title={getHeaderTitle()}>
       <Routes>
         <Route path="/" element={<HomePage />} />
-        <Route path="/admin" element={<AdminDashboardPage />} />
+        <Route
+          path="/admin"
+          element={
+            <AdminRouteGuard title="Central de Arbitragem, Súmulas & Administração">
+              <AdminDashboardPage />
+            </AdminRouteGuard>
+          }
+        />
         <Route path="/competicoes" element={<CompetitionsPage />} />
         <Route
           path="/competicoes/:modalityId"

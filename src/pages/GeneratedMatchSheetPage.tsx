@@ -22,7 +22,9 @@ export const GeneratedMatchSheetPage: React.FC = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
 
-  const { getMatchById, getSheetByMatchId } = useCompetitionStore();
+  const { getMatchById, getSheetByMatchId, canOperateOfficialData } =
+    useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
 
   const [signatures, setSignatures] = useState<{
     referee: boolean;
@@ -49,8 +51,12 @@ export const GeneratedMatchSheetPage: React.FC = () => {
         <p className="text-xs text-brand-text-secondary max-w-sm">
           Selecione uma partida no Painel de Súmulas para visualizar o documento consolidado.
         </p>
-        <Button variant="primary" size="sm" onClick={() => navigate('/admin')}>
-          Ir para o Painel de Súmulas
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => navigate(isAdmin ? '/admin' : '/jogos')}
+        >
+          {isAdmin ? 'Ir para o Painel de Súmulas' : 'Voltar para Jogos'}
         </Button>
       </div>
     );
@@ -93,11 +99,13 @@ export const GeneratedMatchSheetPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate(`/sumula/${match.id}`)}
+              onClick={() =>
+                navigate(isAdmin ? `/sumula/${match.id}` : `/placar/${match.id}`)
+              }
               className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-surface-muted hover:bg-brand-blue-light/50 text-xs font-semibold text-brand-text-primary transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Voltar ao Operador</span>
+              <span>{isAdmin ? 'Voltar ao Operador' : 'Voltar à Partida'}</span>
             </button>
             <h1 className="text-sm sm:text-base font-display font-bold text-brand-text-primary">
               Súmula da Partida • {match.modalityName}
@@ -385,7 +393,9 @@ export const GeneratedMatchSheetPage: React.FC = () => {
                   <button
                     key={sig.key}
                     type="button"
+                    disabled={!isAdmin}
                     onClick={() =>
+                      isAdmin &&
                       setSignatures((prev) => ({
                         ...prev,
                         [sig.key]: !prev[sig.key as keyof typeof prev],
@@ -395,7 +405,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
                       isSigned
                         ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950'
                         : 'bg-brand-surface-muted border-dashed border-brand-surface-border text-brand-text-secondary'
-                    }`}
+                    } ${!isAdmin ? 'cursor-default' : ''}`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider">
@@ -411,7 +421,11 @@ export const GeneratedMatchSheetPage: React.FC = () => {
                       {sig.sub}
                     </span>
                     <span className="block text-[10px] mt-1 font-semibold">
-                      {isSigned ? '✓ Validado digitalmente' : 'Toque para validar'}
+                      {isSigned
+                        ? '✓ Validado digitalmente'
+                        : isAdmin
+                        ? 'Toque para validar'
+                        : 'Aguardando mesa'}
                     </span>
                   </button>
                 );

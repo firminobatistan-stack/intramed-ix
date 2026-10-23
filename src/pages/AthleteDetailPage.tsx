@@ -47,10 +47,11 @@ export const AthleteDetailPage: React.FC = () => {
     favoriteAthleteIds,
     toggleFavoriteAthlete,
     canEditAthleteProfile,
+    canOperateOfficialData,
     updateAthleteAvatar,
     currentUser,
-    setCurrentUser,
   } = useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
 
   const [activeTab, setActiveTab] = useState<AthleteTab>('profile');
   const [selectedModality, setSelectedModality] = useState<ModalitySlug>('futsal');
@@ -102,19 +103,8 @@ export const AthleteDetailPage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  const handleSimulateAthleteLogin = () => {
-    if (!resolvedAthlete) return;
-    setCurrentUser({
-      id: `usr-${resolvedAthlete.id}`,
-      name: resolvedAthlete.name,
-      email: `${resolvedAthlete.id}@medicina.uema.br`,
-      avatarUrl: resolvedAthlete.avatarUrl,
-      teamId: resolvedAthlete.teamId,
-      teamName: team?.name || 'Período Medicina UEMA',
-      modalityIds: resolvedAthlete.modalityIds,
-      role: 'atleta',
-      linkedAthleteId: resolvedAthlete.id,
-    });
+  const handleGoToAthleteLogin = () => {
+    navigate('/login');
   };
 
   const getPositionDiagram = (mod: ModalitySlug, athletePos?: string | null) => {
@@ -489,27 +479,29 @@ export const AthleteDetailPage: React.FC = () => {
         </div>
       ) : (
         !isTestMode && (
-          <div className="all-sports-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-amber-50/70 border-amber-200">
-            <div className="text-xs text-amber-950 font-medium">
-              Nenhum atleta oficial cadastrado ainda. Cadastre períodos e atletas no Painel Admin ou ative o <strong>Modo de Teste</strong> para inspecionar perfis com estatísticas ao vivo.
+          <div className="all-sports-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 border-slate-200">
+            <div className="text-xs text-slate-600 font-medium">
+              Os atletas inscritos pelas 5 equipes oficiais aparecerão listados aqui assim que o cadastro for concluído pela Comissão Organizadora.
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => navigate('/admin')}
-                className="px-3.5 py-1.5 rounded-full bg-[#0B218A] text-white text-xs font-display font-bold"
-              >
-                Cadastrar no Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => setTestMode(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-brand-yellow text-[#0B218A] text-xs font-display font-extrabold"
-              >
-                <FlaskConical className="w-3.5 h-3.5" />
-                <span>Modo de Teste</span>
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin')}
+                  className="px-3.5 py-1.5 rounded-full bg-[#0B218A] text-white text-xs font-display font-bold"
+                >
+                  Cadastrar no Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTestMode(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-brand-yellow text-[#0B218A] text-xs font-display font-extrabold"
+                >
+                  <FlaskConical className="w-3.5 h-3.5" />
+                  <span>Modo de Teste</span>
+                </button>
+              </div>
+            )}
           </div>
         )
       )}
@@ -636,14 +628,16 @@ export const AthleteDetailPage: React.FC = () => {
                     </span>
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleSimulateAthleteLogin}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-[11px] font-semibold text-white/85 transition-colors"
-                  >
-                    <UserCheck className="w-3.5 h-3.5 text-brand-yellow" />
-                    <span>Simular Acesso deste Atleta (Liberar Upload de Foto)</span>
-                  </button>
+                  !currentUser && (
+                    <button
+                      type="button"
+                      onClick={handleGoToAthleteLogin}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-[11px] font-semibold text-white/85 transition-colors"
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-brand-yellow" />
+                      <span>Sou este atleta (Fazer Login)</span>
+                    </button>
+                  )
                 )}
 
                 {currentUser?.linkedAthleteId === resolvedAthlete.id && (

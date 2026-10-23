@@ -34,8 +34,10 @@ export const Header: React.FC<HeaderProps> = ({ title, showBack }) => {
   const [isSportDropdownOpen, setIsSportDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const { notifications } = useCompetitionStore();
+  const { notifications, currentUser, canOperateOfficialData } =
+    useCompetitionStore();
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const isAdmin = canOperateOfficialData();
 
   // Identifica se estamos dentro de uma modalidade específica
   const currentModalitySlug = location.pathname.startsWith('/competicoes/')
@@ -238,14 +240,24 @@ export const Header: React.FC<HeaderProps> = ({ title, showBack }) => {
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => navigate('/admin')}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-extrabold text-[#0B218A] bg-brand-yellow hover:bg-brand-yellow-dark transition-colors shadow-sm"
-            >
-              <ClipboardList className="w-3.5 h-3.5" />
-              <span>Súmula</span>
-            </button>
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => navigate('/admin')}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-extrabold text-[#0B218A] bg-brand-yellow hover:bg-brand-yellow-dark transition-colors shadow-sm"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                <span>Súmula &amp; Admin</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate(currentUser ? '/perfil' : '/login')}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-bold text-white bg-white/10 hover:bg-white/20 border border-white/15 transition-colors"
+              >
+                <span>{currentUser ? currentUser.name.split(' ')[0] : 'Entrar'}</span>
+              </button>
+            )}
           </div>
         </div>
 
