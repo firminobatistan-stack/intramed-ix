@@ -147,7 +147,14 @@ interface CompetitionStoreContextValue {
   // Observações e Finalização da Súmula
   updateRefereeMetadata: (
     matchId: string,
-    data: { refereeName?: string; tableOfficialName?: string; refereeNotes?: string }
+    data: {
+      refereeName?: string;
+      assistantRefereeName?: string;
+      tableOfficialName?: string;
+      timekeeperName?: string;
+      twentyFourSecOperatorName?: string;
+      refereeNotes?: string;
+    }
   ) => void;
   finalizeMatch: (matchId: string) => void;
   reopenMatchForCorrection: (matchId: string) => void;
@@ -1184,7 +1191,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           payload.type === 'point_1' ||
           payload.type === 'set_point' ||
           payload.type === 'seven_meters' ||
-          payload.type === 'penalty_goal'
+          payload.type === 'penalty_goal' ||
+          payload.type === 'direct_free_throw' ||
+          payload.type === 'volleyball_ace' ||
+          payload.type === 'volleyball_block' ||
+          payload.type === 'volleyball_attack' ||
+          payload.type === 'volleyball_opponent_error'
             ? 1
             : payload.type === 'point_2'
             ? 2
@@ -1224,7 +1236,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
         // 2. Contabilização de Faltas da Equipe no Período
         if (
-          (payload.type === 'foul' || payload.type === 'team_foul') &&
+          (payload.type === 'foul' ||
+            payload.type === 'team_foul' ||
+            payload.type === 'technical_foul' ||
+            payload.type === 'unsportsmanlike_foul') &&
           payload.teamSide
         ) {
           if (payload.teamSide === 'home') nextHomeFouls += 1;
@@ -1376,7 +1391,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           target.type === 'point_1' ||
           target.type === 'set_point' ||
           target.type === 'seven_meters' ||
-          target.type === 'penalty_goal'
+          target.type === 'penalty_goal' ||
+          target.type === 'direct_free_throw' ||
+          target.type === 'volleyball_ace' ||
+          target.type === 'volleyball_block' ||
+          target.type === 'volleyball_attack' ||
+          target.type === 'volleyball_opponent_error'
             ? 1
             : target.type === 'point_2'
             ? 2
@@ -1476,7 +1496,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           target.type === 'point_1' ||
           target.type === 'set_point' ||
           target.type === 'seven_meters' ||
-          target.type === 'penalty_goal'
+          target.type === 'penalty_goal' ||
+          target.type === 'direct_free_throw' ||
+          target.type === 'volleyball_ace' ||
+          target.type === 'volleyball_block' ||
+          target.type === 'volleyball_attack' ||
+          target.type === 'volleyball_opponent_error'
             ? 1
             : target.type === 'point_2'
             ? 2
@@ -1515,7 +1540,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         }
 
         if (
-          (target.type === 'foul' || target.type === 'team_foul') &&
+          (target.type === 'foul' ||
+            target.type === 'team_foul' ||
+            target.type === 'technical_foul' ||
+            target.type === 'unsportsmanlike_foul') &&
           target.teamSide &&
           target.periodNumber === sheet.timer.currentPeriod
         ) {
@@ -1951,7 +1979,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       matchId: string,
       data: {
         refereeName?: string;
+        assistantRefereeName?: string;
         tableOfficialName?: string;
+        timekeeperName?: string;
+        twentyFourSecOperatorName?: string;
         refereeNotes?: string;
       }
     ) => {
@@ -1961,10 +1992,22 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           ...sheet,
           refereeName:
             data.refereeName !== undefined ? data.refereeName : sheet.refereeName,
+          assistantRefereeName:
+            data.assistantRefereeName !== undefined
+              ? data.assistantRefereeName
+              : sheet.assistantRefereeName,
           tableOfficialName:
             data.tableOfficialName !== undefined
               ? data.tableOfficialName
               : sheet.tableOfficialName,
+          timekeeperName:
+            data.timekeeperName !== undefined
+              ? data.timekeeperName
+              : sheet.timekeeperName,
+          twentyFourSecOperatorName:
+            data.twentyFourSecOperatorName !== undefined
+              ? data.twentyFourSecOperatorName
+              : sheet.twentyFourSecOperatorName,
           refereeNotes:
             data.refereeNotes !== undefined
               ? data.refereeNotes

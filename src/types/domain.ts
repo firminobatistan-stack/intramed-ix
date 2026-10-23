@@ -247,6 +247,13 @@ export type MatchEventType =
   | 'set_end'
   | 'foul'
   | 'team_foul'
+  | 'technical_foul'
+  | 'unsportsmanlike_foul'
+  | 'direct_free_throw'
+  | 'volleyball_ace'
+  | 'volleyball_block'
+  | 'volleyball_attack'
+  | 'volleyball_opponent_error'
   | 'yellow_card'
   | 'red_card'
   | 'expulsion'
@@ -325,7 +332,10 @@ export interface MatchSheet {
   // Arbitragem e Fechamento
   refereeNotes: string;
   refereeName?: string;
+  assistantRefereeName?: string;
   tableOfficialName?: string;
+  timekeeperName?: string;
+  twentyFourSecOperatorName?: string;
   isClosed: boolean;
   closedAtIso?: string | null;
   syncStatus: 'synced' | 'pending_sync' | 'offline_ready';

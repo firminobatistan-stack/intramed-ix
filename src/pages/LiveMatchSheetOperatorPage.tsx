@@ -112,8 +112,17 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isLineupModalOpen, setIsLineupModalOpen] = useState(false);
   const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
+  const [isOfficialsModalOpen, setIsOfficialsModalOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [possessionSide, setPossessionSide] = useState<'home' | 'away'>('home');
+
+  // Metadados Oficiais de Mesa e Arbitragem
+  const [officialReferee1, setOfficialReferee1] = useState('');
+  const [officialReferee2, setOfficialReferee2] = useState('');
+  const [officialTableOfficial, setOfficialTableOfficial] = useState('');
+  const [officialTimekeeper, setOfficialTimekeeper] = useState('');
+  const [official24sOperator, setOfficial24sOperator] = useState('');
+  const [officialNotes, setOfficialNotes] = useState('');
 
   // Modal de Edição / Correção e Exclusão de Evento (Item 25)
   const [editingEvent, setEditingEvent] = useState<MatchEvent | null>(null);
@@ -241,6 +250,29 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             accentColor: 'blue',
           },
           {
+            type: 'penalty_goal',
+            label: 'GOL DE PÊNALTI',
+            shortBadge: '🥅',
+            pointsDelta: 1,
+            requiresAthlete: true,
+            accentColor: 'blue',
+          },
+          {
+            type: 'direct_free_throw',
+            label: 'TIRO LIVRE (10m)',
+            shortBadge: '🎯',
+            pointsDelta: 1,
+            requiresAthlete: true,
+            accentColor: 'blue',
+          },
+          {
+            type: 'foul',
+            label: 'FALTA ACUMULADA',
+            shortBadge: '⚠️',
+            requiresAthlete: true,
+            accentColor: 'neutral',
+          },
+          {
             type: 'yellow_card',
             label: 'CARTÃO',
             shortBadge: '🟨',
@@ -255,13 +287,6 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             accentColor: 'red',
           },
           {
-            type: 'foul',
-            label: 'FALTA',
-            shortBadge: '⚠️',
-            requiresAthlete: true,
-            accentColor: 'neutral',
-          },
-          {
             type: 'substitution',
             label: 'SUBSTITUIÇÃO',
             shortBadge: '🔄',
@@ -271,18 +296,10 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
           },
           {
             type: 'timeout',
-            label: 'TEMPO / PAUSA',
+            label: 'PEDIDO DE TEMPO',
             shortBadge: '⏱️',
             requiresAthlete: false,
             accentColor: 'neutral',
-          },
-          {
-            type: 'penalty_goal',
-            label: 'GOL DE PÊNALTI',
-            shortBadge: '🥅',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            accentColor: 'blue',
           },
         ];
 
@@ -297,6 +314,14 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             accentColor: 'blue',
           },
           {
+            type: 'seven_meters',
+            label: 'GOL 7 METROS',
+            shortBadge: '7m',
+            pointsDelta: 1,
+            requiresAthlete: true,
+            accentColor: 'blue',
+          },
+          {
             type: 'suspension_2min',
             label: '2 MINUTOS',
             shortBadge: '⏱️ 2m',
@@ -305,23 +330,22 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
           },
           {
             type: 'yellow_card',
-            label: 'CARTÃO',
+            label: 'ADVERTÊNCIA (AMARELO)',
             shortBadge: '🟨',
             requiresAthlete: true,
             accentColor: 'yellow',
           },
           {
             type: 'expulsion',
-            label: 'EXPULSÃO',
+            label: 'DESQUALIFICAÇÃO (VERMELHO)',
             shortBadge: '🟥',
             requiresAthlete: true,
             accentColor: 'red',
           },
           {
-            type: 'seven_meters',
-            label: 'GOL 7 METROS',
-            shortBadge: '7m',
-            pointsDelta: 1,
+            type: 'disqualification',
+            label: 'RELATÓRIO (AZUL)',
+            shortBadge: '🟦',
             requiresAthlete: true,
             accentColor: 'blue',
           },
@@ -335,7 +359,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
           },
           {
             type: 'timeout',
-            label: 'TIMEOUT',
+            label: 'TEMPO TÉCNICO (TTO)',
             shortBadge: '⏸️',
             requiresAthlete: false,
             accentColor: 'neutral',
@@ -376,6 +400,20 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             accentColor: 'neutral',
           },
           {
+            type: 'technical_foul',
+            label: 'FALTA TÉCNICA (T)',
+            shortBadge: '🇹',
+            requiresAthlete: true,
+            accentColor: 'yellow',
+          },
+          {
+            type: 'unsportsmanlike_foul',
+            label: 'ANTIDESPORTIVA (U)',
+            shortBadge: '🇺',
+            requiresAthlete: true,
+            accentColor: 'yellow',
+          },
+          {
             type: 'team_foul',
             label: 'FALTA EQUIPE',
             shortBadge: '🛡️',
@@ -411,15 +449,47 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
         return [
           {
             type: 'set_point',
-            label: '+1 PONTO (CONFIRMADO)',
+            label: '+1 PONTO (DIRETO)',
             shortBadge: '🏐 +1',
             pointsDelta: 1,
             requiresAthlete: false,
             accentColor: 'blue',
           },
           {
+            type: 'volleyball_attack',
+            label: 'ATAQUE (PONTO)',
+            shortBadge: '💥',
+            pointsDelta: 1,
+            requiresAthlete: true,
+            accentColor: 'blue',
+          },
+          {
+            type: 'volleyball_block',
+            label: 'BLOQUEIO (PONTO)',
+            shortBadge: '🧱',
+            pointsDelta: 1,
+            requiresAthlete: true,
+            accentColor: 'blue',
+          },
+          {
+            type: 'volleyball_ace',
+            label: 'ACE / SAQUE',
+            shortBadge: '🎯',
+            pointsDelta: 1,
+            requiresAthlete: true,
+            accentColor: 'blue',
+          },
+          {
+            type: 'volleyball_opponent_error',
+            label: 'ERRO ADVERSÁRIO',
+            shortBadge: '❌',
+            pointsDelta: 1,
+            requiresAthlete: false,
+            accentColor: 'neutral',
+          },
+          {
             type: 'timeout',
-            label: 'TIMEOUT',
+            label: 'TIMEOUT (30s)',
             shortBadge: '⏱️',
             requiresAthlete: false,
             accentColor: 'neutral',
@@ -548,6 +618,30 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     sheet.periodScores[0];
 
   const activeEvents = sheet.events.filter((ev) => !ev.isDeleted);
+
+  const openOfficialsModal = () => {
+    if (!sheet) return;
+    setOfficialReferee1(sheet.refereeName || '');
+    setOfficialReferee2(sheet.assistantRefereeName || '');
+    setOfficialTableOfficial(sheet.tableOfficialName || '');
+    setOfficialTimekeeper(sheet.timekeeperName || '');
+    setOfficial24sOperator(sheet.twentyFourSecOperatorName || '');
+    setOfficialNotes(sheet.refereeNotes || '');
+    setIsOfficialsModalOpen(true);
+  };
+
+  const handleSaveOfficials = () => {
+    if (!matchId) return;
+    updateRefereeMetadata(matchId, {
+      refereeName: officialReferee1,
+      assistantRefereeName: officialReferee2,
+      tableOfficialName: officialTableOfficial,
+      timekeeperName: officialTimekeeper,
+      twentyFourSecOperatorName: official24sOperator,
+      refereeNotes: officialNotes,
+    });
+    setIsOfficialsModalOpen(false);
+  };
 
   return (
     <div className="min-h-screen bg-[#F1F5F9] text-brand-text-primary flex flex-col select-none">
@@ -679,6 +773,15 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             >
               <FileText className="w-4 h-4 text-brand-yellow" />
               <span className="hidden sm:inline">Súmula</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={openOfficialsModal}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors min-h-[38px]"
+            >
+              <ShieldAlert className="w-4 h-4 text-brand-yellow" />
+              <span className="hidden sm:inline">Mesa / Árbitros</span>
             </button>
 
             {!sheet.isClosed ? (
@@ -1219,6 +1322,131 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
           )}
         </section>
 
+        {/* TELEMETRIA E REGRAS AO VIVO CONFORME A MODALIDADE */}
+        <section className="rounded-2xl bg-white border border-brand-surface-border p-3.5 sm:p-4 shadow-sm">
+          {match.modalityId === 'basquete' && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <span className="font-display font-extrabold uppercase text-brand-blue tracking-wider">
+                  Faltas Coletivas ({sheet.timer.periodLabel || 'Quarto Atual'}):
+                </span>
+                <span
+                  className={`px-2.5 py-1 rounded-lg font-mono font-bold ${
+                    sheet.homeFoulsCurrentPeriod >= 4
+                      ? 'bg-rose-600 text-white animate-pulse'
+                      : 'bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  {match.homeTeam.teamName}: {sheet.homeFoulsCurrentPeriod}/4{' '}
+                  {sheet.homeFoulsCurrentPeriod >= 4 && '⚠️ BÔNUS'}
+                </span>
+                <span
+                  className={`px-2.5 py-1 rounded-lg font-mono font-bold ${
+                    sheet.awayFoulsCurrentPeriod >= 4
+                      ? 'bg-rose-600 text-white animate-pulse'
+                      : 'bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  {match.awayTeam.teamName}: {sheet.awayFoulsCurrentPeriod}/4{' '}
+                  {sheet.awayFoulsCurrentPeriod >= 4 && '⚠️ BÔNUS'}
+                </span>
+              </div>
+              <span className="text-[11px] text-brand-text-secondary">
+                Na 5ª falta coletiva do quarto = 2 lances livres para o adversário. Máx. 5 faltas pessoais por jogador (P1–P5).
+              </span>
+            </div>
+          )}
+
+          {match.modalityId === 'futsal' && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <span className="font-display font-extrabold uppercase text-brand-blue tracking-wider">
+                  Faltas Acumuladas ({sheet.timer.periodLabel || 'Período Atual'}):
+                </span>
+                <span
+                  className={`px-2.5 py-1 rounded-lg font-mono font-bold ${
+                    sheet.homeFoulsCurrentPeriod >= 5
+                      ? 'bg-rose-600 text-white animate-pulse'
+                      : 'bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  {match.homeTeam.teamName}: {sheet.homeFoulsCurrentPeriod}/5{' '}
+                  {sheet.homeFoulsCurrentPeriod >= 5 && '🎯 TIRO LIVRE 10M'}
+                </span>
+                <span
+                  className={`px-2.5 py-1 rounded-lg font-mono font-bold ${
+                    sheet.awayFoulsCurrentPeriod >= 5
+                      ? 'bg-rose-600 text-white animate-pulse'
+                      : 'bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  {match.awayTeam.teamName}: {sheet.awayFoulsCurrentPeriod}/5{' '}
+                  {sheet.awayFoulsCurrentPeriod >= 5 && '🎯 TIRO LIVRE 10M'}
+                </span>
+              </div>
+              <span className="text-[11px] text-brand-text-secondary">
+                A partir da 6ª falta acumulada = tiro livre direto sem barreira (10m). Máx. 1 pedido de tempo por tempo.
+              </span>
+            </div>
+          )}
+
+          {(match.modalityId === 'volei' || match.modalityId === 'volei-de-praia') && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <span className="font-display font-extrabold uppercase text-brand-blue tracking-wider">
+                  Controle de Set ({sheet.timer.periodLabel || 'Set Atual'}):
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-800">
+                  Tempos de Descanso: {match.homeTeam.teamName} ({sheet.homeTimeoutsUsed}/2) • {match.awayTeam.teamName} ({sheet.awayTimeoutsUsed}/2)
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-800">
+                  Substituições no Set: {match.homeTeam.teamName} (
+                  {
+                    activeEvents.filter(
+                      (e) =>
+                        e.type === 'substitution' &&
+                        e.teamSide === 'home' &&
+                        e.periodNumber === sheet.timer.currentPeriod
+                    ).length
+                  }
+                  /6) • {match.awayTeam.teamName} (
+                  {
+                    activeEvents.filter(
+                      (e) =>
+                        e.type === 'substitution' &&
+                        e.teamSide === 'away' &&
+                        e.periodNumber === sheet.timer.currentPeriod
+                    ).length
+                  }
+                  /6)
+                </span>
+              </div>
+              <span className="text-[11px] text-brand-text-secondary">
+                Sets normais até 25 pontos (diferença mínima de 2). Set decisivo (Tie-break) até 15 pontos.
+              </span>
+            </div>
+          )}
+
+          {match.modalityId === 'handebol' && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                <span className="font-display font-extrabold uppercase text-brand-blue tracking-wider">
+                  Controle da Mesa (CBHb):
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-800">
+                  TTOs Utilizados: {match.homeTeam.teamName} ({sheet.homeTimeoutsUsed}/3) • {match.awayTeam.teamName} ({sheet.awayTimeoutsUsed}/3)
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-800">
+                  Exclusões Ativas: {sheet.activeSuspensions.length}
+                </span>
+              </div>
+              <span className="text-[11px] text-brand-text-secondary">
+                Máximo de 3 exclusões de 2 minutos por atleta antes da desqualificação (Cartão Vermelho direto).
+              </span>
+            </div>
+          )}
+        </section>
+
         {/* 13. ALERTA DE TIMEOUT EM ANDAMENTO */}
         {sheet.activeTimeout && sheet.activeTimeout.isActive && (
           <div className="rounded-2xl bg-brand-yellow-light border-2 border-brand-yellow p-4 flex items-center justify-between gap-4 shadow-sm">
@@ -1678,23 +1906,108 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                     : sheet.awayLineup
                   ).map((ath) => {
                     const isSelected = selectedAthleteId === ath.athleteId;
+
+                    const athFouls = activeEvents.filter(
+                      (e) =>
+                        (e.athleteId === ath.athleteId ||
+                          (e.athleteName &&
+                            e.athleteName.toLowerCase() ===
+                              ath.athleteName.toLowerCase())) &&
+                        (e.type === 'foul' ||
+                          e.type === 'technical_foul' ||
+                          e.type === 'unsportsmanlike_foul')
+                    ).length;
+
+                    const athYellow = activeEvents.some(
+                      (e) =>
+                        (e.athleteId === ath.athleteId ||
+                          (e.athleteName &&
+                            e.athleteName.toLowerCase() ===
+                              ath.athleteName.toLowerCase())) &&
+                        e.type === 'yellow_card'
+                    );
+
+                    const athRed = activeEvents.some(
+                      (e) =>
+                        (e.athleteId === ath.athleteId ||
+                          (e.athleteName &&
+                            e.athleteName.toLowerCase() ===
+                              ath.athleteName.toLowerCase())) &&
+                        (e.type === 'red_card' ||
+                          e.type === 'expulsion' ||
+                          e.type === 'disqualification')
+                    );
+
+                    const athSuspensions = activeEvents.filter(
+                      (e) =>
+                        (e.athleteId === ath.athleteId ||
+                          (e.athleteName &&
+                            e.athleteName.toLowerCase() ===
+                              ath.athleteName.toLowerCase())) &&
+                        e.type === 'suspension_2min'
+                    ).length;
+
                     return (
                       <button
                         key={ath.athleteId}
                         type="button"
                         onClick={() => setSelectedAthleteId(ath.athleteId)}
-                        className={`p-3 rounded-xl border text-left transition-all flex items-center justify-between ${
+                        className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-1.5 ${
                           isSelected
-                            ? 'bg-brand-blue text-white border-brand-blue font-bold'
+                            ? 'bg-brand-blue text-white border-brand-blue font-bold shadow-sm'
+                            : athRed
+                            ? 'bg-rose-50 border-rose-200 text-rose-900 opacity-60'
                             : 'bg-brand-surface-muted/70 border-brand-surface-border text-brand-text-primary hover:border-brand-blue/40'
                         }`}
                       >
-                        <span className="text-xs truncate">{ath.athleteName}</span>
-                        {ath.isStarter && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/10">
-                            Titular
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {ath.jerseyNumber && (
+                            <span className={`font-mono text-xs font-bold px-1 rounded shrink-0 ${isSelected ? 'bg-white/20 text-white' : 'bg-brand-blue-light/60 text-brand-blue'}`}>
+                              #{ath.jerseyNumber}
+                            </span>
+                          )}
+                          <span className="text-xs truncate">{ath.athleteName}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0 text-[10px]">
+                          {match.modalityId === 'basquete' && athFouls > 0 && (
+                            <span
+                              className={`px-1.5 py-0.5 rounded font-mono font-black ${
+                                athFouls >= 5
+                                  ? 'bg-red-600 text-white animate-pulse'
+                                  : isSelected
+                                  ? 'bg-white/25 text-white'
+                                  : 'bg-amber-100 text-amber-900'
+                              }`}
+                            >
+                              {athFouls >= 5 ? '5F OUT' : `P${athFouls}`}
+                            </span>
+                          )}
+
+                          {athYellow && !athRed && (
+                            <span className="px-1 rounded bg-yellow-100 text-yellow-900 font-bold">
+                              🟨
+                            </span>
+                          )}
+
+                          {athSuspensions > 0 && (
+                            <span className="px-1 rounded bg-amber-100 text-amber-900 font-bold">
+                              2m ({athSuspensions})
+                            </span>
+                          )}
+
+                          {athRed && (
+                            <span className="px-1 rounded bg-red-600 text-white font-bold">
+                              EXPULSO
+                            </span>
+                          )}
+
+                          {ath.isStarter && !athRed && athFouls < 5 && (
+                            <span className={`px-1.5 py-0.5 rounded ${isSelected ? 'bg-white/20' : 'bg-black/10'}`}>
+                              Titular
+                            </span>
+                          )}
+                        </div>
                       </button>
                     );
                   })}
@@ -2196,6 +2509,91 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             >
               Encerrar Partida
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL DE CONTROLE DE MESA E ARBITRAGEM OFICIAL */}
+      <Modal
+        isOpen={isOfficialsModalOpen}
+        onClose={() => setIsOfficialsModalOpen(false)}
+        title="Mesa de Controle & Arbitragem Oficial"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-brand-text-secondary leading-relaxed">
+            Identifique os árbitros e mesários oficiais da partida. Esses dados serão consolidados e impressos automaticamente na súmula oficial da modalidade.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Árbitro Principal / 1º Árbitro"
+              placeholder="Ex: Carlos Roberto (Federação)"
+              value={officialReferee1}
+              onChange={(e) => setOfficialReferee1(e.target.value)}
+            />
+            <Input
+              label="Árbitro Auxiliar / 2º Árbitro / Fiscal"
+              placeholder="Ex: Marcos Vinicius (Federação)"
+              value={officialReferee2}
+              onChange={(e) => setOfficialReferee2(e.target.value)}
+            />
+            <Input
+              label="Anotador / Apontador / Secretário"
+              placeholder="Ex: Ana Clara Lima"
+              value={officialTableOfficial}
+              onChange={(e) => setOfficialTableOfficial(e.target.value)}
+            />
+            <Input
+              label={match.modalityId === 'basquete' ? 'Cronometrista' : 'Cronometrista / Mesa'}
+              placeholder="Ex: Leonardo Ramos"
+              value={officialTimekeeper}
+              onChange={(e) => setOfficialTimekeeper(e.target.value)}
+            />
+          </div>
+
+          {match.modalityId === 'basquete' && (
+            <Input
+              label="Operador de 24 Segundos"
+              placeholder="Ex: Thiago Pires"
+              value={official24sOperator}
+              onChange={(e) => setOfficial24sOperator(e.target.value)}
+            />
+          )}
+
+          <Input
+            label="Relatório Disciplinar e Observações da Súmula"
+            placeholder="Relato de ocorrências, exclusões disciplinares ou observações técnicas"
+            value={officialNotes}
+            onChange={(e) => setOfficialNotes(e.target.value)}
+          />
+
+          <div className="flex items-center justify-between pt-3 border-t border-brand-surface-border">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                handleSaveOfficials();
+                navigate(`/sumula/${match.id}/documento`);
+              }}
+            >
+              Ver Súmula em PDF
+            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsOfficialsModalOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSaveOfficials}
+              >
+                Salvar Mesa &amp; Árbitros
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>
