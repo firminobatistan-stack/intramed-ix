@@ -11,6 +11,9 @@ import {
   FlaskConical,
   CircleDot,
   Sparkles,
+  CreditCard,
+  ArrowRight,
+  CheckCircle2,
 } from 'lucide-react';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
@@ -157,6 +160,46 @@ export const HomePage: React.FC = () => {
               </button>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* BANNER OFICIAL: INSCRIÇÕES E PAGAMENTOS (FASE 1) */}
+      <section className="bg-gradient-to-r from-amber-500 via-brand-yellow to-yellow-400 rounded-3xl p-5 sm:p-6 shadow-lg border border-amber-300 text-slate-900 flex flex-col md:flex-row items-center justify-between gap-5 relative overflow-hidden">
+        <div className="space-y-1.5 z-10 text-center md:text-left">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-brand-yellow text-[11px] font-display font-extrabold uppercase tracking-wider shadow-sm">
+            <Sparkles className="w-3.5 h-3.5" />
+            1º Lote Oficial Disponível
+          </div>
+          <h2 className="text-xl sm:text-2xl font-display font-black tracking-tight text-slate-950">
+            Inscrições Abertas para o INTRAMED IX!
+          </h2>
+          <p className="text-xs sm:text-sm font-medium text-slate-800 max-w-xl">
+            Garanta sua vaga nas modalidades esportivas. Sócios Cangaceira com valor promocional de{' '}
+            <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 45,00</strong>{' '}
+            após validação cadastral da Atlética. Pagamentos 100% seguros com Pix e Cartão via Mercado Pago.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 z-10 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() => navigate('/inscricao')}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-sm shadow-xl hover:scale-105 transition-all"
+          >
+            <CreditCard className="w-4 h-4 text-brand-yellow" />
+            <span>Fazer Inscrição</span>
+            <ArrowRight className="w-4 h-4 text-brand-yellow" />
+          </button>
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate('/admin/inscricoes')}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-white/80 hover:bg-white text-slate-900 font-display font-bold text-xs shadow transition-all border border-amber-200"
+            >
+              <span>Gestão de Sócios</span>
+            </button>
+          )}
         </div>
       </section>
 

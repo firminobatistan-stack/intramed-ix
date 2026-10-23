@@ -26,6 +26,9 @@ import { NotificationsPage } from './pages/NotificationsPage';
 import { TeamDetailPage } from './pages/TeamDetailPage';
 import { AthleteDetailPage } from './pages/AthleteDetailPage';
 import { DesignSystemCasePage } from './pages/DesignSystemCasePage';
+import { RegistrationPage } from './pages/RegistrationPage';
+import { AdminRegistrationsPage } from './pages/AdminRegistrationsPage';
+import { RegistrationProvider } from './context/RegistrationStoreContext';
 import { OFFICIAL_MODALITIES } from './data/officialData';
 
 const ScrollToTop: React.FC = () => {
@@ -93,6 +96,8 @@ const RoutedApp: React.FC = () => {
     if (location.pathname.startsWith('/atleta')) return 'Ficha do Atleta';
     if (location.pathname === '/design-system') return 'UI/UX Design System & Case';
     if (location.pathname === '/perfil') return 'Perfil';
+    if (location.pathname === '/inscricao') return 'Inscrições • INTRAMED IX';
+    if (location.pathname === '/admin/inscricoes') return 'Gestão de Inscrições';
     return 'INTRAMED IX';
   };
 
@@ -108,6 +113,15 @@ const RoutedApp: React.FC = () => {
             </AdminRouteGuard>
           }
         />
+        <Route
+          path="/admin/inscricoes"
+          element={
+            <AdminRouteGuard title="Gestão de Inscrições & Validação de Sócios">
+              <AdminRegistrationsPage />
+            </AdminRouteGuard>
+          }
+        />
+        <Route path="/inscricao" element={<RegistrationPage />} />
         <Route path="/competicoes" element={<CompetitionsPage />} />
         <Route
           path="/competicoes/:modalityId"
@@ -141,11 +155,13 @@ export const App: React.FC = () => {
 
   return (
     <CompetitionStoreProvider>
-      <BrowserRouter>
-        <ScrollToTop />
-        <SplashScreen isVisible={showSplash} />
-        <RoutedApp />
-      </BrowserRouter>
+      <RegistrationProvider>
+        <BrowserRouter>
+          <ScrollToTop />
+          <SplashScreen isVisible={showSplash} />
+          <RoutedApp />
+        </BrowserRouter>
+      </RegistrationProvider>
     </CompetitionStoreProvider>
   );
 };

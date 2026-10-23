@@ -512,3 +512,123 @@ export interface LeaderboardEntry {
   hasLivePartial?: boolean;
 }
 
+// ==========================================
+// 12. MÓDULO DE INSCRIÇÕES E PAGAMENTOS (INTRAMED IX)
+// ==========================================
+
+export type MemberStatus =
+  | 'nao_solicitado'      // Não solicitou desconto de sócio (preço integral)
+  | 'pendente'            // Solicitou desconto de sócio, aguardando conferência administrativa
+  | 'aprovado'            // Desconto de sócio aprovado pelo administrador
+  | 'rejeitado';          // Desconto de sócio rejeitado pelo administrador
+
+export type RegistrationPaymentStatus =
+  | 'aguardando_validacao' // Sócio pendente de validação (bloqueado para pagamento)
+  | 'pendente'             // Liberado para pagamento (aguardando atleta pagar)
+  | 'processando'          // Transação em análise no gateway
+  | 'pago'                 // Confirmado confiavelmente pelo Mercado Pago
+  | 'cancelado'            // Inscrição cancelada
+  | 'expirado';            // Lote ou prazo expirou
+
+export interface RegistrationLot {
+  id: string;
+  eventId: string;
+  name: string; // Ex: '1º Lote Antecipado'
+  priceMember: number; // Ex: 40.00
+  priceNonMember: number; // Ex: 70.00
+  startDateIso: string;
+  endDateIso: string;
+  isActive: boolean;
+}
+
+export interface TournamentEvent {
+  id: string;
+  title: string;
+  edition: string; // 'IX'
+  year: number; // 2026
+  description: string;
+  startDateIso: string;
+  endDateIso: string;
+  status: 'upcoming' | 'open_for_registrations' | 'in_progress' | 'finished';
+  lots: RegistrationLot[];
+}
+
+export interface Registration {
+  id: string;
+  eventId: string;
+  lotId: string;
+  userId: string;
+  athleteName: string;
+  athleteEmail: string;
+  athletePhone: string;
+  athleteDocument: string; // CPF ou Matrícula
+  teamId?: string | null;
+  teamName?: string | null;
+  modalityId: ModalitySlug;
+  modalityName: string;
+  categoryName: string; // 'Masculino' | 'Feminino' | 'Misto'
+  
+  // Status e Validação de Sócio
+  requestedMemberDiscount: boolean;
+  memberStatus: MemberStatus;
+  memberDocumentProofUrl?: string | null;
+  memberNotes?: string | null;
+  validatedByAdminId?: string | null;
+  validatedByAdminName?: string | null;
+  validatedAtIso?: string | null;
+
+  // Preço e Status de Pagamento
+  paymentStatus: RegistrationPaymentStatus;
+  authorizedPrice: number; // Calculado e selado pelo backend
+  
+  // Vínculo com Mercado Pago
+  paymentTransactionId?: string | null;
+  paymentMethod?: 'pix' | 'credit_card' | 'ticket' | null;
+  mpPreferenceId?: string | null;
+  mpPaymentId?: string | null;
+  mpInitPointUrl?: string | null;
+  paidAtIso?: string | null;
+
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface PaymentTransactionRecord {
+  id: string;
+  registrationId: string;
+  amount: number;
+  paymentMethod: 'pix' | 'credit_card' | 'ticket';
+  status: 'pending' | 'approved' | 'in_process' | 'rejected' | 'refunded';
+  statusDetail?: string;
+  mpPaymentId: string;
+  mpPreferenceId?: string;
+  externalReference: string;
+  qrCode?: string; // Código Pix Copia e Cola
+  qrCodeBase64?: string; // QR Code em base64
+  ticketUrl?: string; // Comprovante externo do Mercado Pago
+  payerEmail?: string;
+  installments?: number;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface FinancialAuditLog {
+  id: string;
+  entity: 'registration' | 'payment' | 'lot' | 'event';
+  entityId: string;
+  action:
+    | 'CRIAR_INSCRICAO'
+    | 'APROVAR_SOCIO'
+    | 'REJEITAR_SOCIO'
+    | 'CRIAR_PREFERENCIA_PAGAMENTO'
+    | 'CONFIRMAR_PAGAMENTO_WEBHOOK'
+    | 'ALTERAR_PRECO'
+    | 'CANCELAR_INSCRICAO'
+    | 'ESTORNO_SOLICITADO';
+  adminUserId?: string;
+  adminUserName?: string;
+  ipAddress?: string;
+  metadata?: Record<string, unknown>;
+  timestampIso: string;
+}
+

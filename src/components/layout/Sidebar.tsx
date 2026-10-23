@@ -13,6 +13,8 @@ import {
   Bell,
   Layers,
   Shield,
+  CreditCard,
+  ShieldCheck,
 } from 'lucide-react';
 import { BrandMark } from './BrandMark';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
@@ -29,6 +31,12 @@ const PRIMARY_ITEMS: SidebarItem[] = [
     to: '/',
     label: 'Início',
     icon: Home,
+  },
+  {
+    to: '/inscricao',
+    label: 'Inscrições & Pagamento',
+    icon: CreditCard,
+    matchPrefix: '/inscricao',
   },
   {
     to: '/competicoes',
@@ -135,22 +143,41 @@ export const Sidebar: React.FC = () => {
           </p>
           <div className="space-y-1">
             {isAdmin && (
-              <NavLink
-                to="/admin"
-                className={({ isActive }) =>
-                  `group flex items-center justify-between gap-3 px-3.5 py-3 rounded-2xl text-sm transition-all duration-150 ${
-                    isActive
-                      ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
-                      : 'text-white/75 hover:text-white hover:bg-white/10 font-medium'
-                  }`
-                }
-              >
-                <span className="flex items-center gap-3">
-                  <ClipboardList className="w-5 h-5 shrink-0 text-brand-yellow group-hover:text-brand-yellow" />
-                  <span>Súmula ao Vivo / Admin</span>
-                </span>
-                <span className="w-2 h-2 rounded-full bg-brand-yellow" />
-              </NavLink>
+              <>
+                <NavLink
+                  to="/admin"
+                  className={({ isActive }) =>
+                    `group flex items-center justify-between gap-3 px-3.5 py-3 rounded-2xl text-sm transition-all duration-150 ${
+                      isActive && location.pathname === '/admin'
+                        ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
+                        : 'text-white/75 hover:text-white hover:bg-white/10 font-medium'
+                    }`
+                  }
+                >
+                  <span className="flex items-center gap-3">
+                    <ClipboardList className="w-5 h-5 shrink-0 text-brand-yellow group-hover:text-brand-yellow" />
+                    <span>Súmula ao Vivo / Admin</span>
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-brand-yellow" />
+                </NavLink>
+
+                <NavLink
+                  to="/admin/inscricoes"
+                  className={({ isActive }) =>
+                    `group flex items-center justify-between gap-3 px-3.5 py-3 rounded-2xl text-sm transition-all duration-150 ${
+                      isActive
+                        ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
+                        : 'text-white/75 hover:text-white hover:bg-white/10 font-medium'
+                    }`
+                  }
+                >
+                  <span className="flex items-center gap-3">
+                    <ShieldCheck className="w-5 h-5 shrink-0 text-brand-yellow group-hover:text-brand-yellow" />
+                    <span>Gestão de Inscrições</span>
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-brand-yellow" />
+                </NavLink>
+              </>
             )}
 
             <NavLink
