@@ -266,7 +266,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               </button>
             </>
           )}
-          {isFinished && (
+          {(isLive || isFinished) && (
             <>
               <span className="text-slate-200">|</span>
               <button
@@ -275,7 +275,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 className="inline-flex items-center gap-1 text-xs font-display font-bold text-amber-600 hover:underline"
               >
                 <FileText className="w-3 h-3" />
-                <span>Súmula Oficial</span>
+                <span>Baixar Súmula Oficial</span>
               </button>
             </>
           )}

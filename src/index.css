@@ -58,3 +58,30 @@
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/* Regras de Impressão / Exportação de Súmula Oficial em Folha A4 (Estilo CBHb / Cangaceira) */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .cbhb-print-page {
+    page-break-after: always;
+    break-after: page;
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+
+  .cbhb-print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+}
