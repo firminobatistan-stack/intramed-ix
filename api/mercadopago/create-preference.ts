@@ -19,6 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     athleteName,
     athleteEmail,
     athleteDocument,
+    turmaLabel,
     modalityName,
     authorizedPrice,
     memberStatus,
@@ -78,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         items: [
           {
             id: registrationId,
-            title: `Inscrição INTRAMED IX — ${modalityName} (${athleteName})`,
+            title: `Inscrição INTRAMED IX — ${turmaLabel ? turmaLabel + ' • ' : ''}Passaporte Geral (${athleteName})`,
             quantity: 1,
             unit_price: Number(authorizedPrice),
             currency_id: 'BRL',

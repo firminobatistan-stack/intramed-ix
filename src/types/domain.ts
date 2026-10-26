@@ -516,6 +516,22 @@ export interface LeaderboardEntry {
 // 12. MÓDULO DE INSCRIÇÕES E PAGAMENTOS (INTRAMED IX)
 // ==========================================
 
+export type TurmaMedicina = '21' | '22' | '23' | '24' | '25';
+
+export interface TurmaDefinition {
+  turma: TurmaMedicina;
+  number: number;
+  roman: string;
+  name: string; // 'Sanguinária', 'Predadora', etc.
+  fullName: string; // 'Turma XXI • Sanguinária'
+  teamId: string;
+  crestUrl: string;
+  primaryColor: string;
+  badgeBg: string;
+  textColor: string;
+  description: string;
+}
+
 export type MemberStatus =
   | 'nao_solicitado'      // Não solicitou desconto de sócio (preço integral)
   | 'pendente'            // Solicitou desconto de sócio, aguardando conferência administrativa
@@ -562,11 +578,17 @@ export interface Registration {
   athleteEmail: string;
   athletePhone: string;
   athleteDocument: string; // CPF ou Matrícula
-  teamId?: string | null;
-  teamName?: string | null;
-  modalityId: ModalitySlug;
-  modalityName: string;
-  categoryName: string; // 'Masculino' | 'Feminino' | 'Misto'
+  
+  // Turma de Medicina UEMA e Equipe
+  turma: TurmaMedicina; // '21' | '22' | '23' | '24' | '25'
+  turmaLabel: string; // Ex: 'Turma XXI • Sanguinária'
+  teamId: string; // 'sanguinaria', 'predadora', 'tormenta', 'colossal', 'soberana'
+  teamName: string;
+
+  // Passaporte de Modalidades (Unificado - dá acesso a todas)
+  modalityId?: ModalitySlug | 'todas';
+  modalityName?: string; // 'Passaporte Geral (Todas as 10 Modalidades)'
+  categoryName: string; // 'Masculino' | 'Feminino' | 'Geral'
   
   // Status e Validação de Sócio
   requestedMemberDiscount: boolean;

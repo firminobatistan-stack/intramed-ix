@@ -174,7 +174,7 @@ export const HomePage: React.FC = () => {
             Inscrições Abertas para o INTRAMED IX!
           </h2>
           <p className="text-xs sm:text-sm font-medium text-slate-800 max-w-xl">
-            Garanta sua vaga nas modalidades esportivas. Sócios Cangaceira com valor promocional de{' '}
+            Garanta seu <strong>Passaporte Geral</strong> pela sua turma (T21 Sanguinária, T22 Predadora, T23 Tormenta, T24 Colossal ou T25 Soberana) com acesso livre a todas as modalidades esportivas. Sócios Cangaceira com valor promocional de{' '}
             <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 45,00</strong>{' '}
             após validação cadastral da Atlética. Pagamentos 100% seguros com Pix e Cartão via Mercado Pago.
           </p>

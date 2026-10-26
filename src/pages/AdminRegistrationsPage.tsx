@@ -23,7 +23,8 @@ import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
-import { Registration } from '../types/domain';
+import { Registration, TurmaMedicina } from '../types/domain';
+import { TURMAS_MEDICINA } from '../data/registrationData';
 
 export const AdminRegistrationsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -41,6 +42,7 @@ export const AdminRegistrationsPage: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<
     'todos' | 'aguardando_validacao' | 'pendente' | 'pago' | 'cancelado'
   >('todos');
+  const [filterTurma, setFilterTurma] = useState<'todas' | TurmaMedicina>('todas');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Modais de Ação
@@ -72,13 +74,18 @@ export const AdminRegistrationsPage: React.FC = () => {
     if (filterStatus === 'cancelado' && reg.paymentStatus !== 'cancelado')
       return false;
 
+    if (filterTurma !== 'todas' && reg.turma !== filterTurma) {
+      return false;
+    }
+
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       const matchName = reg.athleteName.toLowerCase().includes(q);
       const matchEmail = reg.athleteEmail.toLowerCase().includes(q);
       const matchDoc = reg.athleteDocument.includes(q);
-      const matchMod = reg.modalityName.toLowerCase().includes(q);
-      return matchName || matchEmail || matchDoc || matchMod;
+      const matchTurma = (reg.turmaLabel || reg.teamName || '').toLowerCase().includes(q);
+      const matchMod = (reg.modalityName || '').toLowerCase().includes(q);
+      return matchName || matchEmail || matchDoc || matchTurma || matchMod;
     }
     return true;
   });
@@ -90,7 +97,8 @@ export const AdminRegistrationsPage: React.FC = () => {
       'E-mail',
       'Telefone',
       'Documento',
-      'Modalidade',
+      'Turma / Equipe',
+      'Modalidades',
       'Categoria',
       'Solicitou Sócio',
       'Status Sócio',
@@ -107,7 +115,8 @@ export const AdminRegistrationsPage: React.FC = () => {
       r.athleteEmail,
       r.athletePhone,
       r.athleteDocument,
-      r.modalityName,
+      `"${r.turmaLabel || r.teamName || ('Turma ' + r.turma)}"`,
+      '"Passaporte Geral (Todas as 10 Modalidades)"',
       r.categoryName,
       r.requestedMemberDiscount ? 'SIM' : 'NÃO',
       r.memberStatus.toUpperCase(),
@@ -261,39 +270,74 @@ export const AdminRegistrationsPage: React.FC = () => {
         </section>
 
         {/* Barra de Filtros e Busca */}
-        <section className="bg-white p-4 rounded-3xl border border-brand-surface-border shadow-card flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {[
-              { id: 'todos', label: `Todos (${totalRegistrations})` },
-              { id: 'aguardando_validacao', label: `Sócios Pendentes (${pendingMemberCount})` },
-              { id: 'pendente', label: `Aguardando Pgto (${pendingPaymentCount})` },
-              { id: 'pago', label: `Pagos (${paidCount})` },
-              { id: 'cancelado', label: 'Cancelados' },
-            ].map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilterStatus(f.id as typeof filterStatus)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                  filterStatus === f.id
-                    ? 'bg-brand-blue text-white shadow-sm'
-                    : 'bg-brand-surface-muted text-brand-text-secondary hover:text-brand-text-primary'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+        <section className="bg-white p-4 rounded-3xl border border-brand-surface-border shadow-card space-y-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[
+                { id: 'todos', label: `Todos (${totalRegistrations})` },
+                { id: 'aguardando_validacao', label: `Sócios Pendentes (${pendingMemberCount})` },
+                { id: 'pendente', label: `Aguardando Pgto (${pendingPaymentCount})` },
+                { id: 'pago', label: `Pagos (${paidCount})` },
+                { id: 'cancelado', label: 'Cancelados' },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFilterStatus(f.id as typeof filterStatus)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    filterStatus === f.id
+                      ? 'bg-brand-blue text-white shadow-sm'
+                      : 'bg-brand-surface-muted text-brand-text-secondary hover:text-brand-text-primary'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative min-w-[260px]">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Buscar por atleta, CPF, turma..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full text-xs pl-9 pr-3 py-2 rounded-xl bg-brand-surface-muted border border-brand-surface-border focus:outline-none focus:border-brand-blue"
+              />
+            </div>
           </div>
 
-          <div className="relative min-w-[260px]">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Buscar por atleta, CPF, modalidade..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full text-xs pl-9 pr-3 py-2 rounded-xl bg-brand-surface-muted border border-brand-surface-border focus:outline-none focus:border-brand-blue"
-            />
+          {/* Filtro Rápido por Turma */}
+          <div className="pt-2 border-t border-brand-surface-border/60 flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+              <Filter className="w-3 h-3" />
+              Turma:
+            </span>
+            <button
+              type="button"
+              onClick={() => setFilterTurma('todas')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                filterTurma === 'todas'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Todas as Turmas
+            </button>
+            {TURMAS_MEDICINA.map((t) => (
+              <button
+                key={t.turma}
+                type="button"
+                onClick={() => setFilterTurma(t.turma)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  filterTurma === t.turma
+                    ? 'bg-brand-blue text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <span>T{t.number} {t.name}</span>
+              </button>
+            ))}
           </div>
         </section>
 
@@ -304,7 +348,7 @@ export const AdminRegistrationsPage: React.FC = () => {
               <thead>
                 <tr className="bg-brand-surface-muted/80 border-b border-brand-surface-border text-brand-text-muted font-display font-extrabold uppercase text-[10px]">
                   <th className="py-3 px-4">Atleta / Contato</th>
-                  <th className="py-3 px-3">Modalidade</th>
+                  <th className="py-3 px-3">Turma & Acesso Esportivo</th>
                   <th className="py-3 px-3">Condição de Sócio</th>
                   <th className="py-3 px-3">Valor</th>
                   <th className="py-3 px-3">Status de Pagamento</th>
@@ -332,8 +376,12 @@ export const AdminRegistrationsPage: React.FC = () => {
                         </td>
 
                         <td className="py-3 px-3">
-                          <span className="font-bold text-brand-blue block">{reg.modalityName}</span>
-                          <span className="text-[10px] text-brand-text-muted">{reg.categoryName}</span>
+                          <span className="font-display font-black text-slate-900 block">
+                            {reg.turmaLabel || reg.teamName || ('Turma ' + reg.turma)}
+                          </span>
+                          <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-bold inline-block mt-0.5">
+                            Passaporte Geral (Todas as 10 Modalidades) • {reg.categoryName}
+                          </span>
                         </td>
 
                         <td className="py-3 px-3">
@@ -470,7 +518,8 @@ export const AdminRegistrationsPage: React.FC = () => {
               <p><strong>Atleta:</strong> {validatingReg.athleteName}</p>
               <p><strong>E-mail:</strong> {validatingReg.athleteEmail} • <strong>Tel:</strong> {validatingReg.athletePhone}</p>
               <p><strong>Documento / Matrícula:</strong> {validatingReg.athleteDocument}</p>
-              <p><strong>Modalidade:</strong> {validatingReg.modalityName} ({validatingReg.categoryName})</p>
+              <p><strong>Turma / Equipe:</strong> {validatingReg.turmaLabel || validatingReg.teamName || ('Turma ' + validatingReg.turma)}</p>
+              <p><strong>Acesso Esportivo:</strong> Passaporte Geral (Todas as 10 Modalidades) • {validatingReg.categoryName}</p>
               <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 mt-2">
                 <strong>Comprovante / Declaração anexada:</strong>{' '}
                 {validatingReg.memberDocumentProofUrl || 'Declaração padrão de filiação à Atlética Cangaceira'}

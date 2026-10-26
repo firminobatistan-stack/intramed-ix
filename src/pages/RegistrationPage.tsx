@@ -19,12 +19,13 @@ import {
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
+import { TURMAS_MEDICINA } from '../data/registrationData';
 import { SportIcon } from '../components/sports/SportIcon';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { StatusBadge } from '../components/ui/StatusBadge';
-import { ModalitySlug, Registration } from '../types/domain';
+import { ModalitySlug, Registration, TurmaMedicina } from '../types/domain';
 
 export const RegistrationPage: React.FC = () => {
   const navigate = useNavigate();
@@ -42,8 +43,8 @@ export const RegistrationPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'nova_inscricao' | 'minhas_inscricoes'>('nova_inscricao');
 
-  // Formulário de Nova Inscrição
-  const [selectedModality, setSelectedModality] = useState<ModalitySlug>('futsal');
+  // Formulário de Nova Inscrição (Passaporte Geral por Turma)
+  const [selectedTurma, setSelectedTurma] = useState<TurmaMedicina>('21');
   const [categoryName, setCategoryName] = useState<'Masculino' | 'Feminino'>('Masculino');
   const [athleteName, setAthleteName] = useState(currentUser?.name || '');
   const [athleteEmail, setAthleteEmail] = useState(currentUser?.email || '');
@@ -60,13 +61,13 @@ export const RegistrationPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
   const [copiedPix, setCopiedPix] = useState(false);
 
+  const selectedTurmaObj = TURMAS_MEDICINA.find((t) => t.turma === selectedTurma) || TURMAS_MEDICINA[0];
+
   const myRegistrations = registrations.filter((r) => {
     if (currentUser?.email && r.athleteEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
     if (athleteEmail && r.athleteEmail.toLowerCase() === athleteEmail.toLowerCase()) return true;
     return false;
   });
-
-  const selectedModObj = OFFICIAL_MODALITIES.find((m) => m.id === selectedModality) || OFFICIAL_MODALITIES[0];
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,8 +85,10 @@ export const RegistrationPage: React.FC = () => {
         athleteEmail,
         athletePhone,
         athleteDocument,
-        modalityId: selectedModality,
-        modalityName: selectedModObj.name,
+        turma: selectedTurma,
+        turmaLabel: selectedTurmaObj.fullName,
+        teamId: selectedTurmaObj.teamId,
+        teamName: selectedTurmaObj.name,
         categoryName,
         requestedMemberDiscount: isSocioClaim,
         memberDocumentProofUrl: isSocioClaim ? (socioDocumentProof || 'Declaração de Sócio da Atlética Cangaceira') : undefined,
@@ -197,44 +200,102 @@ export const RegistrationPage: React.FC = () => {
               className="lg:col-span-8 bg-white rounded-3xl border border-brand-surface-border p-6 shadow-card space-y-6"
             >
               <div className="border-b border-brand-surface-border pb-4">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-blue/10 text-brand-blue text-[11px] font-display font-extrabold uppercase tracking-wider mb-2">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Passaporte Esportivo Unificado INTRAMED IX
+                </div>
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                  1. Escolha a Modalidade e Categoria
+                  1. Selecione a sua Turma de Medicina UEMA
                 </h2>
-                <p className="text-xs text-brand-text-secondary mt-0.5">
-                  Selecione o esporte em que você irá competir no INTRAMED IX.
+                <p className="text-xs text-brand-text-secondary mt-1">
+                  Escolha o período pelo qual você irá competir. Ao se inscrever, você adquire o <strong>Passaporte Geral</strong> e tem direito a disputar <strong>todas as modalidades esportivas</strong>!
                 </p>
               </div>
 
-              {/* Seletor de Modalidade */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                {OFFICIAL_MODALITIES.slice(0, 8).map((mod) => (
-                  <button
-                    key={mod.id}
-                    type="button"
-                    onClick={() => setSelectedModality(mod.id)}
-                    className={`p-3 rounded-2xl border-2 text-left transition-all flex flex-col justify-between ${
-                      selectedModality === mod.id
-                        ? 'bg-brand-blue-light/50 border-brand-blue text-brand-blue font-bold shadow-sm'
-                        : 'border-brand-surface-border bg-brand-surface-muted/60 text-brand-text-primary hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-8 h-8 rounded-xl bg-brand-blue/10 flex items-center justify-center text-brand-blue mb-2">
-                      <SportIcon iconKey={mod.iconKey} className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-display font-extrabold uppercase truncate">
-                      {mod.name}
+              {/* Seletor das 5 Turmas Oficiais */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {TURMAS_MEDICINA.map((t) => {
+                  const isSelected = selectedTurma === t.turma;
+                  return (
+                    <button
+                      key={t.turma}
+                      type="button"
+                      onClick={() => setSelectedTurma(t.turma)}
+                      className={`p-3.5 rounded-2xl border-2 text-left transition-all relative overflow-hidden flex flex-col justify-between ${
+                        isSelected
+                          ? 'border-brand-blue bg-blue-50/70 shadow-md ring-2 ring-brand-blue/30'
+                          : 'border-brand-surface-border bg-white hover:border-slate-300 hover:bg-slate-50/70'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 shadow-sm flex items-center justify-center">
+                            <img
+                              src={t.crestUrl}
+                              alt={t.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                              Turma {t.number}
+                            </span>
+                            <span className="text-sm font-display font-black text-slate-900 leading-tight block">
+                              {t.name}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black ${
+                            isSelected
+                              ? 'bg-brand-blue text-white'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          T{t.number}
+                        </span>
+                      </div>
+
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        {t.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Card Destaque: Acesso Liberado a Todas as Modalidades */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50/50 to-slate-50 border border-blue-200/80 space-y-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 text-xs font-display font-extrabold text-blue-950">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Inscrição Única: Acesso Liberado a Todas as 10 Modalidades</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full">
+                    Sem taxa adicional por esporte
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  Você não precisa escolher uma única modalidade. Represente a <strong>{selectedTurmaObj.fullName}</strong> no futsal, basquete, vôlei ou em quantas modalidades for escalado(a)!
+                </p>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {OFFICIAL_MODALITIES.map((mod) => (
+                    <span
+                      key={mod.id}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white border border-blue-200/60 text-[10px] font-bold text-slate-700 shadow-2xs"
+                    >
+                      <SportIcon iconKey={mod.iconKey} className="w-3 h-3 text-brand-blue" />
+                      <span>{mod.name}</span>
                     </span>
-                    <span className="text-[10px] text-brand-text-muted mt-0.5">
-                      Oficial INTRAMED
-                    </span>
-                  </button>
-                ))}
+                  ))}
+                </div>
               </div>
 
               {/* Categoria: Masculino vs Feminino */}
-              <div className="space-y-1.5 pt-2">
+              <div className="space-y-1.5 pt-1">
                 <label className="text-xs font-bold text-brand-text-primary block">
-                  Categoria da Disputa
+                  Categoria Principal do(a) Atleta
                 </label>
                 <div className="grid grid-cols-2 gap-3 max-w-sm">
                   {(['Masculino', 'Feminino'] as const).map((cat) => (
@@ -376,11 +437,19 @@ export const RegistrationPage: React.FC = () => {
                   <span className="font-bold text-brand-text-primary">{activeLot?.name}</span>
                 </div>
                 <div className="flex justify-between pt-2">
-                  <span className="text-brand-text-secondary">Modalidade:</span>
-                  <span className="font-bold text-brand-text-primary">{selectedModObj.name} ({categoryName})</span>
+                  <span className="text-brand-text-secondary">Turma Escolhida:</span>
+                  <span className="font-bold text-brand-text-primary">{selectedTurmaObj.fullName}</span>
                 </div>
                 <div className="flex justify-between pt-2">
-                  <span className="text-brand-text-secondary">Categoria do Atleta:</span>
+                  <span className="text-brand-text-secondary">Modalidades:</span>
+                  <span className="font-bold text-emerald-600">Acesso a Todas (10)</span>
+                </div>
+                <div className="flex justify-between pt-2">
+                  <span className="text-brand-text-secondary">Categoria Principal:</span>
+                  <span className="font-bold text-brand-text-primary">{categoryName}</span>
+                </div>
+                <div className="flex justify-between pt-2">
+                  <span className="text-brand-text-secondary">Condição do Atleta:</span>
                   <span className="font-bold text-brand-text-primary">
                     {isSocioClaim ? 'Sócio da Atlética (Em análise)' : 'Não Sócio (Integral)'}
                   </span>
@@ -450,8 +519,11 @@ export const RegistrationPage: React.FC = () => {
                               ID: {reg.id.toUpperCase()}
                             </span>
                             <h3 className="text-base font-display font-extrabold text-brand-text-primary mt-1">
-                              {reg.modalityName} ({reg.categoryName})
+                              {reg.turmaLabel || reg.teamName}
                             </h3>
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md inline-block mt-1">
+                              Passaporte Geral • Todas as Modalidades ({reg.categoryName})
+                            </span>
                           </div>
 
                           <span

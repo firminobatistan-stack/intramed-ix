@@ -12,6 +12,7 @@ import {
   FinancialAuditLog,
   RegistrationLot,
   ModalitySlug,
+  TurmaMedicina,
 } from '../types/domain';
 import {
   INITIAL_TOURNAMENT_EVENT,
@@ -30,10 +31,12 @@ interface CreateRegistrationPayload {
   athleteEmail: string;
   athletePhone: string;
   athleteDocument: string;
-  teamId?: string | null;
-  teamName?: string | null;
-  modalityId: ModalitySlug;
-  modalityName: string;
+  turma: TurmaMedicina;
+  turmaLabel: string;
+  teamId: string;
+  teamName: string;
+  modalityId?: ModalitySlug | 'todas';
+  modalityName?: string;
   categoryName: string;
   requestedMemberDiscount: boolean;
   memberDocumentProofUrl?: string;
@@ -178,10 +181,12 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         athleteEmail: payload.athleteEmail.trim(),
         athletePhone: payload.athletePhone.trim(),
         athleteDocument: payload.athleteDocument.trim(),
-        teamId: payload.teamId || null,
-        teamName: payload.teamName || null,
-        modalityId: payload.modalityId,
-        modalityName: payload.modalityName,
+        turma: payload.turma,
+        turmaLabel: payload.turmaLabel,
+        teamId: payload.teamId,
+        teamName: payload.teamName,
+        modalityId: payload.modalityId || 'todas',
+        modalityName: payload.modalityName || 'Passaporte Geral (Todas as 10 Modalidades)',
         categoryName: payload.categoryName,
         requestedMemberDiscount: isSocioRequested,
         memberStatus: isSocioRequested ? 'pendente' : 'nao_solicitado',
