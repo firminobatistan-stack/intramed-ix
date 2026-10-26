@@ -69,14 +69,14 @@ export const BrandMark: React.FC<BrandMarkProps> = ({
       <div className="flex flex-col">
         <div className="flex items-center gap-1.5 leading-none">
           <span
-            className={`font-display font-extrabold tracking-tight ${
+            className={`font-black tracking-tight ${
               inverted ? 'text-white' : 'text-brand-blue'
             } ${s.title}`}
           >
             INTRAMED
           </span>
           <span
-            className={`font-display font-extrabold tracking-wider ${
+            className={`font-black tracking-wider ${
               inverted
                 ? 'bg-brand-yellow text-brand-blue-dark'
                 : 'bg-brand-blue text-brand-yellow border border-brand-blue/15'
@@ -87,7 +87,7 @@ export const BrandMark: React.FC<BrandMarkProps> = ({
         </div>
         {showSubtitle && (
           <span
-            className={`font-bold uppercase tracking-widest mt-1 ${
+            className={`font-medium uppercase tracking-[0.2em] mt-1 ${
               inverted ? 'text-brand-yellow/90' : 'text-brand-text-secondary'
             } ${s.sub}`}
           >

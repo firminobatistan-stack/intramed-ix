@@ -32,8 +32,9 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        display: ['Plus Jakarta Sans', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['Montserrat', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Montserrat', 'system-ui', '-apple-system', 'sans-serif'],
+        montserrat: ['Montserrat', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
         'card': '0 2px 10px rgba(15, 42, 86, 0.05), 0 1px 3px rgba(10, 22, 41, 0.03)',

@@ -133,7 +133,7 @@ export const HomePage: React.FC = () => {
                 />
               </div>
               <span className="mt-2 text-xs font-display font-bold text-white/90">
-                10 Modalidades
+                16 Modalidades
               </span>
             </div>
           </div>

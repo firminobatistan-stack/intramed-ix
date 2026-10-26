@@ -69,6 +69,10 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('intramed_admin_session', 'true');
+    }
+
     setCurrentUser({
       id: 'usr-admin-intramed',
       name:

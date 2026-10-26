@@ -40,6 +40,10 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
       return;
     }
 
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('intramed_admin_session', 'true');
+    }
+
     setCurrentUser({
       id: 'usr-admin-intramed',
       name: 'Comissão Organizadora • A.A.A. Cangaceira',

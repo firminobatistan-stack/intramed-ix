@@ -13,7 +13,8 @@ export const TestModeBanner: React.FC = () => {
   const navigate = useNavigate();
   const isAdmin = canOperateOfficialData();
 
-  if (!isTestMode) return null;
+  // O Modo de Teste e suas barras/atalhos NUNCA devem ser exibidos para não-administradores
+  if (!isTestMode || !isAdmin) return null;
 
   return (
     <div

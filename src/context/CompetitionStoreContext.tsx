@@ -215,7 +215,7 @@ interface CompetitionStoreContextValue {
   }) => Match | null;
 }
 
-const STORAGE_KEY_STATE = 'intramed_ix_live_engine_v1';
+const STORAGE_KEY_STATE = 'intramed_ix_live_engine_v3';
 const BROADCAST_CHANNEL_NAME = 'intramed_ix_live_sync_channel';
 
 /**
@@ -556,8 +556,19 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             return merged;
           };
 
+          const hasAdminSession =
+            typeof window !== 'undefined' &&
+            sessionStorage.getItem('intramed_admin_session') === 'true';
+
+          let resolvedUser: UserProfile | null = null;
+          if (parsed.currentUser && parsed.currentUser.role === 'atleta') {
+            resolvedUser = parsed.currentUser;
+          } else if (hasAdminSession && parsed.currentUser) {
+            resolvedUser = parsed.currentUser;
+          }
+
           return {
-            isTestMode: Boolean(parsed.isTestMode),
+            isTestMode: Boolean(hasAdminSession && parsed.isTestMode),
             officialTeams: mergeTeamsWithDefaults(parsed.officialTeams, INITIAL_TEAMS),
             officialAthletes: parsed.officialAthletes || INITIAL_ATHLETES,
             officialMatches: parsed.officialMatches || INITIAL_MATCHES,
@@ -569,10 +580,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 : initialTest.athletes,
             testMatches: parsed.testMatches,
             testSheets: parsed.testSheets || initialTest.sheets,
-            currentUser:
-              parsed.currentUser !== undefined
-                ? parsed.currentUser
-                : INITIAL_USER_PROFILE,
+            currentUser: resolvedUser,
             pendingSyncCount: parsed.pendingSyncCount || 0,
             favoriteModalityIds: parsed.favoriteModalityIds || [],
             favoriteTeamIds: parsed.favoriteTeamIds || [],
@@ -594,7 +602,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       testAthletes: initialTest.athletes,
       testMatches: initialTest.matches,
       testSheets: initialTest.sheets,
-      currentUser: INITIAL_USER_PROFILE,
+      currentUser: null,
       pendingSyncCount: 0,
       favoriteModalityIds: [],
       favoriteTeamIds: [],
@@ -2223,9 +2231,29 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   // PERMISSÕES E AUTENTICAÇÃO
   const setCurrentUser = useCallback((user: UserProfile | null) => {
+    if (typeof window !== 'undefined') {
+      if (
+        user &&
+        (user.role === 'administrador' ||
+          user.role === 'organizacao' ||
+          user.role === 'moderador')
+      ) {
+        sessionStorage.setItem('intramed_admin_session', 'true');
+      } else {
+        sessionStorage.removeItem('intramed_admin_session');
+      }
+    }
+
     setState((prev) => ({
       ...prev,
       currentUser: user,
+      isTestMode:
+        user &&
+        (user.role === 'administrador' ||
+          user.role === 'organizacao' ||
+          user.role === 'moderador')
+          ? prev.isTestMode
+          : false,
     }));
   }, []);
 
