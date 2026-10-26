@@ -11,7 +11,6 @@ import {
   Tv,
   Heart,
   Bell,
-  Layers,
   Shield,
   CreditCard,
   ShieldCheck,
@@ -221,20 +220,6 @@ export const Sidebar: React.FC = () => {
               <Shield className="w-5 h-5 shrink-0 text-brand-yellow" />
               <span>Página de Equipe</span>
             </NavLink>
-
-            <NavLink
-              to="/design-system"
-              className={({ isActive }) =>
-                `group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-sm transition-all duration-150 ${
-                  isActive
-                    ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
-                    : 'text-white/75 hover:text-white hover:bg-white/10 font-medium'
-                }`
-              }
-            >
-              <Layers className="w-5 h-5 shrink-0 text-brand-yellow" />
-              <span>Design System & Case</span>
-            </NavLink>
           </div>
         </div>
       </div>
@@ -268,7 +253,7 @@ export const Sidebar: React.FC = () => {
           <span className="flex items-center gap-2 truncate">
             <LogIn className="w-4 h-4 shrink-0" />
             <span className="truncate">
-              {currentUser ? currentUser.name : 'Entrar (Atleta / Admin)'}
+              {currentUser ? currentUser.name : 'Entrar'}
             </span>
           </span>
           <span className="w-2 h-2 rounded-full bg-brand-blue-dark shrink-0" aria-hidden="true" />

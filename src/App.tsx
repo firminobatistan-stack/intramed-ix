@@ -25,7 +25,6 @@ import { FavoritesPage } from './pages/FavoritesPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { TeamDetailPage } from './pages/TeamDetailPage';
 import { AthleteDetailPage } from './pages/AthleteDetailPage';
-import { DesignSystemCasePage } from './pages/DesignSystemCasePage';
 import { RegistrationPage } from './pages/RegistrationPage';
 import { AdminRegistrationsPage } from './pages/AdminRegistrationsPage';
 import { RegistrationProvider } from './context/RegistrationStoreContext';
@@ -94,7 +93,6 @@ const RoutedApp: React.FC = () => {
     if (location.pathname === '/notificacoes') return 'Central de Alertas';
     if (location.pathname.startsWith('/equipe')) return 'Página da Equipe';
     if (location.pathname.startsWith('/atleta')) return 'Ficha do Atleta';
-    if (location.pathname === '/design-system') return 'UI/UX Design System & Case';
     if (location.pathname === '/perfil') return 'Perfil';
     if (location.pathname === '/inscricao') return 'Inscrições • INTRAMED IX';
     if (location.pathname === '/admin/inscricoes') return 'Gestão de Inscrições';
@@ -135,7 +133,6 @@ const RoutedApp: React.FC = () => {
         <Route path="/equipe/:teamId" element={<TeamDetailPage />} />
         <Route path="/atleta" element={<AthleteDetailPage />} />
         <Route path="/atleta/:athleteId" element={<AthleteDetailPage />} />
-        <Route path="/design-system" element={<DesignSystemCasePage />} />
         <Route path="/perfil" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
