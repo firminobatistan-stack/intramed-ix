@@ -20,6 +20,8 @@ import {
   INITIAL_FINANCIAL_AUDIT_LOGS,
 } from '../data/registrationData';
 import { useCompetitionStore } from './CompetitionStoreContext';
+import { db } from '../lib/firebase';
+import { collection, doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 
 const REGISTRATIONS_STORAGE_KEY = 'intramed_registrations_store_v1';
 const SYNC_CHANNEL_NAME = 'intramed_registration_channel';
@@ -134,6 +136,36 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
+  // Sincronização em tempo real via Cloud Firestore
+  useEffect(() => {
+    try {
+      const colRef = collection(db, 'registrations');
+      const unsubscribe = onSnapshot(
+        colRef,
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const firestoreList: Registration[] = [];
+            snapshot.forEach((snap) => {
+              firestoreList.push(snap.data() as Registration);
+            });
+            firestoreList.sort(
+              (a, b) =>
+                new Date(b.createdAtIso).getTime() -
+                new Date(a.createdAtIso).getTime()
+            );
+            setRegistrations(firestoreList);
+          }
+        },
+        (error) => {
+          console.warn('Firestore onSnapshot notice:', error.message);
+        }
+      );
+      return () => unsubscribe();
+    } catch (err) {
+      console.warn('Failed to attach Firestore listener:', err);
+    }
+  }, []);
+
   const broadcastState = (regs: Registration[], logs: FinancialAuditLog[]) => {
     if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
     try {
@@ -227,6 +259,13 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         return next;
       });
 
+      // Persistência em nuvem no Cloud Firestore
+      try {
+        await setDoc(doc(db, 'registrations', newRegistration.id), newRegistration);
+      } catch (err) {
+        console.warn('Firestore setDoc registration notice:', err);
+      }
+
       return newRegistration;
     },
     [tournamentEvent, activeLot, currentUser]
@@ -290,6 +329,22 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           return nextLogs;
         });
 
+        // Sincroniza validação de sócio no Cloud Firestore
+        try {
+          updateDoc(doc(db, 'registrations', registrationId), {
+            memberStatus: updated.memberStatus,
+            paymentStatus: updated.paymentStatus,
+            authorizedPrice: updated.authorizedPrice,
+            memberNotes: updated.memberNotes,
+            validatedByAdminId: updated.validatedByAdminId,
+            validatedByAdminName: updated.validatedByAdminName,
+            validatedAtIso: updated.validatedAtIso,
+            updatedAtIso: updated.updatedAtIso,
+          }).catch((err) => console.warn('Firestore updateDoc validateMemberDiscount notice:', err));
+        } catch (err) {
+          console.warn('Firestore updateDoc notice:', err);
+        }
+
         return nextRegs;
       });
     },
@@ -343,6 +398,19 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           return nextLogs;
         });
 
+        // Sincroniza pagamento confirmado no Cloud Firestore
+        try {
+          updateDoc(doc(db, 'registrations', registrationId), {
+            paymentStatus: updated.paymentStatus,
+            paymentMethod: updated.paymentMethod,
+            mpPaymentId: updated.mpPaymentId,
+            paidAtIso: updated.paidAtIso,
+            updatedAtIso: updated.updatedAtIso,
+          }).catch((err) => console.warn('Firestore updateDoc payment notice:', err));
+        } catch (err) {
+          console.warn('Firestore updateDoc payment notice:', err);
+        }
+
         return nextRegs;
       });
     },
@@ -381,6 +449,17 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           broadcastState(nextRegs, nextLogs);
           return nextLogs;
         });
+
+        // Sincroniza cancelamento no Cloud Firestore
+        try {
+          updateDoc(doc(db, 'registrations', registrationId), {
+            paymentStatus: updated.paymentStatus,
+            memberNotes: updated.memberNotes,
+            updatedAtIso: updated.updatedAtIso,
+          }).catch((err) => console.warn('Firestore updateDoc cancel notice:', err));
+        } catch (err) {
+          console.warn('Firestore updateDoc notice:', err);
+        }
 
         return nextRegs;
       });

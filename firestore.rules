@@ -1,0 +1,566 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model — INTRAMED IX (Medicina UEMA)
+// ===============================================================
+//
+// 1. Collection: registrations/{registrationId}
+//    Document ID: reg-{timestamp}-{random} or custom UID
+//    Fields:
+//      - id: string (optional/required, max 100 chars)
+//      - eventId: string (required, 1-50 chars) - Evento oficial (ex: intramed-ix-2026)
+//      - lotId: string (required, 1-50 chars) - Lote de inscrição
+//      - userId: string (required, 1-100 chars) - ID do usuário autenticado ou visitante
+//      - athleteName: string (required, 2-100 chars) - Nome completo do atleta
+//      - athleteEmail: string (required, valid email, max 100 chars) - E-mail do atleta
+//      - athletePhone: string (required, 8-25 chars) - Telefone / WhatsApp com DDD
+//      - athleteDocument: string (required, 5-25 chars) - CPF ou Matrícula UEMA
+//      - turma: string (required, in ['21', '22', '23', '24', '25']) - Turma de Medicina
+//      - turmaLabel: string (required, 1-100 chars) - Ex: 'Turma XXI • Sanguinária'
+//      - teamId: string (required, in ['sanguinaria', 'predadora', 'tormenta', 'colossal', 'soberana'])
+//      - teamName: string (required, 1-100 chars) - Nome da atlética da turma
+//      - modalityId: string (optional, 1-50 chars) - 'todas' ou slug de modalidade
+//      - modalityName: string (optional, 1-100 chars) - Nome de exibição
+//      - categoryName: string (required, in ['Masculino', 'Feminino', 'Geral'])
+//      - requestedMemberDiscount: bool (required) - Se solicitou desconto de sócio da atlética
+//      - memberStatus: string (required, in ['nao_solicitado', 'pendente', 'aprovado', 'rejeitado'])
+//      - memberDocumentProofUrl: string (optional, max 500 chars) - Comprovante de sócio
+//      - memberNotes: string (optional, max 500 chars) - Observações da diretoria
+//      - validatedByAdminId: string (optional, max 100 chars) - Admin que validou
+//      - validatedByAdminName: string (optional, max 100 chars) - Nome do admin
+//      - validatedAtIso: string (optional, max 50 chars) - Data de conferência
+//      - paymentStatus: string (required, in ['aguardando_validacao', 'pendente', 'processando', 'pago', 'cancelado', 'expirado'])
+//      - authorizedPrice: number (required, > 0 and <= 1000) - Valor autorizado
+//      - paymentTransactionId: string (optional, max 100 chars) - ID de transação interna
+//      - paymentMethod: string (optional, in ['pix', 'credit_card', 'ticket'])
+//      - mpPreferenceId: string (optional, max 100 chars) - Mercado Pago Preference ID
+//      - mpPaymentId: string (optional, max 100 chars) - Mercado Pago Payment ID
+//      - mpInitPointUrl: string (optional, max 500 chars) - URL do checkout
+//      - paidAtIso: string (optional, max 50 chars) - Data de confirmação
+//      - createdAtIso: string (required, max 50 chars) - Data de submissão
+//      - updatedAtIso: string (required, max 50 chars) - Data da última alteração
+//
+// 2. Collection: matches/{matchId}
+//    Document ID: match-{modality}-{number} or UUID
+//    Fields:
+//      - id: string (required, 1-64 chars)
+//      - modalityId: string (required, 1-50 chars)
+//      - modalityName: string (required, 1-64 chars)
+//      - categoryId: string (optional, max 50 chars)
+//      - categoryName: string (optional, max 50 chars)
+//      - phase: string (required, in ['group_stage', 'quarterfinals', 'semifinals', 'third_place', 'final'])
+//      - phaseLabel: string (required, 1-50 chars)
+//      - status: string (required, in ['scheduled', 'live', 'halftime', 'finished', 'postponed', 'cancelled'])
+//      - scheduledDate: string (optional, max 30 chars)
+//      - scheduledTime: string (optional, max 20 chars)
+//      - venue: string (optional, max 100 chars)
+//      - homeTeam: map (required, keys: teamId, teamName, crestUrl, score, setsWon, isWinner)
+//      - awayTeam: map (required, keys: teamId, teamName, crestUrl, score, setsWon, isWinner)
+//      - matchSheetId: string (optional, max 64 chars)
+//      - isTestData: bool (optional)
+//
+// 3. Collection: match_sheets/{sheetId}
+//    Document ID: sheet-{matchId} or UUID
+//    Fields:
+//      - id: string (required, 1-64 chars)
+//      - matchId: string (required, 1-64 chars)
+//      - modalityId: string (required, 1-50 chars)
+//      - scoringModel: string (required, 1-50 chars)
+//      - isTestMode: bool (required)
+//      - homeLineup: list (required, max 50 entries)
+//      - awayLineup: list (required, max 50 entries)
+//      - timer: map (required, timer state)
+//      - periodScores: list (required, max 20 entries)
+//      - events: list (required, max 250 entries)
+//      - activeSuspensions: list (required, max 20 entries)
+//      - activeTimeout: map (optional)
+//      - homeTimeoutsUsed: number (required, >= 0)
+//      - awayTimeoutsUsed: number (required, >= 0)
+//      - homeFoulsCurrentPeriod: number (required, >= 0)
+//      - awayFoulsCurrentPeriod: number (required, >= 0)
+//      - refereeNotes: string (required, max 2000 chars)
+//      - refereeName: string (optional, max 100 chars)
+//      - assistantRefereeName: string (optional, max 100 chars)
+//      - tableOfficialName: string (optional, max 100 chars)
+//      - timekeeperName: string (optional, max 100 chars)
+//      - twentyFourSecOperatorName: string (optional, max 100 chars)
+//      - isClosed: bool (required)
+//      - closedAtIso: string (optional, max 50 chars)
+//      - syncStatus: string (required, in ['synced', 'pending_sync', 'offline_ready'])
+//      - lastUpdatedIso: string (required, max 50 chars)
+//
+// 4. Collection: teams/{teamId}
+//    Fields:
+//      - id: string (required, 1-50 chars)
+//      - name: string (required, 1-100 chars)
+//      - shortName: string (optional, max 50 chars)
+//      - turmaLabel: string (optional, max 50 chars)
+//      - mascotLabel: string (optional, max 50 chars)
+//      - crestUrl: string (optional, max 500 chars)
+//      - theme: map (optional)
+//      - modalityIds: list (required, max 30 strings)
+//      - isTestOnly: bool (optional)
+//
+// 5. Collection: athletes/{athleteId}
+//    Fields:
+//      - id: string (required, 1-64 chars)
+//      - name: string (required, 1-100 chars)
+//      - avatarUrl: string (optional, max 500 chars)
+//      - jerseyNumber: number (optional, 0-99)
+//      - position: string (optional, max 50 chars)
+//      - teamId: string (required, 1-50 chars)
+//      - modalityIds: list (required, max 30 strings)
+//      - isTestOnly: bool (optional)
+//
+// 6. Collection: audit_logs/{logId}
+//    Fields:
+//      - id: string (required, 1-64 chars)
+//      - entity: string (required, 1-50 chars)
+//      - entityId: string (required, 1-64 chars)
+//      - action: string (required, 1-64 chars)
+//      - adminUserId: string (optional, max 64 chars)
+//      - adminUserName: string (optional, max 100 chars)
+//      - ipAddress: string (optional, max 50 chars)
+//      - metadata: map (optional)
+//      - timestampIso: string (required, max 50 chars)
+//
+// 7. Collection: users/{userId}
+//    Fields:
+//      - id: string (required, matches userId)
+//      - name: string (required, 1-100 chars)
+//      - email: string (required, valid email)
+//      - avatarUrl: string (optional, max 500 chars)
+//      - role: string (required, in ['atleta', 'organizacao', 'moderador', 'administrador'])
+//      - teamId: string (optional, max 50 chars)
+//      - teamName: string (optional, max 100 chars)
+//      - linkedAthleteId: string (optional, max 64 chars)
+//      - modalityIds: list (optional, max 30 strings)
+//      - registrationCode: string (optional, max 50 chars)
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Validação de Perfil Administrativo / Comissão Organizadora
+    // Suporta Custom Claims do Firebase Auth ou e-mails bootstrap oficiais da Atlética Cangaceira
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.get('admin', false) == true ||
+        request.auth.token.get('role', '') in ['admin', 'administrador', 'organizacao', 'moderador'] ||
+        (
+          request.auth.token.get('email', '') in [
+            'organizacao@intramed.uema.br',
+            'admin@intramed.uema.br',
+            'atletica.cangaceira@uema.br'
+          ]
+        )
+      );
+    }
+
+    function hasRequiredFields(data, fields) {
+      return data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(data, fields) {
+      return data.keys().hasOnly(fields);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.size() <= 100 &&
+        email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    function isValidOptionalUrl(url) {
+      return url == null || (
+        url is string &&
+        url.size() <= 500 &&
+        (url.matches('^https://.*') || url.matches('^http://.*') || url.matches('^/.*'))
+      );
+    }
+
+    function isValidOptionalString(data, field, minLen, maxLen) {
+      return !(field in data) || data[field] == null || (
+        data[field] is string &&
+        data[field].size() >= minLen &&
+        data[field].size() <= maxLen
+      );
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    // Validador de Inscrição Esportiva (Passaporte INTRAMED IX)
+    function isValidRegistration(data) {
+      let requiredFields = [
+        'eventId', 'lotId', 'userId', 'athleteName', 'athleteEmail',
+        'athletePhone', 'athleteDocument', 'turma', 'turmaLabel',
+        'teamId', 'teamName', 'categoryName', 'requestedMemberDiscount',
+        'memberStatus', 'paymentStatus', 'authorizedPrice',
+        'createdAtIso', 'updatedAtIso'
+      ];
+
+      let allowedFields = [
+        'id', 'eventId', 'lotId', 'userId', 'athleteName', 'athleteEmail',
+        'athletePhone', 'athleteDocument', 'turma', 'turmaLabel',
+        'teamId', 'teamName', 'modalityId', 'modalityName', 'categoryName',
+        'requestedMemberDiscount', 'memberStatus', 'memberDocumentProofUrl',
+        'memberNotes', 'validatedByAdminId', 'validatedByAdminName',
+        'validatedAtIso', 'paymentStatus', 'authorizedPrice',
+        'paymentTransactionId', 'paymentMethod', 'mpPreferenceId',
+        'mpPaymentId', 'mpInitPointUrl', 'paidAtIso',
+        'createdAtIso', 'updatedAtIso'
+      ];
+
+      return hasRequiredFields(data, requiredFields) &&
+        hasOnlyAllowedFields(data, allowedFields) &&
+        data.eventId is string && data.eventId.size() >= 1 && data.eventId.size() <= 50 &&
+        data.lotId is string && data.lotId.size() >= 1 && data.lotId.size() <= 50 &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 100 &&
+        data.athleteName is string && data.athleteName.size() >= 2 && data.athleteName.size() <= 100 &&
+        isValidEmail(data.athleteEmail) &&
+        data.athletePhone is string && data.athletePhone.size() >= 8 && data.athletePhone.size() <= 25 &&
+        data.athleteDocument is string && data.athleteDocument.size() >= 5 && data.athleteDocument.size() <= 25 &&
+        data.turma in ['21', '22', '23', '24', '25'] &&
+        data.turmaLabel is string && data.turmaLabel.size() <= 100 &&
+        data.teamId in ['sanguinaria', 'predadora', 'tormenta', 'colossal', 'soberana'] &&
+        data.teamName is string && data.teamName.size() <= 100 &&
+        data.categoryName in ['Masculino', 'Feminino', 'Geral'] &&
+        data.requestedMemberDiscount is bool &&
+        data.memberStatus in ['nao_solicitado', 'pendente', 'aprovado', 'rejeitado'] &&
+        data.paymentStatus in ['aguardando_validacao', 'pendente', 'processando', 'pago', 'cancelado', 'expirado'] &&
+        data.authorizedPrice is number && data.authorizedPrice > 0 && data.authorizedPrice <= 1000 &&
+        isValidOptionalString(data, 'modalityId', 1, 50) &&
+        isValidOptionalString(data, 'modalityName', 1, 100) &&
+        isValidOptionalString(data, 'memberDocumentProofUrl', 1, 500) &&
+        isValidOptionalString(data, 'memberNotes', 1, 500) &&
+        isValidOptionalString(data, 'validatedByAdminId', 1, 100) &&
+        isValidOptionalString(data, 'validatedByAdminName', 1, 100) &&
+        isValidOptionalString(data, 'validatedAtIso', 1, 50) &&
+        isValidOptionalString(data, 'paymentTransactionId', 1, 100) &&
+        isValidOptionalString(data, 'mpPreferenceId', 1, 100) &&
+        isValidOptionalString(data, 'mpPaymentId', 1, 100) &&
+        isValidOptionalString(data, 'mpInitPointUrl', 1, 500) &&
+        isValidOptionalString(data, 'paidAtIso', 1, 50) &&
+        isValidOptionalString(data, 'createdAtIso', 1, 50) &&
+        isValidOptionalString(data, 'updatedAtIso', 1, 50) &&
+        (!( 'paymentMethod' in data ) || data.paymentMethod == null || data.paymentMethod in ['pix', 'credit_card', 'ticket']);
+    }
+
+    // Regra de segurança para criação de inscrição por participante:
+    // Garante que o usuário não possa se auto-aprovar como sócio ou marcar inscrição como paga
+    function isAuthorizedRegistrationCreate(data) {
+      let isUnprivilegedUser = !isAdmin();
+      return isValidRegistration(data) && (
+        !isUnprivilegedUser || (
+          // Participante solicitando desconto de sócio deve iniciar estritamente como 'pendente'
+          data.memberStatus == (data.requestedMemberDiscount ? 'pendente' : 'nao_solicitado') &&
+          // O status de pagamento inicial nunca pode ser marcado como pago pelo cliente
+          data.paymentStatus in ['aguardando_validacao', 'pendente'] &&
+          // Nenhum campo administrativo ou de quitação pode ser inserido pelo cliente
+          !( 'validatedByAdminId' in data && data.validatedByAdminId != null ) &&
+          !( 'validatedByAdminName' in data && data.validatedByAdminName != null ) &&
+          !( 'validatedAtIso' in data && data.validatedAtIso != null ) &&
+          !( 'mpPaymentId' in data && data.mpPaymentId != null ) &&
+          !( 'paidAtIso' in data && data.paidAtIso != null )
+        )
+      );
+    }
+
+    // Validador de Partida Oficial
+    function isValidMatch(data) {
+      let requiredFields = [
+        'id', 'modalityId', 'modalityName', 'phase', 'phaseLabel',
+        'status', 'homeTeam', 'awayTeam'
+      ];
+      return hasRequiredFields(data, requiredFields) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 64 &&
+        data.modalityId is string && data.modalityId.size() <= 50 &&
+        data.modalityName is string && data.modalityName.size() <= 64 &&
+        data.phase in ['group_stage', 'quarterfinals', 'semifinals', 'third_place', 'final'] &&
+        data.phaseLabel is string && data.phaseLabel.size() <= 50 &&
+        data.status in ['scheduled', 'live', 'halftime', 'finished', 'postponed', 'cancelled'] &&
+        data.homeTeam is map &&
+        data.awayTeam is map &&
+        isValidOptionalString(data, 'scheduledDate', 1, 30) &&
+        isValidOptionalString(data, 'scheduledTime', 1, 20) &&
+        isValidOptionalString(data, 'venue', 1, 100) &&
+        isValidOptionalString(data, 'matchSheetId', 1, 64) &&
+        (!( 'isTestData' in data ) || data.isTestData is bool);
+    }
+
+    // Validador de Súmula Oficial
+    function isValidMatchSheet(data) {
+      let requiredFields = [
+        'id', 'matchId', 'modalityId', 'scoringModel', 'isTestMode',
+        'homeLineup', 'awayLineup', 'timer', 'periodScores', 'events',
+        'activeSuspensions', 'homeTimeoutsUsed', 'awayTimeoutsUsed',
+        'homeFoulsCurrentPeriod', 'awayFoulsCurrentPeriod',
+        'refereeNotes', 'isClosed', 'syncStatus', 'lastUpdatedIso'
+      ];
+      return hasRequiredFields(data, requiredFields) &&
+        data.id is string && data.id.size() <= 64 &&
+        data.matchId is string && data.matchId.size() <= 64 &&
+        data.modalityId is string && data.modalityId.size() <= 50 &&
+        data.scoringModel is string && data.scoringModel.size() <= 50 &&
+        data.isTestMode is bool &&
+        data.homeLineup is list && data.homeLineup.size() <= 50 &&
+        data.awayLineup is list && data.awayLineup.size() <= 50 &&
+        data.timer is map &&
+        data.periodScores is list && data.periodScores.size() <= 20 &&
+        data.events is list && data.events.size() <= 250 &&
+        data.activeSuspensions is list && data.activeSuspensions.size() <= 20 &&
+        data.homeTimeoutsUsed is number && data.homeTimeoutsUsed >= 0 &&
+        data.awayTimeoutsUsed is number && data.awayTimeoutsUsed >= 0 &&
+        data.homeFoulsCurrentPeriod is number && data.homeFoulsCurrentPeriod >= 0 &&
+        data.awayFoulsCurrentPeriod is number && data.awayFoulsCurrentPeriod >= 0 &&
+        data.refereeNotes is string && data.refereeNotes.size() <= 2000 &&
+        data.isClosed is bool &&
+        data.syncStatus in ['synced', 'pending_sync', 'offline_ready'] &&
+        data.lastUpdatedIso is string && data.lastUpdatedIso.size() <= 50 &&
+        isValidOptionalString(data, 'refereeName', 1, 100) &&
+        isValidOptionalString(data, 'assistantRefereeName', 1, 100) &&
+        isValidOptionalString(data, 'tableOfficialName', 1, 100) &&
+        isValidOptionalString(data, 'timekeeperName', 1, 100) &&
+        isValidOptionalString(data, 'twentyFourSecOperatorName', 1, 100) &&
+        isValidOptionalString(data, 'closedAtIso', 1, 50);
+    }
+
+    // Validador de Equipes Oficiais
+    function isValidTeam(data) {
+      let requiredFields = ['id', 'name', 'modalityIds'];
+      return hasRequiredFields(data, requiredFields) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 50 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.modalityIds is list && data.modalityIds.size() <= 30 &&
+        isValidOptionalString(data, 'shortName', 1, 50) &&
+        isValidOptionalString(data, 'turmaLabel', 1, 50) &&
+        isValidOptionalString(data, 'mascotLabel', 1, 50) &&
+        isValidOptionalUrl(data.get('crestUrl', null)) &&
+        (!( 'theme' in data ) || data.theme is map) &&
+        (!( 'isTestOnly' in data ) || data.isTestOnly is bool);
+    }
+
+    // Validador de Atletas Oficiais
+    function isValidAthlete(data) {
+      let requiredFields = ['id', 'name', 'teamId', 'modalityIds'];
+      return hasRequiredFields(data, requiredFields) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 64 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        data.teamId is string && data.teamId.size() >= 1 && data.teamId.size() <= 50 &&
+        data.modalityIds is list && data.modalityIds.size() <= 30 &&
+        isValidOptionalUrl(data.get('avatarUrl', null)) &&
+        isValidOptionalString(data, 'position', 1, 50) &&
+        (!( 'jerseyNumber' in data ) || data.jerseyNumber == null || (data.jerseyNumber is number && data.jerseyNumber >= 0 && data.jerseyNumber <= 99)) &&
+        (!( 'isTestOnly' in data ) || data.isTestOnly is bool);
+    }
+
+    // Validador de Log de Auditoria
+    function isValidAuditLog(data) {
+      let requiredFields = ['id', 'entity', 'entityId', 'action', 'timestampIso'];
+      return hasRequiredFields(data, requiredFields) &&
+        data.id is string && data.id.size() <= 64 &&
+        data.entity is string && data.entity.size() <= 50 &&
+        data.entityId is string && data.entityId.size() <= 64 &&
+        data.action is string && data.action.size() <= 64 &&
+        data.timestampIso is string && data.timestampIso.size() <= 50 &&
+        isValidOptionalString(data, 'adminUserId', 1, 64) &&
+        isValidOptionalString(data, 'adminUserName', 1, 100) &&
+        isValidOptionalString(data, 'ipAddress', 1, 50) &&
+        (!( 'metadata' in data ) || data.metadata is map);
+    }
+
+    // Validador de Perfil de Usuário
+    function isValidUserProfile(data) {
+      let requiredFields = ['id', 'name', 'email', 'role'];
+      return hasRequiredFields(data, requiredFields) &&
+        data.id is string && data.id.size() <= 100 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        isValidEmail(data.email) &&
+        data.role in ['atleta', 'organizacao', 'moderador', 'administrador'] &&
+        isValidOptionalUrl(data.get('avatarUrl', null)) &&
+        isValidOptionalString(data, 'teamId', 1, 50) &&
+        isValidOptionalString(data, 'teamName', 1, 100) &&
+        isValidOptionalString(data, 'linkedAthleteId', 1, 64) &&
+        isValidOptionalString(data, 'registrationCode', 1, 50) &&
+        (!( 'modalityIds' in data ) || (data.modalityIds is list && data.modalityIds.size() <= 30));
+    }
+
+    // Validador de Evento / Lotes
+    function isValidTournamentEvent(data) {
+      let requiredFields = ['id', 'title', 'edition', 'year', 'status', 'lots'];
+      return hasRequiredFields(data, requiredFields) &&
+        data.id is string && data.id.size() <= 50 &&
+        data.title is string && data.title.size() <= 100 &&
+        data.edition is string && data.edition.size() <= 20 &&
+        data.year is number &&
+        data.status in ['upcoming', 'open_for_registrations', 'in_progress', 'finished'] &&
+        data.lots is list && data.lots.size() <= 10;
+    }
+
+    // ===============================================================
+    // Root Match: Default Deny
+    // ===============================================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // 1. Inscrições Esportivas (Passaporte Geral de Turmas)
+    // ===============================================================
+
+    match /registrations/{registrationId} {
+      // Proteção de PII (Lei Geral de Proteção de Dados - LGPD):
+      // Registros contêm CPF, telefone e comprovantes privados do atleta.
+      // Leitura permitida para o próprio atleta titular ou administradores da organização.
+      allow read: if isAdmin() || (
+        isAuthenticated() && (
+          resource.data.userId == request.auth.uid ||
+          (request.auth.token.get('email', '') != '' && resource.data.athleteEmail == request.auth.token.email)
+        )
+      );
+
+      // Criação aberta a participantes: submissão com status inicial 'pendente' e validação rígida de schema
+      allow create: if isAuthorizedRegistrationCreate(request.resource.data);
+
+      // Atualização restrita exclusivamente a administradores e mesários autorizados
+      // (aprovação de sócio, conferência de comprovante, confirmação de pagamento e alteração de lote)
+      allow update: if isAdmin() &&
+        isValidRegistration(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'eventId', 'userId', 'athleteDocument', 'turma', 'teamId', 'createdAtIso']);
+
+      // Exclusão estritamente restrita a administradores
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 2. Partidas Oficiais e Súmulas ao Vivo
+    // ===============================================================
+
+    match /matches/{matchId} {
+      // Leitura pública em tempo real para arquibancada, torcida e atletas
+      allow read: if true;
+
+      // Gestão de partidas restrita a administradores e comissão técnica
+      allow create: if isAdmin() && isValidMatch(request.resource.data);
+      allow update: if isAdmin() &&
+        isValidMatch(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'modalityId']);
+      allow delete: if isAdmin();
+    }
+
+    match /match_sheets/{sheetId} {
+      // Súmula e placar ao vivo com leitura pública universal
+      allow read: if true;
+
+      // Operação de mesa e arbitragem restrita a administradores
+      allow create: if isAdmin() && isValidMatchSheet(request.resource.data);
+      allow update: if isAdmin() &&
+        isValidMatchSheet(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'matchId']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 3. Equipes e Atletas Oficiais das Turmas
+    // ===============================================================
+
+    match /teams/{teamId} {
+      // Leitura pública de equipes (T21 Sanguinária a T25 Soberana)
+      allow read: if true;
+
+      // Cadastro e edição restrita à diretoria esportiva
+      allow create: if isAdmin() && isValidTeam(request.resource.data);
+      allow update: if isAdmin() &&
+        isValidTeam(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id']);
+      allow delete: if isAdmin();
+    }
+
+    match /athletes/{athleteId} {
+      // Relação nominal e estatísticas públicas de atletas
+      allow read: if true;
+
+      // Inscrição em súmulas e elencos restrita a administradores
+      allow create: if isAdmin() && isValidAthlete(request.resource.data);
+      allow update: if isAdmin() &&
+        isValidAthlete(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'teamId']);
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 4. Auditoria Administrativa e Financeira (Append-Only)
+    // ===============================================================
+
+    match /audit_logs/{logId} {
+      // Histórico restrito a administradores
+      allow read: if isAdmin();
+
+      // Registro de novas ações de auditoria (criação permitida a admins)
+      allow create: if isAdmin() && isValidAuditLog(request.resource.data);
+
+      // Imutabilidade total: logs de auditoria nunca podem ser modificados ou deletados
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // 5. Perfis de Usuário
+    // ===============================================================
+
+    match /users/{userId} {
+      // Leitura restrita ao titular da conta ou administradores
+      allow read: if isOwner(userId) || isAdmin();
+
+      // Usuário pode criar seu próprio perfil padrão 'atleta'
+      // Auto-atribuição de privilégios ('administrador', 'organizacao') é impedida
+      allow create: if isAuthenticated() &&
+        isOwner(userId) &&
+        isValidUserProfile(request.resource.data) &&
+        (request.resource.data.role == 'atleta' || isAdmin());
+
+      // Usuário pode atualizar seus dados pessoais, mas não seu cargo/função
+      allow update: if isAuthenticated() &&
+        isOwner(userId) &&
+        isValidUserProfile(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'email']) &&
+        (request.resource.data.role == resource.data.role || isAdmin());
+
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 6. Configurações de Evento e Lotes de Inscrição
+    // ===============================================================
+
+    match /tournament_events/{eventId} {
+      // Leitura pública dos lotes e datas do INTRAMED IX
+      allow read: if true;
+
+      // Gestão de lotes e preços restrita à diretoria
+      allow create: if isAdmin() && isValidTournamentEvent(request.resource.data);
+      allow update: if isAdmin() && isValidTournamentEvent(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+  }
+}
