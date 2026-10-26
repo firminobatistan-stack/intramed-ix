@@ -82,7 +82,223 @@ export const OFFICIAL_MODALITIES: SportModality[] = [
   },
 ];
 
-const ALL_MODALITY_SLUGS: ModalitySlug[] = OFFICIAL_MODALITIES.map((m) => m.id);
+export const ALL_MODALITY_SLUGS: ModalitySlug[] = OFFICIAL_MODALITIES.map((m) => m.id);
+
+export interface OfficialTournamentModality {
+  id: string;
+  name: string;
+  sportSlug: ModalitySlug;
+  type: 'coletiva' | 'individual';
+  gender: 'feminino' | 'masculino';
+  weight: 2 | 1;
+  points1st: number;
+  points2nd: number;
+  points3rd: number;
+  points4th: number;
+}
+
+/**
+ * 16 MODALIDADES OFICIAIS DO INTRAMED IX (Regulamento Atualizado):
+ * - 8 Coletivas (Peso 2: 20, 14, 8, 6 pontos)
+ * - 8 Individuais (Peso 1: 10, 7, 4, 3 pontos)
+ */
+export const TOURNAMENT_16_MODALITIES: OfficialTournamentModality[] = [
+  // 8 Coletivas (Peso 2)
+  {
+    id: 'volei-fem',
+    name: 'Vôlei Feminino',
+    sportSlug: 'volei',
+    type: 'coletiva',
+    gender: 'feminino',
+    weight: 2,
+    points1st: 20,
+    points2nd: 14,
+    points3rd: 8,
+    points4th: 6,
+  },
+  {
+    id: 'volei-masc',
+    name: 'Vôlei Masculino',
+    sportSlug: 'volei',
+    type: 'coletiva',
+    gender: 'masculino',
+    weight: 2,
+    points1st: 20,
+    points2nd: 14,
+    points3rd: 8,
+    points4th: 6,
+  },
+  {
+    id: 'basquete-fem',
+    name: 'Basquete Feminino',
+    sportSlug: 'basquete',
+    type: 'coletiva',
+    gender: 'feminino',
+    weight: 2,
+    points1st: 20,
+    points2nd: 14,
+    points3rd: 8,
+    points4th: 6,
+  },
+  {
+    id: 'basquete-masc',
+    name: 'Basquete Masculino',
+    sportSlug: 'basquete',
+    type: 'coletiva',
+    gender: 'masculino',
+    weight: 2,
+    points1st: 20,
+    points2nd: 14,
+    points3rd: 8,
+    points4th: 6,
+  },
+  {
+    id: 'handebol-fem',
+    name: 'Handebol Feminino',
+    sportSlug: 'handebol',
+    type: 'coletiva',
+    gender: 'feminino',
+    weight: 2,
+    points1st: 20,
+    points2nd: 14,
+    points3rd: 8,
+    points4th: 6,
+  },
+  {
+    id: 'handebol-masc',
+    name: 'Handebol Masculino',
+    sportSlug: 'handebol',
+    type: 'coletiva',
+    gender: 'masculino',
+    weight: 2,
+    points1st: 20,
+    points2nd: 14,
+    points3rd: 8,
+    points4th: 6,
+  },
+  {
+    id: 'futsal-fem',
+    name: 'Futsal Feminino',
+    sportSlug: 'futsal',
+    type: 'coletiva',
+    gender: 'feminino',
+    weight: 2,
+    points1st: 20,
+    points2nd: 14,
+    points3rd: 8,
+    points4th: 6,
+  },
+  {
+    id: 'futsal-masc',
+    name: 'Futsal Masculino',
+    sportSlug: 'futsal',
+    type: 'coletiva',
+    gender: 'masculino',
+    weight: 2,
+    points1st: 20,
+    points2nd: 14,
+    points3rd: 8,
+    points4th: 6,
+  },
+
+  // 8 Individuais (Peso 1)
+  {
+    id: 'sinuca-fem',
+    name: 'Sinuca Feminina',
+    sportSlug: 'sinuca',
+    type: 'individual',
+    gender: 'feminino',
+    weight: 1,
+    points1st: 10,
+    points2nd: 7,
+    points3rd: 4,
+    points4th: 3,
+  },
+  {
+    id: 'sinuca-masc',
+    name: 'Sinuca Masculina',
+    sportSlug: 'sinuca',
+    type: 'individual',
+    gender: 'masculino',
+    weight: 1,
+    points1st: 10,
+    points2nd: 7,
+    points3rd: 4,
+    points4th: 3,
+  },
+  {
+    id: 'truco-fem',
+    name: 'Truco Feminino',
+    sportSlug: 'truco',
+    type: 'individual',
+    gender: 'feminino',
+    weight: 1,
+    points1st: 10,
+    points2nd: 7,
+    points3rd: 4,
+    points4th: 3,
+  },
+  {
+    id: 'truco-masc',
+    name: 'Truco Masculino',
+    sportSlug: 'truco',
+    type: 'individual',
+    gender: 'masculino',
+    weight: 1,
+    points1st: 10,
+    points2nd: 7,
+    points3rd: 4,
+    points4th: 3,
+  },
+  {
+    id: 'volei-praia-fem',
+    name: 'Vôlei de Praia Feminino',
+    sportSlug: 'volei-de-praia',
+    type: 'individual',
+    gender: 'feminino',
+    weight: 1,
+    points1st: 10,
+    points2nd: 7,
+    points3rd: 4,
+    points4th: 3,
+  },
+  {
+    id: 'volei-praia-masc',
+    name: 'Vôlei de Praia Masculino',
+    sportSlug: 'volei-de-praia',
+    type: 'individual',
+    gender: 'masculino',
+    weight: 1,
+    points1st: 10,
+    points2nd: 7,
+    points3rd: 4,
+    points4th: 3,
+  },
+  {
+    id: 'tenis-mesa-fem',
+    name: 'Tênis de Mesa Feminino',
+    sportSlug: 'tenis-de-mesa',
+    type: 'individual',
+    gender: 'feminino',
+    weight: 1,
+    points1st: 10,
+    points2nd: 7,
+    points3rd: 4,
+    points4th: 3,
+  },
+  {
+    id: 'tenis-mesa-masc',
+    name: 'Tênis de Mesa Masculino',
+    sportSlug: 'tenis-de-mesa',
+    type: 'individual',
+    gender: 'masculino',
+    weight: 1,
+    points1st: 10,
+    points2nd: 7,
+    points3rd: 4,
+    points4th: 3,
+  },
+];
 
 export const INITIAL_TEAMS: Team[] = [
   {

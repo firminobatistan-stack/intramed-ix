@@ -43,12 +43,18 @@ export const BracketView: React.FC<BracketViewProps> = ({
     (m) => m.phase === 'final'
   );
 
-  const dynamicQuarterfinals: BracketMatchSlot[] = [0, 1, 2, 3].map((idx) => ({
-    id: `dyn-qf-${idx}`,
-    orderIndex: idx,
-    phase: 'quarterfinals',
-    match: qfMatches[idx] || bracket?.quarterfinals?.[idx]?.match || null,
-  }));
+  // Formato oficial de 5 atléticas do INTRAMED IX:
+  // - 1 confronto de Quartas de Final (A x B)
+  // - Semifinal 1 (C x D) e Semifinal 2 (Vencedor QF x E)
+  // - Final (Vencedor SF1 x Vencedor SF2)
+  const dynamicQuarterfinals: BracketMatchSlot[] = [
+    {
+      id: 'dyn-qf-0',
+      orderIndex: 0,
+      phase: 'quarterfinals',
+      match: qfMatches[0] || bracket?.quarterfinals?.[0]?.match || null,
+    },
+  ];
 
   const dynamicSemifinals: BracketMatchSlot[] = [0, 1].map((idx) => ({
     id: `dyn-sf-${idx}`,
@@ -355,10 +361,19 @@ export const BracketView: React.FC<BracketViewProps> = ({
           >
             {(mobileStageFilter === 'all' ||
               mobileStageFilter === 'quarterfinals') && (
-              <div className="flex flex-col justify-between gap-4">
-                {dynamicQuarterfinals.map((slot) =>
-                  renderPopulatedSlotCard(slot, 'Quartas de Final')
-                )}
+              <div className="flex flex-col justify-around gap-4">
+                {renderPopulatedSlotCard(dynamicQuarterfinals[0], 'Quartas de Final (Jogo Único)')}
+
+                {/* Card de Byes das Semifinais */}
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-dashed border-slate-300 text-xs text-slate-600 space-y-1.5 shadow-2xs">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-900 text-[11px] uppercase tracking-wide">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>3 Entradas Diretas na Semifinal</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    Três atléticas entram diretamente nas semifinais através do sorteio equilibrado: duas duelam na <strong>Semifinal 1</strong> e a terceira enfrenta a vencedora das Quartas na <strong>Semifinal 2</strong>.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -413,6 +428,71 @@ export const BracketView: React.FC<BracketViewProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Critério Oficial de Classificação & Pontuação (Regulamento INTRAMED IX) */}
+      <div className="bg-white rounded-2xl border border-brand-surface-border p-4 sm:p-5 shadow-card space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-brand-surface-border/80 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-4 h-4 text-brand-yellow-dark" />
+            <h4 className="text-xs sm:text-sm font-display font-black text-brand-text-primary uppercase tracking-tight">
+              Classificação Final & Pontuação Oficial (Regulamento • Item 04)
+            </h4>
+          </div>
+          <span className="text-[11px] font-bold text-brand-blue bg-brand-blue/10 px-2.5 py-0.5 rounded-full">
+            5 Equipes Participantes
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+          <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 space-y-1">
+            <span className="font-display font-black text-amber-900 block flex items-center gap-1.5">
+              <span>🥇 1º Lugar (Campeão)</span>
+            </span>
+            <p className="text-[11px] text-amber-800 leading-tight">
+              Vencedora da Grande Final.
+            </p>
+            <span className="text-xs font-mono font-black text-amber-950 block pt-1">
+              Coletivas: 20 pts • Individuais: 10 pts
+            </span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+            <span className="font-display font-black text-slate-800 block flex items-center gap-1.5">
+              <span>🥈 2º Lugar (Vice-campeão)</span>
+            </span>
+            <p className="text-[11px] text-slate-600 leading-tight">
+              Derrotada na Grande Final.
+            </p>
+            <span className="text-xs font-mono font-black text-slate-900 block pt-1">
+              Coletivas: 14 pts • Individuais: 7 pts
+            </span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-orange-50/80 border border-orange-200/80 space-y-1">
+            <span className="font-display font-black text-orange-950 block flex items-center gap-1.5">
+              <span>🥉 3º Lugar (Bronze)</span>
+            </span>
+            <p className="text-[11px] text-orange-900 leading-tight">
+              Derrotada na semifinal pela equipe campeã.
+            </p>
+            <span className="text-xs font-mono font-black text-orange-950 block pt-1">
+              Coletivas: 8 pts • Individuais: 4 pts
+            </span>
+          </div>
+
+          <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-200/60 space-y-1">
+            <span className="font-display font-black text-blue-950 block flex items-center gap-1.5">
+              <span>4º Lugar (Semifinalista)</span>
+            </span>
+            <p className="text-[11px] text-blue-900 leading-tight">
+              Derrotada na semifinal pela equipe vice-campeã.
+            </p>
+            <span className="text-xs font-mono font-black text-blue-950 block pt-1">
+              Coletivas: 6 pts • Individuais: 3 pts
+            </span>
           </div>
         </div>
       </div>
