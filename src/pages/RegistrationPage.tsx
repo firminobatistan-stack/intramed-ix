@@ -152,8 +152,8 @@ export const RegistrationPage: React.FC = () => {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
         {/* Navegação entre Formulário e Minhas Inscrições */}
-        <div className="flex items-center justify-between border-b border-brand-surface-border pb-3">
-          <div className="inline-flex items-center bg-white p-1 rounded-2xl border border-brand-surface-border shadow-sm">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-brand-surface-border pb-3">
+          <div className="inline-flex items-center justify-center bg-white p-1 rounded-2xl border border-brand-surface-border shadow-sm">
             <button
               type="button"
               onClick={() => setActiveTab('nova_inscricao')}

@@ -347,7 +347,7 @@ export const HomePage: React.FC = () => {
           As 5 Equipes Oficiais • Medicina UEMA
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+        <div className="flex sm:grid sm:grid-cols-5 gap-3 overflow-x-auto no-scrollbar pb-2 sm:pb-0 snap-x">
           {visibleTeams.map((team) => {
             const pHex = team.theme?.primaryHex || '#0B218A';
             const sHex = team.theme?.secondaryHex || '#061356';
@@ -360,7 +360,7 @@ export const HomePage: React.FC = () => {
                 style={{
                   background: `linear-gradient(155deg, ${pHex} 0%, ${sHex} 100%)`,
                 }}
-                className="group relative overflow-hidden rounded-2xl p-4 text-white text-center shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all flex flex-col items-center justify-between border border-white/15"
+                className="shrink-0 w-36 sm:w-auto snap-start group relative overflow-hidden rounded-2xl p-3.5 sm:p-4 text-white text-center shadow-md hover:shadow-xl hover:-translate-y-0.5 transition-all flex flex-col items-center justify-between border border-white/15"
               >
                 <div
                   style={{ borderColor: aHex }}

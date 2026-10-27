@@ -56,7 +56,20 @@
 
 /* Suporte a safe-area no mobile */
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+}
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 8px);
+}
+
+/* Otimização de toque e fluidez mobile */
+@media (max-width: 768px) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  input, select, textarea {
+    font-size: 16px !important; /* Evita zoom automático no iOS ao focar em inputs */
+  }
 }
 
 /* Regras de Impressão / Exportação de Súmula Oficial em Folha A4 (Estilo CBHb / Cangaceira) */

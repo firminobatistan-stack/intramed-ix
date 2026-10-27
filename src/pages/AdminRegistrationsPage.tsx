@@ -341,9 +341,10 @@ export const AdminRegistrationsPage: React.FC = () => {
           </div>
         </section>
 
-        {/* Tabela de Inscrições */}
+        {/* Tabela de Inscrições Desktop + Cards Otimizados Mobile */}
         <section className="bg-white rounded-3xl border border-brand-surface-border shadow-card overflow-hidden">
-          <div className="overflow-x-auto">
+          {/* Versão Desktop (Tabela Completa) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-brand-surface-muted/80 border-b border-brand-surface-border text-brand-text-muted font-display font-extrabold uppercase text-[10px]">
@@ -502,6 +503,130 @@ export const AdminRegistrationsPage: React.FC = () => {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Versão Mobile (Cards com Ergonomia de Toque) */}
+          <div className="md:hidden divide-y divide-brand-surface-border">
+            {filteredRegistrations.length === 0 ? (
+              <div className="p-8 text-center text-brand-text-muted text-xs">
+                Nenhuma inscrição localizada com os filtros selecionados.
+              </div>
+            ) : (
+              filteredRegistrations.map((reg) => {
+                const isPendingMember = reg.memberStatus === 'pendente';
+                const isPaid = reg.paymentStatus === 'pago';
+
+                return (
+                  <div key={reg.id} className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="font-display font-extrabold text-sm text-slate-900 block leading-tight truncate">
+                          {reg.athleteName}
+                        </span>
+                        <span className="text-[11px] text-slate-500 font-medium block truncate">
+                          {reg.athleteEmail} • {reg.athleteDocument}
+                        </span>
+                      </div>
+                      <span className="text-sm font-black text-brand-blue shrink-0">
+                        R$ {reg.authorizedPrice.toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-100 font-bold text-slate-800">
+                        {reg.turmaLabel || ('Turma ' + reg.turma)}
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full font-bold ${
+                          isPaid
+                            ? 'bg-emerald-100 text-emerald-900'
+                            : reg.paymentStatus === 'pendente'
+                            ? 'bg-blue-100 text-blue-900'
+                            : reg.paymentStatus === 'cancelado'
+                            ? 'bg-rose-100 text-rose-900'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        {reg.paymentStatus === 'pago'
+                          ? 'PAGO'
+                          : reg.paymentStatus === 'pendente'
+                          ? 'AGUARDANDO PGTO'
+                          : reg.paymentStatus === 'cancelado'
+                          ? 'CANCELADO'
+                          : 'BLOQUEADO'}
+                      </span>
+                      {reg.requestedMemberDiscount && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-bold ${
+                            reg.memberStatus === 'aprovado'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : reg.memberStatus === 'rejeitado'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-amber-100 text-amber-900 animate-pulse'
+                          }`}
+                        >
+                          {reg.memberStatus === 'aprovado'
+                            ? 'SÓCIO OK'
+                            : reg.memberStatus === 'rejeitado'
+                            ? 'SÓCIO RECUSADO'
+                            : 'SÓCIO PENDENTE'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Botões de Ação para o Polegar */}
+                    <div className="flex items-center gap-2 pt-1">
+                      {isPendingMember && (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          fullWidth
+                          leftIcon={<UserCheck className="w-3.5 h-3.5" />}
+                          onClick={() => {
+                            setValidatingReg(reg);
+                            setAdminNotes('');
+                          }}
+                        >
+                          Conferir Sócio
+                        </Button>
+                      )}
+                      {!isPendingMember && reg.requestedMemberDiscount && !isPaid && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          fullWidth
+                          onClick={() => {
+                            setValidatingReg(reg);
+                            setAdminNotes(reg.memberNotes || '');
+                          }}
+                        >
+                          Revisar Sócio
+                        </Button>
+                      )}
+                      {isPaid && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          fullWidth
+                          leftIcon={<FileText className="w-3.5 h-3.5 text-emerald-600" />}
+                          onClick={() => setSelectedReceiptReg(reg)}
+                        >
+                          Comprovante
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedAuditReg(reg)}
+                        title="Auditoria"
+                      >
+                        <History className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </section>
       </main>

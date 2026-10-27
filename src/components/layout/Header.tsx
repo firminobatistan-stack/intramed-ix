@@ -17,6 +17,7 @@ import { SportIcon } from '../sports/SportIcon';
 interface HeaderProps {
   title?: string;
   showBack?: boolean;
+  onOpenMobileNav?: () => void;
 }
 
 /**
@@ -27,7 +28,11 @@ interface HeaderProps {
  * - Menu Bar inferior integrado no próprio cabeçalho azul ("LiveTV", "Matches", "Leagues")
  *   com barra indicadora Amarela (#FACC15) na aba ativa.
  */
-export const Header: React.FC<HeaderProps> = ({ title, showBack }) => {
+export const Header: React.FC<HeaderProps> = ({
+  title,
+  showBack,
+  onOpenMobileNav,
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -121,9 +126,9 @@ export const Header: React.FC<HeaderProps> = ({ title, showBack }) => {
             ) : (
               <button
                 type="button"
-                onClick={() => navigate('/')}
-                aria-label="Início INTRAMED IX"
-                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-colors lg:hidden"
+                onClick={onOpenMobileNav}
+                aria-label="Abrir menu de navegação"
+                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/15 text-white transition-all lg:hidden"
               >
                 <Menu className="w-5 h-5" />
               </button>
