@@ -24,6 +24,7 @@ import { db } from '../lib/firebase';
 import { collection, doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 
 const REGISTRATIONS_STORAGE_KEY = 'intramed_registrations_store_v1';
+const MY_REGISTRATIONS_KEY = 'intramed_my_registered_ids_v1';
 const SYNC_CHANNEL_NAME = 'intramed_registration_channel';
 
 interface CreateRegistrationPayload {
@@ -47,6 +48,8 @@ interface CreateRegistrationPayload {
 interface RegistrationContextValue {
   tournamentEvent: TournamentEvent;
   registrations: Registration[];
+  myRegistrations: Registration[];
+  hasCompletedRegistration: boolean;
   auditLogs: FinancialAuditLog[];
   activeLot: RegistrationLot | undefined;
   createRegistration: (payload: CreateRegistrationPayload) => Promise<Registration>;
@@ -73,6 +76,15 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
   const { currentUser, canOperateOfficialData } = useCompetitionStore();
 
   const [tournamentEvent] = useState<TournamentEvent>(INITIAL_TOURNAMENT_EVENT);
+
+  const [myRegisteredIds, setMyRegisteredIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(MY_REGISTRATIONS_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const [registrations, setRegistrations] = useState<Registration[]>(() => {
     try {
@@ -264,6 +276,17 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         await setDoc(doc(db, 'registrations', newRegistration.id), newRegistration);
       } catch (err) {
         console.warn('Firestore setDoc registration notice:', err);
+      }
+
+      // Persistência local dos IDs inscritos neste dispositivo
+      try {
+        setMyRegisteredIds((prevIds) => {
+          const nextIds = prevIds.includes(newRegistration.id) ? prevIds : [...prevIds, newRegistration.id];
+          localStorage.setItem(MY_REGISTRATIONS_KEY, JSON.stringify(nextIds));
+          return nextIds;
+        });
+      } catch {
+        // Silencioso
       }
 
       return newRegistration;
@@ -487,10 +510,23 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     [registrations]
   );
 
+  const myRegistrations = useMemo(() => {
+    return registrations.filter((r) => {
+      if (myRegisteredIds.includes(r.id)) return true;
+      if (currentUser?.email && r.athleteEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
+      if (currentUser?.id && r.userId === currentUser.id) return true;
+      return false;
+    });
+  }, [registrations, myRegisteredIds, currentUser]);
+
+  const hasCompletedRegistration = myRegistrations.length > 0;
+
   const value = useMemo(
     () => ({
       tournamentEvent,
       registrations,
+      myRegistrations,
+      hasCompletedRegistration,
       auditLogs,
       activeLot,
       createRegistration,
@@ -503,6 +539,8 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     [
       tournamentEvent,
       registrations,
+      myRegistrations,
+      hasCompletedRegistration,
       auditLogs,
       activeLot,
       createRegistration,

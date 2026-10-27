@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
+import { useRegistrationStore } from '../context/RegistrationStoreContext';
 import { SportIcon } from '../components/sports/SportIcon';
 import { MatchCard } from '../components/sports/MatchCard';
 import { StandingsTable } from '../components/sports/StandingsTable';
@@ -50,6 +51,7 @@ export const HomePage: React.FC = () => {
     setTestMode,
     canOperateOfficialData,
   } = useCompetitionStore();
+  const { hasCompletedRegistration, myRegistrations } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
   const [selectedSportFilter, setSelectedSportFilter] = useState<string>('todas');
   const [timeFilter, setTimeFilter] = useState<HomeTimeFilter>('all');
@@ -164,44 +166,82 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* BANNER OFICIAL: INSCRIÇÕES E PAGAMENTOS (FASE 1) */}
-      <section className="bg-gradient-to-r from-amber-500 via-brand-yellow to-yellow-400 rounded-3xl p-5 sm:p-6 shadow-lg border border-amber-300 text-slate-900 flex flex-col md:flex-row items-center justify-between gap-5 relative overflow-hidden">
-        <div className="space-y-1.5 z-10 text-center md:text-left">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-brand-yellow text-[11px] font-display font-extrabold uppercase tracking-wider shadow-sm">
-            <Sparkles className="w-3.5 h-3.5" />
-            1º Lote Oficial Disponível
+      {!hasCompletedRegistration ? (
+        <section className="bg-gradient-to-r from-amber-500 via-brand-yellow to-yellow-400 rounded-3xl p-5 sm:p-6 shadow-lg border border-amber-300 text-slate-900 flex flex-col md:flex-row items-center justify-between gap-5 relative overflow-hidden">
+          <div className="space-y-1.5 z-10 text-center md:text-left">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-brand-yellow text-[11px] font-display font-extrabold uppercase tracking-wider shadow-sm">
+              <Sparkles className="w-3.5 h-3.5" />
+              1º Lote Oficial Disponível
+            </div>
+            <h2 className="text-xl sm:text-2xl font-display font-black tracking-tight text-slate-950">
+              Inscrições Abertas para o INTRAMED IX!
+            </h2>
+            <p className="text-xs sm:text-sm font-medium text-slate-800 max-w-xl">
+              Garanta seu <strong>Passaporte Geral</strong> pela sua turma (T21 Sanguinária, T22 Predadora, T23 Tormenta, T24 Colossal ou T25 Soberana) com acesso livre a todas as modalidades esportivas. Sócios Cangaceira com valor promocional de{' '}
+              <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 45,00</strong>{' '}
+              após validação cadastral da Atlética. Pagamentos 100% seguros com Pix e Cartão via Mercado Pago.
+            </p>
           </div>
-          <h2 className="text-xl sm:text-2xl font-display font-black tracking-tight text-slate-950">
-            Inscrições Abertas para o INTRAMED IX!
-          </h2>
-          <p className="text-xs sm:text-sm font-medium text-slate-800 max-w-xl">
-            Garanta seu <strong>Passaporte Geral</strong> pela sua turma (T21 Sanguinária, T22 Predadora, T23 Tormenta, T24 Colossal ou T25 Soberana) com acesso livre a todas as modalidades esportivas. Sócios Cangaceira com valor promocional de{' '}
-            <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 45,00</strong>{' '}
-            após validação cadastral da Atlética. Pagamentos 100% seguros com Pix e Cartão via Mercado Pago.
-          </p>
-        </div>
 
-        <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 z-10 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => navigate('/inscricao')}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-sm shadow-xl hover:scale-105 transition-all"
-          >
-            <CreditCard className="w-4 h-4 text-brand-yellow" />
-            <span>Fazer Inscrição</span>
-            <ArrowRight className="w-4 h-4 text-brand-yellow" />
-          </button>
-
-          {isAdmin && (
+          <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 z-10 w-full sm:w-auto">
             <button
               type="button"
-              onClick={() => navigate('/admin/inscricoes')}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-white/80 hover:bg-white text-slate-900 font-display font-bold text-xs shadow transition-all border border-amber-200"
+              onClick={() => navigate('/inscricao')}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-sm shadow-xl hover:scale-105 transition-all"
             >
-              <span>Gestão de Sócios</span>
+              <CreditCard className="w-4 h-4 text-brand-yellow" />
+              <span>Fazer Inscrição</span>
+              <ArrowRight className="w-4 h-4 text-brand-yellow" />
             </button>
-          )}
-        </div>
-      </section>
+
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => navigate('/admin/inscricoes')}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-white/80 hover:bg-white text-slate-900 font-display font-bold text-xs shadow transition-all border border-amber-200"
+              >
+                <span>Gestão de Sócios</span>
+              </button>
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-emerald-300 flex flex-col sm:flex-row items-center justify-between gap-3 bg-emerald-50/40">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center justify-center shrink-0 shadow-xs">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 block">
+                Inscrição Registrada • INTRAMED IX
+              </span>
+              <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                {myRegistrations[0]?.athleteName} • {myRegistrations[0]?.turmaLabel || myRegistrations[0]?.teamName}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate('/inscricao')}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-sm transition-all"
+            >
+              <span>Ver Minha Inscrição</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => navigate('/admin/inscricoes')}
+                className="w-full sm:w-auto inline-flex items-center justify-center px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-all"
+              >
+                <span>Gestão</span>
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* 2. SELETOR "MATCH DAY" COM SETAS LATERAIS (Idêntico ao topo da Imagem 3) */}
       <section className="flex flex-col items-center justify-center text-center pt-1">

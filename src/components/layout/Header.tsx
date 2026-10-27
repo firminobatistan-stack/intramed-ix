@@ -126,11 +126,14 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <button
                 type="button"
-                onClick={onOpenMobileNav}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenMobileNav?.();
+                }}
                 aria-label="Abrir menu de navegação"
-                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/15 text-white transition-all lg:hidden"
+                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/15 text-white transition-all lg:hidden cursor-pointer touch-manipulation select-none"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="w-5 h-5 pointer-events-none" />
               </button>
             )}
 

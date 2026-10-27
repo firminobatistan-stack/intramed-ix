@@ -7,6 +7,7 @@ import {
   CreditCard,
   Menu,
 } from 'lucide-react';
+import { useRegistrationStore } from '../../context/RegistrationStoreContext';
 
 interface BottomNavProps {
   onOpenMenu?: () => void;
@@ -16,13 +17,14 @@ interface BottomNavProps {
  * Dock de Navegação Móvel Otimizado para Ergonomia (Floating Dock com Thumb-Zone)
  * - 5 Ações estratégicas com rótulos nítidos em Montserrat:
  *   1. Início (Home)
- *   2. Inscrição (Portal de Inscrições & Pagamento)
+ *   2. Inscrição (com destaque ANTES de se inscrever, e discreto DEPOIS)
  *   3. Ao Vivo (Match Center & Placar)
  *   4. Chaves (Chaveamento 5 Equipes)
  *   5. Menu (Abre o Drawer completo com esportes, equipes, perfil, favoritos e admin)
  */
 export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
   const location = useLocation();
+  const { hasCompletedRegistration } = useRegistrationStore();
 
   const triggerHaptic = () => {
     try {
@@ -43,9 +45,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
     },
     {
       to: '/inscricao',
-      label: 'Inscrição',
+      label: hasCompletedRegistration ? 'Ingresso' : 'Inscrição',
       icon: CreditCard,
-      highlight: true,
+      highlight: !hasCompletedRegistration,
     },
     {
       to: '/placar',

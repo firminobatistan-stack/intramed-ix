@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShieldCheck,
@@ -37,11 +37,15 @@ export const RegistrationPage: React.FC = () => {
     tournamentEvent,
     activeLot,
     registrations,
+    myRegistrations: contextMyRegistrations,
+    hasCompletedRegistration,
     createRegistration,
     simulatePaymentConfirmation,
   } = useRegistrationStore();
 
-  const [activeTab, setActiveTab] = useState<'nova_inscricao' | 'minhas_inscricoes'>('nova_inscricao');
+  const [activeTab, setActiveTab] = useState<'nova_inscricao' | 'minhas_inscricoes'>(
+    hasCompletedRegistration ? 'minhas_inscricoes' : 'nova_inscricao'
+  );
 
   // Formulário de Nova Inscrição (Passaporte Geral por Turma)
   const [selectedTurma, setSelectedTurma] = useState<TurmaMedicina>('21');
@@ -63,11 +67,14 @@ export const RegistrationPage: React.FC = () => {
 
   const selectedTurmaObj = TURMAS_MEDICINA.find((t) => t.turma === selectedTurma) || TURMAS_MEDICINA[0];
 
-  const myRegistrations = registrations.filter((r) => {
-    if (currentUser?.email && r.athleteEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
-    if (athleteEmail && r.athleteEmail.toLowerCase() === athleteEmail.toLowerCase()) return true;
-    return false;
-  });
+  const myRegistrations: Registration[] = useMemo(() => {
+    if (contextMyRegistrations && contextMyRegistrations.length > 0) return contextMyRegistrations;
+    return registrations.filter((r) => {
+      if (currentUser?.email && r.athleteEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
+      if (athleteEmail && r.athleteEmail.toLowerCase() === athleteEmail.toLowerCase()) return true;
+      return false;
+    });
+  }, [contextMyRegistrations, registrations, currentUser, athleteEmail]);
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

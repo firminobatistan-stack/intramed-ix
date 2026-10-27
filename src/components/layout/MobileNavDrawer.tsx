@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { BrandMark } from './BrandMark';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
+import { useRegistrationStore } from '../../context/RegistrationStoreContext';
 import { OFFICIAL_MODALITIES } from '../../data/officialData';
 import { SportIcon } from '../sports/SportIcon';
 
@@ -35,14 +36,19 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
   const navigate = useNavigate();
   const { currentUser, setCurrentUser, canOperateOfficialData, notifications } =
     useCompetitionStore();
+  const { hasCompletedRegistration } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
   const unreadNotifications = notifications.filter((n) => !n.isRead).length;
 
   const [isSportsExpanded, setIsSportsExpanded] = useState(false);
+  const prevPathRef = React.useRef(location.pathname);
 
-  // Fecha o drawer ao mudar de rota
+  // Fecha o drawer EXCLUSIVAMENTE quando o pathname da URL mudar
   useEffect(() => {
-    onClose();
+    if (prevPathRef.current !== location.pathname) {
+      prevPathRef.current = location.pathname;
+      onClose();
+    }
   }, [location.pathname, onClose]);
 
   // Trava o scroll do body quando o drawer estiver aberto
@@ -91,17 +97,23 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
       role="dialog"
       aria-modal="true"
       aria-label="Menu principal de navegação móvel"
-      className="fixed inset-0 z-50 lg:hidden flex"
+      className="fixed inset-0 z-[100] lg:hidden flex"
     >
       {/* Backdrop com desfoque e escurecimento */}
       <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300"
-        onClick={onClose}
+        className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity duration-300"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
         aria-hidden="true"
       />
 
       {/* Painel do Drawer Lateral */}
-      <div className="relative w-full max-w-[310px] sm:max-w-xs bg-[#091834] text-white h-full flex flex-col shadow-2xl z-10 border-r border-white/10 animate-in slide-in-from-left duration-200">
+      <div
+        style={{ WebkitTransform: 'translate3d(0,0,0)' }}
+        className="relative w-full max-w-[310px] sm:max-w-xs bg-[#091834] text-white h-full flex flex-col shadow-2xl z-10 border-r border-white/10 animate-in slide-in-from-left duration-200 pointer-events-auto"
+      >
         {/* Cabeçalho do Drawer */}
         <div className="h-16 px-4 bg-[#0B218A] border-b border-white/10 flex items-center justify-between shrink-0">
           <BrandMark size="sm" inverted />
@@ -195,24 +207,32 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
               <span>Início</span>
             </button>
 
-            {/* Destaque Inscrições & Pagamento */}
+            {/* Inscrições & Pagamento (destaque chamativo antes de se inscrever, discreto depois) */}
             <button
               type="button"
               onClick={() => handleNav('/inscricao')}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                 location.pathname.startsWith('/inscricao')
                   ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
-                  : 'text-amber-300 hover:text-white hover:bg-white/10 bg-amber-400/10 border border-amber-400/20'
+                  : !hasCompletedRegistration
+                  ? 'text-amber-300 hover:text-white hover:bg-white/10 bg-amber-400/10 border border-amber-400/20'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
               <span className="flex items-center gap-3">
                 <CreditCard className="w-4 h-4 shrink-0" />
-                <span>Inscrições &amp; Pagamento</span>
+                <span>{hasCompletedRegistration ? 'Minha Inscrição & Ingresso' : 'Inscrições & Pagamento'}</span>
               </span>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-yellow text-brand-blue-dark text-[9px] font-black uppercase">
-                <Sparkles className="w-2.5 h-2.5" />
-                Lote 1
-              </span>
+              {!hasCompletedRegistration ? (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-yellow text-brand-blue-dark text-[9px] font-black uppercase">
+                  <Sparkles className="w-2.5 h-2.5" />
+                  Lote 1
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold uppercase border border-emerald-500/30">
+                  Inscrito
+                </span>
+              )}
             </button>
 
             <button
