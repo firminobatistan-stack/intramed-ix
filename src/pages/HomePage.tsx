@@ -174,12 +174,11 @@ export const HomePage: React.FC = () => {
               1º Lote Oficial Disponível
             </div>
             <h2 className="text-xl sm:text-2xl font-display font-black tracking-tight text-slate-950">
-              Inscrições Abertas para o INTRAMED IX!
+              Inscrições Abertas • INTRAMED IX
             </h2>
             <p className="text-xs sm:text-sm font-medium text-slate-800 max-w-xl">
-              Garanta seu <strong>Passaporte Geral</strong> pela sua turma (T21 Sanguinária, T22 Predadora, T23 Tormenta, T24 Colossal ou T25 Soberana) com acesso livre a todas as modalidades esportivas. Sócios Cangaceira com valor promocional de{' '}
-              <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 45,00</strong>{' '}
-              após validação cadastral da Atlética. Pagamentos 100% seguros com Pix e Cartão via Mercado Pago.
+              Passaporte único com acesso a todas as 16 modalidades (Pix ou Cartão). Sócios Cangaceira pagam{' '}
+              <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 45,00</strong>.
             </p>
           </div>
 
@@ -381,10 +380,10 @@ export const HomePage: React.FC = () => {
         )}
       </section>
 
-      {/* 5. PÁGINAS INDIVIDUAIS DAS 5 EQUIPES OFICIAIS (COLOSSAL, SOBERANA, SANGUINÁRIA, PREDADORA, TORMENTA) */}
+      {/* 5. PÁGINAS INDIVIDUAIS DAS 5 EQUIPES OFICIAIS */}
       <section className="all-sports-card p-5 sm:p-6 space-y-4">
         <div className="all-sports-section-pill">
-          As 5 Equipes Oficiais • Medicina UEMA
+          Equipes Oficiais
         </div>
 
         <div className="flex sm:grid sm:grid-cols-5 gap-3 overflow-x-auto no-scrollbar pb-2 sm:pb-0 snap-x">
@@ -392,6 +391,18 @@ export const HomePage: React.FC = () => {
             const pHex = team.theme?.primaryHex || '#0B218A';
             const sHex = team.theme?.secondaryHex || '#061356';
             const aHex = team.theme?.accentHex || '#FACC15';
+            const cleanTurma =
+              team.id === 'sanguinaria'
+                ? 'Turma 21'
+                : team.id === 'predadora'
+                ? 'Turma 22'
+                : team.id === 'tormenta'
+                ? 'Turma 23'
+                : team.id === 'colossal'
+                ? 'Turma 24'
+                : team.id === 'soberana'
+                ? 'Turma 25'
+                : team.turmaLabel || 'Medicina UEMA';
             return (
               <button
                 key={team.id}
@@ -422,7 +433,7 @@ export const HomePage: React.FC = () => {
                     {team.name}
                   </h4>
                   <p className="text-[10px] font-semibold text-white/80 mt-0.5 truncate max-w-[130px]">
-                    {team.turmaLabel || 'Medicina UEMA'}
+                    {cleanTurma}
                   </p>
                 </div>
 
@@ -430,7 +441,7 @@ export const HomePage: React.FC = () => {
                   style={{ backgroundColor: aHex }}
                   className="mt-3 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-display font-extrabold text-slate-950"
                 >
-                  <span>Abrir Página</span>
+                  <span>Ver Equipe</span>
                   <ChevronRight className="w-3 h-3" />
                 </span>
               </button>
@@ -439,10 +450,10 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* 6. TABELA DE CLASSIFICAÇÃO COMPACTA ("Point Table" da Imagem 1 Direita) */}
+      {/* 6. TABELA DE CLASSIFICAÇÃO COMPACTA */}
       <section className="all-sports-card p-5 sm:p-6 space-y-4">
         <div className="all-sports-section-pill">
-          Quadro de Pontuação Geral • Períodos
+          Classificação Geral
         </div>
         <StandingsTable
           standings={standings}
@@ -454,10 +465,10 @@ export const HomePage: React.FC = () => {
         />
       </section>
 
-      {/* 6. SEÇÃO "LATEST NEWS / ACESSO RÁPIDO AOS HUBS" (Rodapé da Imagem 2) */}
+      {/* 7. ACESSO RÁPIDO AOS HUBS */}
       <section className="all-sports-card p-5 sm:p-6 space-y-4">
         <div className="all-sports-section-pill">
-          Central da Competição &amp; Perfis Oficiais
+          Acesso Rápido
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
@@ -470,10 +481,10 @@ export const HomePage: React.FC = () => {
               <Shield className="w-5 h-5" />
             </div>
             <h4 className="text-sm font-display font-extrabold text-slate-900 group-hover:text-white">
-              Hub da Equipe (Período)
+              Equipes
             </h4>
             <p className="text-xs text-slate-500 group-hover:text-white/75 mt-1">
-              Elenco, últimos confrontos e pontuação da turma.
+              Elenco, jogos e classificação.
             </p>
           </button>
 
@@ -486,10 +497,10 @@ export const HomePage: React.FC = () => {
               <User className="w-5 h-5" />
             </div>
             <h4 className="text-sm font-display font-extrabold text-slate-900 group-hover:text-white">
-              Perfil de Atleta
+              Atletas
             </h4>
             <p className="text-xs text-slate-500 group-hover:text-white/75 mt-1">
-              Posição em quadra, estatísticas e histórico na súmula.
+              Estatísticas e histórico na súmula.
             </p>
           </button>
 
@@ -502,10 +513,10 @@ export const HomePage: React.FC = () => {
               <Trophy className="w-5 h-5" />
             </div>
             <h4 className="text-sm font-display font-extrabold text-slate-900 group-hover:text-white">
-              Chaveamento &amp; Mata-Mata
+              Chaveamento
             </h4>
             <p className="text-xs text-slate-500 group-hover:text-white/75 mt-1">
-              Quartas, semifinais e grande final por modalidade.
+              Confrontos e mata-mata por modalidade.
             </p>
           </button>
         </div>

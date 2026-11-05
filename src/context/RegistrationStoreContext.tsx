@@ -31,6 +31,7 @@ import { collection, doc, setDoc, updateDoc, onSnapshot } from 'firebase/firesto
 
 const REGISTRATIONS_STORAGE_KEY = 'intramed_registrations_store_v1';
 const MY_REGISTRATIONS_KEY = 'intramed_my_registered_ids_v1';
+const LOCAL_ATHLETE_CREDENTIALS_KEY = 'intramed_athlete_credentials_v1';
 const SYNC_CHANNEL_NAME = 'intramed_registration_channel';
 
 export interface CreateRegistrationPayload {
@@ -40,6 +41,8 @@ export interface CreateRegistrationPayload {
   athleteEmail: string;
   athletePhone: string;
   athleteDocument: string;
+  accountUsername?: string;
+  accountPassword?: string;
   turma: TurmaMedicina;
   turmaLabel: string;
   teamId: string;
@@ -94,10 +97,13 @@ interface RegistrationContextValue {
 
 const RegistrationContext = createContext<RegistrationContextValue | null>(null);
 
-const pushRegistrationToCloud = (reg: Registration) => {
+const pushRegistrationToCloud = (reg: Registration, accountPassword?: string) => {
   if (typeof window === 'undefined') return;
   try {
     const cleanReg = JSON.parse(JSON.stringify(reg));
+    if (accountPassword) {
+      cleanReg.accountPassword = accountPassword;
+    }
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -430,6 +436,10 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           : OFFICIAL_MODALITIES.map((m) => m.id);
 
       const nowIso = new Date().toISOString();
+      const resolvedUsername =
+        payload.accountUsername?.trim().toLowerCase() ||
+        payload.athleteEmail.trim().toLowerCase().split('@')[0] ||
+        payload.athleteEmail.trim().toLowerCase();
 
       const newRegistration: Registration = {
         id: regId,
@@ -437,6 +447,8 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         lotId: lot.id,
         userId: `usr-${linkedAthleteId}`,
         linkedAthleteId,
+        accountUsername: resolvedUsername,
+        hasAccountPassword: Boolean(payload.accountPassword?.trim()),
         athleteName: payload.athleteName.trim(),
         athleteEmail: payload.athleteEmail.trim(),
         athletePhone: payload.athletePhone.trim(),
@@ -511,7 +523,26 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       setAuditLogs(nextLogs);
       broadcastState(nextRegs, nextLogs);
 
-      pushRegistrationToCloud(newRegistration);
+      pushRegistrationToCloud(newRegistration, payload.accountPassword?.trim());
+      try {
+        if (payload.accountPassword?.trim()) {
+          const savedCredsRaw = localStorage.getItem(LOCAL_ATHLETE_CREDENTIALS_KEY);
+          const savedCreds: Record<string, { regId: string; pass: string }> = savedCredsRaw
+            ? JSON.parse(savedCredsRaw)
+            : {};
+          savedCreds[resolvedUsername] = {
+            regId: newRegistration.id,
+            pass: payload.accountPassword.trim(),
+          };
+          savedCreds[newRegistration.athleteEmail.toLowerCase()] = {
+            regId: newRegistration.id,
+            pass: payload.accountPassword.trim(),
+          };
+          localStorage.setItem(LOCAL_ATHLETE_CREDENTIALS_KEY, JSON.stringify(savedCreds));
+        }
+      } catch {
+        // Silencioso
+      }
       try {
         const cleanReg = JSON.parse(JSON.stringify(newRegistration));
         await setDoc(doc(db, 'registrations', newRegistration.id), cleanReg);

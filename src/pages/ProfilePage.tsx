@@ -50,25 +50,20 @@ export const ProfilePage: React.FC = () => {
     <div className="space-y-6 max-w-3xl mx-auto">
       {/* Cabeçalho da página */}
       <div className="pb-2 border-b border-brand-surface-border flex items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-4 rounded-full bg-brand-yellow" aria-hidden="true" />
-            <h2 className="text-lg sm:text-xl font-display font-bold text-brand-text-primary">
-              Perfil &amp; Permissões de Acesso
-            </h2>
-          </div>
-          <p className="text-xs sm:text-sm text-brand-text-secondary mt-1">
-            Identificação, vínculo com perfil de atleta e controle de sessão.
-          </p>
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-4 rounded-full bg-brand-yellow" aria-hidden="true" />
+          <h2 className="text-lg sm:text-xl font-display font-bold text-brand-text-primary">
+            Meu Perfil
+          </h2>
         </div>
 
         <StatusBadge
           status={currentUser ? 'official' : 'pending'}
-          label={currentUser ? roleLabel : 'Visitante Público'}
+          label={currentUser ? roleLabel : 'Visitante'}
         />
       </div>
 
-      {/* Card Principal: Foto e Nome no estilo All Sports */}
+      {/* Card Principal: Foto e Nome */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-blue-dark via-brand-blue to-brand-blue-medium text-white p-6 sm:p-8 shadow-elevated border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
         <img
           src="/assets/atletica/mascote-monocor.png"
@@ -79,16 +74,13 @@ export const ProfilePage: React.FC = () => {
         <div className="relative z-10 flex items-center gap-4">
           <Avatar src={currentUser?.avatarUrl} size="xl" />
           <div className="space-y-1">
-            <span className="inline-block px-2.5 py-0.5 rounded-full bg-white/10 border border-white/15 text-[10px] font-display font-bold uppercase tracking-wider text-brand-yellow">
-              Identificação Oficial • INTRAMED IX
-            </span>
             <h3 className="text-lg sm:text-xl font-display font-extrabold text-white">
-              {currentUser ? currentUser.name : 'Visitante (Acesso Público)'}
+              {currentUser ? currentUser.name : 'Visitante'}
             </h3>
             <p className="text-xs text-white/80">
               {currentUser
                 ? currentUser.email
-                : 'Você pode consultar todos os atletas, equipes, placares e rankings publicamente.'}
+                : 'Entre na sua conta para editar seu perfil.'}
             </p>
           </div>
         </div>
@@ -100,7 +92,7 @@ export const ProfilePage: React.FC = () => {
             onClick={() => navigate('/inscricao?tab=comunidade')}
             className="border-white/30 text-white hover:bg-white/15"
           >
-            Comunidade IntraMed
+            Comunidade
           </Button>
           {currentUser?.linkedAthleteId && (
             <Button
@@ -109,7 +101,7 @@ export const ProfilePage: React.FC = () => {
               leftIcon={<User className="w-4 h-4" />}
               onClick={() => navigate(`/atleta/${currentUser.linkedAthleteId}`)}
             >
-              Ver / Editar Meu Perfil de Atleta
+              Meu Perfil de Atleta
             </Button>
           )}
           {!currentUser && (
@@ -125,15 +117,11 @@ export const ProfilePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Permissões de Acesso por Papel */}
-      <div className="all-sports-card p-5 sm:p-6 space-y-4">
+      {/* Ações Rápidas da Sessão */}
+      <div className="all-sports-card p-5 sm:p-6 flex flex-wrap items-center justify-between gap-3">
         <div className="all-sports-section-pill">
-          Nível de Permissão &amp; Segurança da Sessão
+          Conta &amp; Acesso
         </div>
-
-        <p className="text-xs text-slate-500 leading-relaxed">
-          No INTRAMED IX, o <strong>público e os atletas</strong> têm acesso de consulta a todas as partidas, chaves, equipes e estatísticas. Apenas <strong>Administradores / Mesários autenticados</strong> podem operar o cronômetro, lançar gols/pontos ao vivo ou alterar cadastros oficiais.
-        </p>
 
         <div className="flex flex-wrap items-center gap-2.5">
           {!currentUser ? (
@@ -143,7 +131,7 @@ export const ProfilePage: React.FC = () => {
               leftIcon={<LogIn className="w-4 h-4" />}
               onClick={() => navigate('/login')}
             >
-              Entrar como Atleta ou Mesário / Admin
+              Entrar na Conta
             </Button>
           ) : (
             <>
@@ -154,7 +142,7 @@ export const ProfilePage: React.FC = () => {
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B218A] text-white text-xs font-display font-bold shadow-sm hover:bg-blue-900 transition-colors"
                 >
                   <ShieldAlert className="w-3.5 h-3.5 text-brand-yellow" />
-                  <span>Abrir Central de Súmulas &amp; Cadastros</span>
+                  <span>Painel Admin</span>
                 </button>
               )}
               <button
@@ -163,7 +151,7 @@ export const ProfilePage: React.FC = () => {
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-display font-bold transition-colors"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Encerrar Sessão Atual</span>
+                <span>Sair</span>
               </button>
             </>
           )}

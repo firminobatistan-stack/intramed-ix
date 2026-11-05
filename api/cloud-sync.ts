@@ -120,11 +120,28 @@ function canClientWriteDocument(
         requestedSocio
       );
 
+      const rawAccountPassword =
+        typeof incoming.accountPassword === 'string' && incoming.accountPassword.trim()
+          ? incoming.accountPassword.trim()
+          : '';
+      const accountPasswordHash = rawAccountPassword
+        ? hashSecretPin(rawAccountPassword)
+        : typeof incoming.accountPasswordHash === 'string'
+        ? incoming.accountPasswordHash
+        : undefined;
+      const { accountPassword: _omitRawPass, ...safeIncoming } = incoming;
+
       return {
         allowed: true,
         sanitizedData: {
-          ...incoming,
+          ...safeIncoming,
           id: docId,
+          accountUsername:
+            typeof incoming.accountUsername === 'string' && incoming.accountUsername.trim()
+              ? incoming.accountUsername.trim().toLowerCase()
+              : String(incoming.athleteEmail || '').trim().toLowerCase(),
+          ...(accountPasswordHash ? { accountPasswordHash } : {}),
+          hasAccountPassword: Boolean(accountPasswordHash),
           memberStatus: safeMemberStatus,
           paymentStatus: safePaymentStatus,
           authorizedPrice: serverPrice,
@@ -373,6 +390,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       saveCloudStore(store);
       return res.status(200).json({ ok: true, matchId });
+    }
+
+    // AÇÃO 2B: Login da Conta do Atleta (Usuário/E-mail + Senha criada no cadastro)
+    if (action === 'athlete_login') {
+      const identifierInput = String(body.identifier || '')
+        .trim()
+        .toLowerCase();
+      const passwordInput = String(body.password || '').trim();
+      const cleanDocInput = identifierInput.replace(/\D/g, '');
+
+      if (!identifierInput) {
+        return res
+          .status(400)
+          .json({ ok: false, error: 'Informe seu usuário ou e-mail.' });
+      }
+
+      const allRegs = Object.values(store.registrations);
+      const matchedReg = allRegs.find((r) => {
+        const email = String(r.athleteEmail || '')
+          .trim()
+          .toLowerCase();
+        const username = String(r.accountUsername || '')
+          .trim()
+          .toLowerCase();
+        const docClean = String(r.athleteDocument || '').replace(/\D/g, '');
+        return (
+          email === identifierInput ||
+          (username && username === identifierInput) ||
+          (cleanDocInput.length >= 6 && docClean === cleanDocInput)
+        );
+      });
+
+      if (!matchedReg) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Conta não encontrada no servidor.',
+        });
+      }
+
+      const storedHash = String(matchedReg.accountPasswordHash || '');
+      if (storedHash) {
+        if (!passwordInput || hashSecretPin(passwordInput) !== storedHash) {
+          return res.status(401).json({
+            ok: false,
+            error: 'Senha incorreta para esta conta.',
+          });
+        }
+      }
+
+      return res.status(200).json({
+        ok: true,
+        registration: sanitizeRegistrationForPublic(matchedReg),
+      });
     }
 
     // AÇÃO 3: Sincronização em Lote (Batch)

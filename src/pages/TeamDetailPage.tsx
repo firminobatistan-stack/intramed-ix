@@ -1,15 +1,11 @@
 import React, { useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Bell,
   Camera,
   ChevronRight,
   CloudLightning,
   Heart,
-  Palette,
   Shield,
-  Shirt,
-  Sparkles,
   User,
   UserPlus,
 } from 'lucide-react';
@@ -63,7 +59,6 @@ export const TeamDetailPage: React.FC = () => {
   const primaryHex = resolvedTeam?.theme?.primaryHex || '#0B218A';
   const secondaryHex = resolvedTeam?.theme?.secondaryHex || '#061356';
   const accentHex = resolvedTeam?.theme?.accentHex || '#FACC15';
-  const colorLabel = resolvedTeam?.theme?.colorLabel || 'Azul Royal & Amarelo';
 
   const teamStats = resolvedTeam
     ? getTeamStats(
@@ -152,17 +147,8 @@ export const TeamDetailPage: React.FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto space-y-5">
-      {/* 0. BARRA DE NAVEGAÇÃO RÁPIDA ENTRE AS 5 EQUIPES OFICIAIS (COM ESCUDOS E CORES DE CADA UMA) */}
-      <div className="all-sports-card p-3.5">
-        <div className="flex items-center justify-between mb-2 px-1">
-          <span className="text-[11px] font-display font-extrabold uppercase tracking-wider text-slate-400">
-            5 Atléticas / Períodos Oficiais • INTRAMED IX
-          </span>
-          <span className="text-[11px] font-semibold text-slate-400">
-            Toque para trocar de página
-          </span>
-        </div>
-
+      {/* 0. BARRA DE NAVEGAÇÃO RÁPIDA ENTRE AS 5 EQUIPES */}
+      <div className="all-sports-card p-2.5">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {visibleTeams.map((t) => {
             const isSelected = resolvedTeam?.id === t.id;
@@ -180,13 +166,13 @@ export const TeamDetailPage: React.FC = () => {
                       }
                     : undefined
                 }
-                className={`flex items-center gap-2.5 p-2 rounded-2xl border text-left transition-all ${
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-2xl border text-left transition-all ${
                   isSelected
-                    ? 'text-white border-transparent shadow-md scale-[1.02]'
+                    ? 'text-white border-transparent shadow-md'
                     : 'bg-[#F8FAFC] hover:bg-slate-100 text-slate-800 border-slate-200/80'
                 }`}
               >
-                <div className="w-9 h-9 rounded-xl bg-black/20 border border-white/25 overflow-hidden flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-black/20 border border-white/25 overflow-hidden flex items-center justify-center shrink-0">
                   {t.crestUrl ? (
                     <img
                       src={t.crestUrl}
@@ -201,18 +187,9 @@ export const TeamDetailPage: React.FC = () => {
                     />
                   )}
                 </div>
-                <div className="min-w-0">
-                  <span className="block text-xs font-display font-extrabold truncate">
-                    {t.name}
-                  </span>
-                  <span
-                    className={`block text-[10px] font-bold truncate ${
-                      isSelected ? 'text-white/80' : 'text-slate-400'
-                    }`}
-                  >
-                    {t.shortName}
-                  </span>
-                </div>
+                <span className="block text-xs font-display font-extrabold truncate">
+                  {t.name}
+                </span>
               </button>
             );
           })}
@@ -225,7 +202,7 @@ export const TeamDetailPage: React.FC = () => {
           style={{
             background: `radial-gradient(circle at 85% 15%, ${accentHex}28 0%, transparent 42%), linear-gradient(135deg, ${primaryHex} 0%, ${secondaryHex} 100%)`,
           }}
-          className="relative text-white px-6 pt-8 pb-7 text-center overflow-hidden"
+          className="relative text-white px-6 pt-7 pb-6 text-center overflow-hidden"
         >
           {/* Marca d'água grande do próprio escudo da equipe ao fundo */}
           {resolvedTeam?.crestUrl && (
@@ -255,25 +232,11 @@ export const TeamDetailPage: React.FC = () => {
           )}
 
           <div className="relative z-10 flex flex-col items-center">
-            {/* Badge de Identidade Cromática da Equipe */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/25 border border-white/20 text-[10px] font-display font-extrabold uppercase tracking-wider text-white/95 mb-3">
-              <Palette className="w-3.5 h-3.5" style={{ color: accentHex }} />
-              <span>{colorLabel}</span>
-              {resolvedTeam?.turmaLabel && (
-                <>
-                  <span>•</span>
-                  <span style={{ color: accentHex }}>
-                    {resolvedTeam.turmaLabel}
-                  </span>
-                </>
-              )}
-            </div>
-
             {/* Escudo Oficial Grande em Destaque */}
             <div className="relative group">
               <div
                 style={{ borderColor: accentHex }}
-                className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl bg-black/40 border-4 shadow-2xl flex items-center justify-center overflow-hidden"
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-black/40 border-4 shadow-2xl flex items-center justify-center overflow-hidden"
               >
                 {resolvedTeam?.crestUrl ? (
                   <img
@@ -288,7 +251,7 @@ export const TeamDetailPage: React.FC = () => {
                       style={{ color: accentHex }}
                     />
                     <span className="text-[10px] font-display font-extrabold uppercase tracking-wider text-white/90">
-                      Escudo Tormenta
+                      {resolvedTeam?.name}
                     </span>
                   </div>
                 )}
@@ -316,17 +279,25 @@ export const TeamDetailPage: React.FC = () => {
               )}
             </div>
 
-            <h2 className="mt-4 text-2xl sm:text-4xl font-display font-black uppercase tracking-tight text-white drop-shadow">
-              {resolvedTeam?.name || 'Equipe Oficial'}
+            <h2 className="mt-3 text-2xl sm:text-3xl font-display font-black uppercase tracking-tight text-white drop-shadow">
+              {resolvedTeam?.name || 'Equipe'}
             </h2>
 
-            <p className="text-xs sm:text-sm font-semibold text-white/85 mt-1 flex items-center justify-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" style={{ color: accentHex }} />
-              <span>
-                {resolvedTeam?.mascotLabel || 'Representação Oficial'} •{' '}
-                {resolvedTeam?.turmaLabel || 'Medicina UEMA'}
+            {resolvedTeam && (
+              <span className="mt-1 inline-block px-3 py-0.5 rounded-full bg-black/25 border border-white/15 text-[11px] font-bold text-white/90">
+                {resolvedTeam.id === 'sanguinaria'
+                  ? 'Turma 21'
+                  : resolvedTeam.id === 'predadora'
+                  ? 'Turma 22'
+                  : resolvedTeam.id === 'tormenta'
+                  ? 'Turma 23'
+                  : resolvedTeam.id === 'colossal'
+                  ? 'Turma 24'
+                  : resolvedTeam.id === 'soberana'
+                  ? 'Turma 25'
+                  : resolvedTeam.turmaLabel}
               </span>
-            </p>
+            )}
 
             {crestFeedback && (
               <p className="mt-3 px-3.5 py-1 rounded-full bg-black/40 text-xs font-bold text-white">
@@ -484,34 +455,22 @@ export const TeamDetailPage: React.FC = () => {
           {/* 2. CARD "NEXT MATCH / PRÓXIMO CONFRONTO DA EQUIPE" */}
           <section
             onClick={() => nextMatch && navigate(`/placar/${nextMatch.id}`)}
-            className={`all-sports-card p-5 sm:p-6 ${
+            className={`all-sports-card p-5 ${
               nextMatch ? 'cursor-pointer hover:shadow-lg transition-all' : ''
             }`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-sm font-display font-extrabold text-slate-900">
-                  Próximo confronto • {resolvedTeam?.name}
-                </h3>
-                <span className="text-[11px] font-semibold text-slate-400">
-                  {nextMatch?.scheduledDate || 'Calendário Oficial INTRAMED IX'}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-display font-extrabold text-slate-900">
+                Próximo Confronto
+              </h3>
+              {nextMatch?.modalityName && (
+                <span
+                  style={{ backgroundColor: `${primaryHex}15`, color: primaryHex }}
+                  className="px-3 py-1 rounded-full text-[10px] font-display font-extrabold uppercase tracking-wider"
+                >
+                  {nextMatch.modalityName}
                 </span>
-              </div>
-              <span
-                style={{ backgroundColor: `${primaryHex}15`, color: primaryHex }}
-                className="px-3 py-1 rounded-full text-[10px] font-display font-extrabold uppercase tracking-wider"
-              >
-                {nextMatch?.modalityName || 'INTRAMED IX'}
-              </span>
-            </div>
-
-            <div className="flex justify-center mb-2">
-              <span
-                style={{ color: primaryHex }}
-                className="w-8 h-8 rounded-full bg-[#F3F4F9] border border-slate-200/80 flex items-center justify-center"
-              >
-                <Bell className="w-3.5 h-3.5" />
-              </span>
+              )}
             </div>
 
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 max-w-md mx-auto">
@@ -544,9 +503,11 @@ export const TeamDetailPage: React.FC = () => {
                     {nextMatch?.scheduledTime || 'A definir'}
                   </span>
                 )}
-                <span className="block text-[10px] font-bold uppercase text-slate-400 mt-1">
-                  {nextMatch?.phaseLabel || 'AGUARDANDO TABELA'}
-                </span>
+                {nextMatch?.phaseLabel && (
+                  <span className="block text-[10px] font-bold uppercase text-slate-400 mt-1">
+                    {nextMatch.phaseLabel}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center justify-start gap-2.5 text-left min-w-0">
@@ -556,23 +517,19 @@ export const TeamDetailPage: React.FC = () => {
                   size="md"
                 />
                 <span className="text-xs sm:text-sm font-display font-bold text-slate-800 truncate">
-                  {nextMatch?.awayTeam.teamName || 'Adversário a definir'}
+                  {nextMatch?.awayTeam.teamName || 'A definir'}
                 </span>
               </div>
             </div>
-
-            <p className="mt-3 text-center text-[11px] font-semibold text-slate-400">
-              {nextMatch?.venue || 'Ginásio Oficial • Medicina UEMA'}
-            </p>
           </section>
 
           {/* 3. CARD "PREVIOUS GAMES / ÚLTIMOS JOGOS" COM 5 CÁPSULAS VERTICAIS */}
-          <section className="all-sports-card p-5 sm:p-6 space-y-4">
+          <section className="all-sports-card p-5 space-y-4">
             <div
               style={{ backgroundColor: `${primaryHex}14`, color: primaryHex }}
               className="all-sports-section-pill"
             >
-              Últimos Jogos • {resolvedTeam?.name}
+              Últimos Jogos
             </div>
 
             <div className="grid grid-cols-5 gap-2.5 sm:gap-4 max-w-md mx-auto">
@@ -611,12 +568,12 @@ export const TeamDetailPage: React.FC = () => {
           </section>
 
           {/* 4. CARD "POINT TABLE / QUADRO DE PONTOS ENTRE AS 5 EQUIPES" */}
-          <section className="all-sports-card p-5 sm:p-6 space-y-4">
+          <section className="all-sports-card p-5 space-y-4">
             <div
               style={{ backgroundColor: `${primaryHex}14`, color: primaryHex }}
               className="all-sports-section-pill"
             >
-              Classificação Geral das 5 Equipes
+              Classificação
             </div>
             <StandingsTable
               standings={standings}
@@ -704,13 +661,13 @@ export const TeamDetailPage: React.FC = () => {
                           {ath.name}
                         </h4>
                       </div>
-                      <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-                        <Shirt
-                          className="w-3 h-3 shrink-0"
-                          style={{ color: primaryHex }}
-                        />
-                        <span>{ath.position || 'Atleta Inscrito'}</span>
-                      </p>
+                      {ath.instagramHandle && (
+                        <p className="text-xs text-slate-500 mt-0.5 truncate">
+                          {ath.instagramHandle.startsWith('@')
+                            ? ath.instagramHandle
+                            : `@${ath.instagramHandle}`}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />

@@ -114,6 +114,7 @@ export interface Athlete {
   bio?: string | null;
   instagramHandle?: string | null;
   email?: string | null;
+  accountUsername?: string | null;
   turma?: TurmaMedicina | null;
   turmaLabel?: string | null;
   teamId: string;
@@ -603,8 +604,10 @@ export interface Registration {
   categoryName: string; // 'Masculino' | 'Feminino' | 'Geral'
   selectedModalities?: ModalitySlug[];
 
-  // Perfil Social do Atleta Vinculado
+  // Perfil Social e Credencial da Conta do Atleta Vinculado
   linkedAthleteId?: string | null;
+  accountUsername?: string | null;
+  hasAccountPassword?: boolean;
   avatarUrl?: string | null;
   jerseyNumber?: number | null;
   position?: string | null;

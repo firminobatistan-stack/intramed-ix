@@ -8,7 +8,6 @@ import {
   FlaskConical,
   Heart,
   Info,
-  Ruler,
   Shield,
   Shirt,
   Trophy,
@@ -74,7 +73,6 @@ export const AthleteDetailPage: React.FC = () => {
 
   const [editName, setEditName] = useState('');
   const [editJersey, setEditJersey] = useState('');
-  const [editPosition, setEditPosition] = useState('');
   const [editBio, setEditBio] = useState('');
   const [editInstagram, setEditInstagram] = useState('');
   const [editModalities, setEditModalities] = useState<ModalitySlug[]>([]);
@@ -87,7 +85,6 @@ export const AthleteDetailPage: React.FC = () => {
         ? String(resolvedAthlete.jerseyNumber)
         : ''
     );
-    setEditPosition(resolvedAthlete.position || '');
     setEditBio(resolvedAthlete.bio || '');
     setEditInstagram(resolvedAthlete.instagramHandle || '');
     setEditModalities(
@@ -107,7 +104,7 @@ export const AthleteDetailPage: React.FC = () => {
     const ok = updateAthletePersonalInfo(resolvedAthlete.id, {
       name: editName.trim() || resolvedAthlete.name,
       jerseyNumber: safeJersey,
-      position: editPosition.trim() || 'Atleta Oficial',
+      position: 'Atleta',
       bio: editBio.trim() || null,
       instagramHandle: editInstagram.trim() || null,
       modalityIds: editModalities,
@@ -118,14 +115,14 @@ export const AthleteDetailPage: React.FC = () => {
         await updateRegistrationSocialProfile(resolvedAthlete.registrationId, {
           athleteName: editName.trim() || resolvedAthlete.name,
           jerseyNumber: safeJersey,
-          position: editPosition.trim() || 'Atleta Oficial',
+          position: 'Atleta',
           bio: editBio.trim() || null,
           instagramHandle: editInstagram.trim() || null,
           selectedModalities: editModalities,
         });
       }
       setIsEditModalOpen(false);
-      setUploadFeedback('Perfil social atualizado em tempo real para todos!');
+      setUploadFeedback('Perfil atualizado!');
       setTimeout(() => setUploadFeedback(null), 3500);
     }
   };
@@ -206,58 +203,6 @@ export const AthleteDetailPage: React.FC = () => {
   const handleGoToAthleteLogin = () => {
     navigate('/login');
   };
-
-  const getPositionDiagram = (mod: ModalitySlug, athletePos?: string | null) => {
-    switch (mod) {
-      case 'basquete':
-        return {
-          primary: athletePos || 'Armador / Ala-Armador',
-          others: 'Ala, Ala-Pivô, Pivô',
-          slots: [
-            { code: 'C', top: '20%', left: '50%', active: false },
-            { code: 'PF', top: '42%', left: '30%', active: false },
-            { code: 'SF', top: '42%', left: '72%', active: true },
-            { code: 'PG', top: '70%', left: '50%', active: false },
-          ],
-        };
-      case 'volei':
-      case 'volei-de-praia':
-        return {
-          primary: athletePos || 'Rotação Coletiva em Quadra',
-          others: 'Saques, Recepção e Defesa Coletiva',
-          slots: [
-            { code: 'P4', top: '28%', left: '28%', active: false },
-            { code: 'P3', top: '28%', left: '50%', active: true },
-            { code: 'P2', top: '28%', left: '72%', active: false },
-            { code: 'P6', top: '72%', left: '50%', active: false },
-          ],
-        };
-      case 'handebol':
-        return {
-          primary: athletePos || 'Armador Central / Ponta',
-          others: 'Meia, Pivô, Goleiro',
-          slots: [
-            { code: 'PIV', top: '22%', left: '50%', active: false },
-            { code: 'PON', top: '34%', left: '78%', active: false },
-            { code: 'ARM', top: '52%', left: '50%', active: true },
-            { code: 'GOL', top: '82%', left: '50%', active: false },
-          ],
-        };
-      default:
-        return {
-          primary: athletePos || 'Ala / Pivô',
-          others: 'Fixo, Ala Esquerda, Goleiro',
-          slots: [
-            { code: 'PIV', top: '18%', left: '50%', active: false },
-            { code: 'ALA', top: '38%', left: '76%', active: true },
-            { code: 'FIX', top: '56%', left: '48%', active: false },
-            { code: 'GOL', top: '80%', left: '50%', active: false },
-          ],
-        };
-    }
-  };
-
-  const posInfo = getPositionDiagram(selectedModality, resolvedAthlete?.position);
 
   const tabs: Array<{ id: AthleteTab; label: string }> = [
     { id: 'profile', label: 'Perfil' },
@@ -695,9 +640,6 @@ export const AthleteDetailPage: React.FC = () => {
             </h2>
 
             <div className="mt-1 inline-flex flex-wrap items-center justify-center gap-1.5 text-xs font-semibold text-white/85">
-              <Shirt className="w-3.5 h-3.5 text-brand-yellow" />
-              <span>{posInfo.primary}</span>
-              <span>•</span>
               {team ? (
                 <button
                   type="button"
@@ -707,7 +649,7 @@ export const AthleteDetailPage: React.FC = () => {
                   {team.name}
                 </button>
               ) : (
-                <span>Período • Medicina UEMA</span>
+                <span>Medicina UEMA</span>
               )}
               {resolvedAthlete?.instagramHandle && (
                 <>
@@ -879,7 +821,7 @@ export const AthleteDetailPage: React.FC = () => {
 
             <div className="all-sports-card p-4 text-left space-y-2">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F3F4F9] text-[11px] font-bold text-slate-600">
-                <Ruler className="w-3.5 h-3.5 text-[#1D63FF]" />
+                <Shirt className="w-3.5 h-3.5 text-[#1D63FF]" />
                 <span>Camisa</span>
               </div>
               <div>
@@ -896,70 +838,18 @@ export const AthleteDetailPage: React.FC = () => {
             <section className="space-y-3">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-xs font-display font-extrabold uppercase tracking-wider text-slate-500">
-                  Desempenho Básico em {activeModObj.name}
+                  Estatísticas em {activeModObj.name}
                 </h3>
                 {stats && stats.liveMatchesPlayed > 0 && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
                     <Clock className="w-3 h-3 animate-pulse" />
-                    <span>Inclui partida em andamento</span>
+                    <span>Em andamento</span>
                   </span>
                 )}
               </div>
               {renderBasicStatsGrid()}
             </section>
           )}
-
-          {/* Card "Position / Posição em Quadra" com Mini-Campo Verde à Direita (Imagem 1 Esquerda) */}
-          <section className="all-sports-card p-5 sm:p-6 space-y-4">
-            <div className="all-sports-section-pill">
-              Posição &amp; Função em Quadra ({activeModObj.name})
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-[1.15fr_0.85fr] items-center gap-6">
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-xs font-display font-extrabold text-slate-800">
-                    Função Principal
-                  </h4>
-                  <p className="text-xs sm:text-sm font-medium text-slate-500 mt-0.5">
-                    {posInfo.primary}
-                  </p>
-                </div>
-
-                <div>
-                  <h4 className="text-xs font-display font-extrabold text-slate-800">
-                    Outras Funções na Equipe
-                  </h4>
-                  <p className="text-xs sm:text-sm font-medium text-slate-500 mt-0.5 leading-relaxed">
-                    {posInfo.others}
-                  </p>
-                </div>
-              </div>
-
-              {/* Mini-Campo / Quadra Verde Estilizada com Siglas das Posições */}
-              <div className="relative h-44 w-40 mx-auto rounded-2xl bg-gradient-to-b from-[#bbf7d0] via-[#86efac] to-[#bbf7d0] border-2 border-emerald-300 overflow-hidden shadow-inner">
-                <div className="pointer-events-none absolute inset-2 border border-white/80 rounded-lg" />
-                <div className="pointer-events-none absolute inset-x-2 top-1/2 h-[1px] bg-white/80" />
-                <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full border border-white/80" />
-                <div className="pointer-events-none absolute left-1/2 top-2 -translate-x-1/2 w-16 h-6 border-b border-x border-white/80" />
-                <div className="pointer-events-none absolute left-1/2 bottom-2 -translate-x-1/2 w-16 h-6 border-t border-x border-white/80" />
-
-                {posInfo.slots.map((slot) => (
-                  <span
-                    key={slot.code}
-                    style={{ top: slot.top, left: slot.left }}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[10px] font-display font-extrabold shadow-sm ${
-                      slot.active
-                        ? 'bg-[#1D63FF] text-white ring-2 ring-white'
-                        : 'bg-white/85 text-slate-600'
-                    }`}
-                  >
-                    {slot.code}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </section>
         </>
       )}
 
@@ -1092,8 +982,7 @@ export const AthleteDetailPage: React.FC = () => {
                       {team?.name || 'Período Medicina UEMA'}
                     </h4>
                     <p className="text-xs text-slate-500">
-                      Camisa #{resolvedAthlete.jerseyNumber || '—'} •{' '}
-                      {resolvedAthlete.position || 'Atleta Inscrito'}
+                      Camisa #{resolvedAthlete.jerseyNumber || '—'}
                     </p>
                   </div>
                 </div>
@@ -1178,25 +1067,18 @@ export const AthleteDetailPage: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
-              label="Posição / Função"
-              value={editPosition}
-              onChange={(e) => setEditPosition(e.target.value)}
-              placeholder="Ex: Ala / Fixo / Goleiro"
-            />
-            <Input
               label="@Instagram"
               value={editInstagram}
               onChange={(e) => setEditInstagram(e.target.value)}
               placeholder="@seu.insta"
             />
+            <Input
+              label="Bio / Frase"
+              value={editBio}
+              onChange={(e) => setEditBio(e.target.value)}
+              placeholder="Ex: Rumo ao título!"
+            />
           </div>
-
-          <Input
-            label="Bio / Frase Esportiva"
-            value={editBio}
-            onChange={(e) => setEditBio(e.target.value)}
-            placeholder="Ex: Rumo ao título!"
-          />
 
           <div className="space-y-2">
             <label className="block text-xs font-bold text-slate-700">

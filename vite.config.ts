@@ -93,6 +93,27 @@ export default defineConfig(({ mode }) => {
                         })
                       );
                     }
+                    if (body.action === 'athlete_login') {
+                      const idIn = String(body.identifier || '').trim().toLowerCase();
+                      const passIn = String(body.password || '').trim();
+                      const cleanDoc = idIn.replace(/\D/g, '');
+                      const allRegs = Object.values(devCloudStore.registrations);
+                      const found = allRegs.find((r) => {
+                        const em = String(r.athleteEmail || '').trim().toLowerCase();
+                        const usr = String(r.accountUsername || '').trim().toLowerCase();
+                        const doc = String(r.athleteDocument || '').replace(/\D/g, '');
+                        return em === idIn || (usr && usr === idIn) || (cleanDoc.length >= 6 && doc === cleanDoc);
+                      });
+                      if (!found) {
+                        res.statusCode = 404;
+                        return res.end(JSON.stringify({ ok: false, error: 'Conta não encontrada.' }));
+                      }
+                      if (found.accountPassword && String(found.accountPassword) !== passIn) {
+                        res.statusCode = 401;
+                        return res.end(JSON.stringify({ ok: false, error: 'Senha incorreta.' }));
+                      }
+                      return res.end(JSON.stringify({ ok: true, registration: found }));
+                    }
                     const { collectionName, docId, data, batch } = body;
                     if (Array.isArray(batch)) {
                       for (const item of batch) {

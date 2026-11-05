@@ -7,7 +7,6 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
-  ShieldCheck,
   KeyRound,
   LogOut,
   Search,
@@ -41,7 +40,6 @@ export const LoginPage: React.FC = () => {
     currentUser,
     setCurrentUser,
     visibleAthletes,
-    visibleTeams,
     getTeamById,
     upsertParticipantAthlete,
   } = useCompetitionStore();
@@ -59,9 +57,8 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   const [athleteQuery, setAthleteQuery] = useState('');
-  const [selectedAthleteId, setSelectedAthleteId] = useState<string>(
-    visibleAthletes[0]?.id || ''
-  );
+  const [athletePassword, setAthletePassword] = useState('');
+  const [showAthletePassword, setShowAthletePassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState('');
@@ -127,103 +124,145 @@ export const LoginPage: React.FC = () => {
     navigate(returnTo || '/admin', { replace: true });
   };
 
-  const handleAthleteSubmit = (e: React.FormEvent) => {
+  const handleAthleteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
     const q = athleteQuery.trim().toLowerCase();
+    const pass = athletePassword.trim();
 
-    // 1. Se o atleta digitou E-mail, CPF/Matrícula ou Nome, busca primeiro nas inscrições e atletas
-    if (q) {
-      const cleanDocQuery = q.replace(/\D/g, '');
-      const matchedReg = registrations.find(
-        (r) =>
-          r.athleteEmail.trim().toLowerCase() === q ||
-          (cleanDocQuery.length >= 4 &&
-            r.athleteDocument.replace(/\D/g, '') === cleanDocQuery) ||
-          r.athleteName.trim().toLowerCase() === q
-      );
+    if (!q) {
+      setErrorMessage('Informe seu usuário, e-mail ou CPF de cadastro.');
+      return;
+    }
 
-      if (matchedReg) {
+    // 1. Tenta autenticar no servidor com Usuário/E-mail + Senha
+    try {
+      const res = await fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'athlete_login',
+          identifier: q,
+          password: pass,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok && data?.registration) {
+        const reg = data.registration;
         const ath = upsertParticipantAthlete({
-          id: matchedReg.linkedAthleteId || `ath-${matchedReg.id}`,
-          name: matchedReg.athleteName,
-          email: matchedReg.athleteEmail,
-          teamId: matchedReg.teamId,
-          turma: matchedReg.turma,
-          turmaLabel: matchedReg.turmaLabel,
-          jerseyNumber: matchedReg.jerseyNumber ?? null,
-          position: matchedReg.position || 'Atleta Inscrito',
-          bio: matchedReg.bio ?? null,
-          instagramHandle: matchedReg.instagramHandle ?? null,
-          avatarUrl: matchedReg.avatarUrl ?? null,
+          id: reg.linkedAthleteId || `ath-${reg.id}`,
+          name: reg.athleteName,
+          email: reg.athleteEmail,
+          teamId: reg.teamId,
+          turma: reg.turma,
+          turmaLabel: reg.turmaLabel,
+          jerseyNumber: reg.jerseyNumber ?? null,
+          position: reg.position || 'Atleta',
+          bio: reg.bio ?? null,
+          instagramHandle: reg.instagramHandle ?? null,
+          avatarUrl: reg.avatarUrl ?? null,
           modalityIds:
-            matchedReg.selectedModalities && matchedReg.selectedModalities.length > 0
-              ? matchedReg.selectedModalities
+            reg.selectedModalities && reg.selectedModalities.length > 0
+              ? reg.selectedModalities
               : OFFICIAL_MODALITIES.map((m) => m.id),
-          registrationId: matchedReg.id,
-          paymentStatus: matchedReg.paymentStatus,
-          memberStatus: matchedReg.memberStatus,
+          registrationId: reg.id,
+          paymentStatus: reg.paymentStatus,
+          memberStatus: reg.memberStatus,
           autoLogin: true,
         });
         navigate(returnTo || `/atleta/${ath.id}`, { replace: true });
         return;
       }
-
-      const matchedAth = visibleAthletes.find(
-        (a) =>
-          (a.email && a.email.trim().toLowerCase() === q) ||
-          a.name.trim().toLowerCase() === q ||
-          a.name.trim().toLowerCase().includes(q)
-      );
-
-      if (matchedAth) {
-        const team = getTeamById(matchedAth.teamId);
-        setCurrentUser({
-          id: `usr-${matchedAth.id}`,
-          name: matchedAth.name,
-          email: matchedAth.email || `${matchedAth.id}@medicina.uema.br`,
-          avatarUrl: matchedAth.avatarUrl,
-          teamId: matchedAth.teamId,
-          teamName: team?.name || matchedAth.turmaLabel || 'Equipe Medicina UEMA',
-          modalityIds: matchedAth.modalityIds,
-          role: 'atleta',
-          linkedAthleteId: matchedAth.id,
-        });
-        navigate(returnTo || `/atleta/${matchedAth.id}`, { replace: true });
+      if (res.status === 401) {
+        setErrorMessage('Senha incorreta para esta conta.');
         return;
       }
+    } catch {
+      // Continua para verificação local
+    }
 
-      setErrorMessage(
-        'Nenhuma inscrição ou atleta encontrado com este E-mail / CPF. Verifique os dados ou faça sua inscrição agora!'
-      );
+    // 2. Fallback local (inscrições salvas no dispositivo)
+    const cleanDocQuery = q.replace(/\D/g, '');
+    const matchedReg = registrations.find(
+      (r) =>
+        r.athleteEmail.trim().toLowerCase() === q ||
+        (r.accountUsername && r.accountUsername.trim().toLowerCase() === q) ||
+        (cleanDocQuery.length >= 4 &&
+          r.athleteDocument.replace(/\D/g, '') === cleanDocQuery) ||
+        r.athleteName.trim().toLowerCase() === q
+    );
+
+    if (matchedReg) {
+      try {
+        const savedCredsRaw = localStorage.getItem('intramed_athlete_credentials_v1');
+        if (savedCredsRaw) {
+          const savedCreds = JSON.parse(savedCredsRaw);
+          const credEntry =
+            savedCreds[q] ||
+            (matchedReg.accountUsername ? savedCreds[matchedReg.accountUsername.toLowerCase()] : undefined) ||
+            savedCreds[matchedReg.athleteEmail.toLowerCase()];
+          if (credEntry && credEntry.pass && credEntry.pass !== pass) {
+            setErrorMessage('Senha incorreta para esta conta.');
+            return;
+          }
+        }
+      } catch {
+        // Silencioso
+      }
+
+      const ath = upsertParticipantAthlete({
+        id: matchedReg.linkedAthleteId || `ath-${matchedReg.id}`,
+        name: matchedReg.athleteName,
+        email: matchedReg.athleteEmail,
+        teamId: matchedReg.teamId,
+        turma: matchedReg.turma,
+        turmaLabel: matchedReg.turmaLabel,
+        jerseyNumber: matchedReg.jerseyNumber ?? null,
+        position: matchedReg.position || 'Atleta',
+        bio: matchedReg.bio ?? null,
+        instagramHandle: matchedReg.instagramHandle ?? null,
+        avatarUrl: matchedReg.avatarUrl ?? null,
+        modalityIds:
+          matchedReg.selectedModalities && matchedReg.selectedModalities.length > 0
+            ? matchedReg.selectedModalities
+            : OFFICIAL_MODALITIES.map((m) => m.id),
+        registrationId: matchedReg.id,
+        paymentStatus: matchedReg.paymentStatus,
+        memberStatus: matchedReg.memberStatus,
+        autoLogin: true,
+      });
+      navigate(returnTo || `/atleta/${ath.id}`, { replace: true });
       return;
     }
 
-    // 2. Caso contrário, utiliza o atleta selecionado na lista
-    const targetId = selectedAthleteId || visibleAthletes[0]?.id;
-    const ath = visibleAthletes.find((a) => a.id === targetId);
-    if (!ath) {
-      setErrorMessage(
-        'Nenhum atleta selecionado. Digite seu E-mail de inscrição ou cadastre-se na página de Inscrições.'
-      );
+    const matchedAth = visibleAthletes.find(
+      (a) =>
+        (a.email && a.email.trim().toLowerCase() === q) ||
+        (a.accountUsername && a.accountUsername.trim().toLowerCase() === q) ||
+        a.name.trim().toLowerCase() === q
+    );
+
+    if (matchedAth) {
+      const team = getTeamById(matchedAth.teamId);
+      setCurrentUser({
+        id: `usr-${matchedAth.id}`,
+        name: matchedAth.name,
+        email: matchedAth.email || `${matchedAth.id}@medicina.uema.br`,
+        avatarUrl: matchedAth.avatarUrl,
+        teamId: matchedAth.teamId,
+        teamName: team?.name || matchedAth.turmaLabel || 'Equipe',
+        modalityIds: matchedAth.modalityIds,
+        role: 'atleta',
+        linkedAthleteId: matchedAth.id,
+      });
+      navigate(returnTo || `/atleta/${matchedAth.id}`, { replace: true });
       return;
     }
 
-    const team = getTeamById(ath.teamId);
-    setCurrentUser({
-      id: `usr-${ath.id}`,
-      name: ath.name,
-      email: ath.email || `${ath.id}@medicina.uema.br`,
-      avatarUrl: ath.avatarUrl,
-      teamId: ath.teamId,
-      teamName: team?.name || ath.turmaLabel || 'Equipe Medicina UEMA',
-      modalityIds: ath.modalityIds,
-      role: 'atleta',
-      linkedAthleteId: ath.id,
-    });
-
-    navigate(returnTo || `/atleta/${ath.id}`, { replace: true });
+    setErrorMessage(
+      'Conta não encontrada. Verifique seu usuário/e-mail ou crie sua conta na inscrição.'
+    );
   };
 
   const handleRecoverySubmit = (e: React.FormEvent) => {
@@ -373,64 +412,46 @@ export const LoginPage: React.FC = () => {
           ) : (
             <div className="space-y-4">
               <form onSubmit={handleAthleteSubmit} className="space-y-4" noValidate>
-                <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs text-amber-950 space-y-1">
-                  <p className="font-display font-extrabold flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Conta do Atleta Inscrito</span>
-                  </p>
-                  <p className="text-[11px] text-amber-900/80 leading-relaxed">
-                    Entre com seu <strong>E-mail ou CPF</strong> de inscrição (ou selecione seu nome na lista) para editar sua foto, camisa, bio, modalidades e ver seu passaporte.
-                  </p>
-                </div>
-
                 <Input
-                  label="Entrar por E-mail ou CPF da Inscrição"
+                  label="Usuário ou E-mail"
                   type="text"
                   value={athleteQuery}
                   onChange={(e) => {
                     setAthleteQuery(e.target.value);
                     if (errorMessage) setErrorMessage(null);
                   }}
-                  placeholder="Digite seu e-mail ou CPF cadastrado..."
+                  placeholder="Ex: lucas.ferreira ou seu e-mail"
                   leftIcon={<Search className="w-4 h-4 text-slate-400" />}
+                  required
                 />
 
-                <div className="relative flex py-1 items-center">
-                  <div className="flex-grow border-t border-slate-200"></div>
-                  <span className="flex-shrink mx-3 text-[10px] font-bold uppercase text-slate-400">
-                    ou escolha na comunidade ({visibleAthletes.length})
-                  </span>
-                  <div className="flex-grow border-t border-slate-200"></div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-brand-text-secondary mb-1.5">
-                    Atletas Inscritos na Comunidade ({visibleAthletes.length})
-                  </label>
-                  <select
-                    value={selectedAthleteId || visibleAthletes[0]?.id || ''}
-                    onChange={(e) => {
-                      setSelectedAthleteId(e.target.value);
-                      setAthleteQuery('');
-                    }}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-brand-surface-border text-sm bg-white focus:outline-none focus:border-brand-blue"
-                  >
-                    {visibleAthletes.length === 0 ? (
-                      <option value="">
-                        Nenhum atleta inscrito ainda
-                      </option>
-                    ) : (
-                      visibleAthletes.map((ath) => {
-                        const t = visibleTeams.find((tm) => tm.id === ath.teamId);
-                        return (
-                          <option key={ath.id} value={ath.id}>
-                            #{ath.jerseyNumber || '—'} {ath.name} ({t?.name || ath.turmaLabel || 'Equipe'})
-                          </option>
-                        );
-                      })
-                    )}
-                  </select>
-                </div>
+                <Input
+                  label="Senha"
+                  type={showAthletePassword ? 'text' : 'password'}
+                  value={athletePassword}
+                  onChange={(e) => {
+                    setAthletePassword(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  placeholder="Sua senha de cadastro"
+                  leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
+                  rightElement={
+                    <button
+                      type="button"
+                      onClick={() => setShowAthletePassword((prev) => !prev)}
+                      aria-label={
+                        showAthletePassword ? 'Ocultar senha' : 'Mostrar senha'
+                      }
+                      className="p-1.5 rounded-lg hover:bg-brand-surface-muted text-brand-text-muted hover:text-brand-text-primary transition-colors"
+                    >
+                      {showAthletePassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  }
+                />
 
                 {errorMessage && (
                   <div
@@ -449,7 +470,7 @@ export const LoginPage: React.FC = () => {
                     size="lg"
                     fullWidth
                   >
-                    Acessar Meu Perfil &amp; Conta
+                    Entrar na Conta
                   </Button>
 
                   <Button
@@ -460,7 +481,7 @@ export const LoginPage: React.FC = () => {
                     leftIcon={<UserPlus className="w-4 h-4 text-brand-blue" />}
                     onClick={() => navigate('/inscricao')}
                   >
-                    Ainda não tenho inscrição (Inscrever-se)
+                    Criar Conta &amp; Fazer Inscrição
                   </Button>
                 </div>
               </form>
@@ -476,7 +497,7 @@ export const LoginPage: React.FC = () => {
                   className="text-[11px] text-slate-400 hover:text-slate-600 transition-colors inline-flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-slate-50"
                 >
                   <Lock className="w-3 h-3" />
-                  <span>Acesso Restrito</span>
+                  <span>Acesso Restrito (Comissão / Mesário)</span>
                 </button>
               </div>
             </div>

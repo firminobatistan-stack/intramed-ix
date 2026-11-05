@@ -220,12 +220,15 @@ export function sanitizeRegistrationForPublic(
   const {
     athletePhone: _phone,
     memberDocumentProofUrl: _proof,
+    accountPassword: _rawPassword,
+    accountPasswordHash: _passwordHash,
     ...rest
   } = reg;
   return {
     ...rest,
     athleteDocument: maskedDoc,
     athletePhone: '',
+    hasAccountPassword: Boolean(_rawPassword || _passwordHash),
   };
 }
 

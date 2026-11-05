@@ -6,7 +6,6 @@ import {
   QrCode,
   CheckCircle2,
   AlertTriangle,
-  Sparkles,
   Info,
   Copy,
   ExternalLink,
@@ -17,7 +16,6 @@ import {
   Users,
   Heart,
   Search,
-  Shirt,
   Instagram,
   Trophy,
   Check,
@@ -104,18 +102,19 @@ export const RegistrationPage: React.FC = () => {
     return 'nova_inscricao';
   });
 
-  // Formulário de Nova Inscrição + Perfil Social do Atleta
+  // Formulário de Nova Inscrição + Conta de Acesso + Perfil Social
   const [selectedTurma, setSelectedTurma] = useState<TurmaMedicina>('21');
   const [categoryName, setCategoryName] = useState<'Masculino' | 'Feminino'>('Masculino');
   const [athleteName, setAthleteName] = useState(currentUser?.name || '');
   const [athleteEmail, setAthleteEmail] = useState(currentUser?.email || '');
   const [athletePhone, setAthletePhone] = useState('');
   const [athleteDocument, setAthleteDocument] = useState('');
+  const [accountUsername, setAccountUsername] = useState('');
+  const [accountPassword, setAccountPassword] = useState('');
 
   // Campos de Perfil Social / Rede Social do Torneio
   const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser?.avatarUrl || null);
   const [jerseyNumber, setJerseyNumber] = useState<string>('');
-  const [position, setPosition] = useState<string>('');
   const [bio, setBio] = useState<string>('');
   const [instagramHandle, setInstagramHandle] = useState<string>('');
   const [selectedModalities, setSelectedModalities] = useState<ModalitySlug[]>(
@@ -196,7 +195,15 @@ export const RegistrationPage: React.FC = () => {
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!athleteName.trim() || !athleteEmail.trim() || !athleteDocument.trim()) {
-      alert('Por favor, preencha todos os campos obrigatórios (Nome, E-mail e CPF/Matrícula).');
+      alert('Por favor, preencha Nome, E-mail e CPF/Matrícula.');
+      return;
+    }
+    if (!accountUsername.trim() || !accountPassword.trim()) {
+      alert('Crie seu usuário e uma senha para sua conta de acesso.');
+      return;
+    }
+    if (accountPassword.trim().length < 4) {
+      alert('A senha deve ter pelo menos 4 caracteres.');
       return;
     }
 
@@ -213,6 +220,8 @@ export const RegistrationPage: React.FC = () => {
         athleteEmail,
         athletePhone,
         athleteDocument,
+        accountUsername: accountUsername.trim().toLowerCase(),
+        accountPassword: accountPassword.trim(),
         turma: selectedTurma,
         turmaLabel: selectedTurmaObj.fullName,
         teamId: selectedTurmaObj.teamId,
@@ -225,7 +234,7 @@ export const RegistrationPage: React.FC = () => {
           : undefined,
         avatarUrl,
         jerseyNumber: parsedJersey && !Number.isNaN(parsedJersey) ? parsedJersey : null,
-        position: position.trim() || 'Atleta Oficial',
+        position: 'Atleta',
         bio: bio.trim() || null,
         instagramHandle: instagramHandle.trim() || null,
       });
@@ -483,30 +492,24 @@ export const RegistrationPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-brand-surface-muted pb-16 space-y-6">
       {/* Banner Superior Institucional */}
-      <section className="bg-gradient-to-r from-[#0B218A] via-[#1030B5] to-[#0B218A] text-white p-6 sm:p-10 rounded-b-3xl sm:rounded-3xl shadow-card">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-xs font-bold text-brand-yellow">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>
-                Inscrições &amp; Comunidade Oficial • {tournamentEvent.edition} Edição
-              </span>
-            </div>
-            <h1 className="text-2xl sm:text-4xl font-display font-extrabold tracking-tight">
+      <section className="bg-gradient-to-r from-[#0B218A] via-[#1030B5] to-[#0B218A] text-white p-6 sm:p-8 rounded-b-3xl sm:rounded-3xl shadow-card">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-display font-extrabold tracking-tight">
               {tournamentEvent.title}
             </h1>
-            <p className="text-xs sm:text-sm text-white/80 max-w-2xl leading-relaxed">
-              Inscreva-se, personalize seu perfil de atleta com foto e camisa, e conecte-se com todos os colegas das 5 turmas na comunidade oficial do torneio!
+            <p className="text-xs sm:text-sm text-white/80 max-w-xl">
+              Faça sua inscrição, crie sua conta de acesso e participe da comunidade das 5 turmas.
             </p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 p-4 sm:p-5 rounded-2xl shrink-0 text-center space-y-1">
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-5 py-3.5 rounded-2xl shrink-0 text-center space-y-0.5">
             <span className="text-[11px] font-bold uppercase tracking-wider text-white/70 block">
               {activeLot?.name || '1º Lote'}
             </span>
             <div className="flex items-baseline justify-center gap-1">
               <span className="text-xs font-bold">R$</span>
-              <span className="text-3xl font-display font-extrabold text-brand-yellow">
+              <span className="text-2xl font-display font-extrabold text-brand-yellow">
                 {activeLot?.priceMember.toFixed(2)}
               </span>
               <span className="text-xs text-white/80">(Sócio)</span>
@@ -554,7 +557,7 @@ export const RegistrationPage: React.FC = () => {
               }`}
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Comunidade &amp; Inscritos ({visibleAthletes.length})</span>
+              <span>Comunidade ({visibleAthletes.length})</span>
             </button>
           </div>
 
@@ -566,7 +569,7 @@ export const RegistrationPage: React.FC = () => {
                 leftIcon={<User className="w-4 h-4 text-brand-blue" />}
                 onClick={() => navigate(`/atleta/${currentUser.linkedAthleteId}`)}
               >
-                Meu Perfil Social
+                Meu Perfil
               </Button>
             )}
             {isAdmin && (
@@ -576,14 +579,14 @@ export const RegistrationPage: React.FC = () => {
                 leftIcon={<ShieldCheck className="w-4 h-4 text-brand-blue" />}
                 onClick={() => navigate('/admin/inscricoes')}
               >
-                Painel Admin de Inscrições
+                Gestão de Inscrições
               </Button>
             )}
           </div>
         </div>
 
         {/* ============================================================ */}
-        {/* ABA 1: FORMULÁRIO DE NOVA INSCRIÇÃO + PERFIL SOCIAL          */}
+        {/* ABA 1: FORMULÁRIO DE NOVA INSCRIÇÃO + CONTA DE ACESSO        */}
         {/* ============================================================ */}
         {activeTab === 'nova_inscricao' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -591,21 +594,14 @@ export const RegistrationPage: React.FC = () => {
               onSubmit={handleRegisterSubmit}
               className="lg:col-span-8 bg-white rounded-3xl border border-brand-surface-border p-6 shadow-card space-y-6"
             >
-              <div className="border-b border-brand-surface-border pb-4">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-blue/10 text-brand-blue text-[11px] font-display font-extrabold uppercase tracking-wider mb-2">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Passaporte Esportivo Unificado + Perfil na Comunidade
-                </div>
+              <div>
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                  1. Selecione a sua Turma de Medicina UEMA
+                  1. Sua Turma
                 </h2>
-                <p className="text-xs text-brand-text-secondary mt-1">
-                  Escolha o período pelo qual você irá competir. Ao se inscrever, seu perfil oficial já fica ativo na <strong>Comunidade IntraMed</strong> junto com a sua turma!
-                </p>
               </div>
 
-              {/* Seletor das 5 Turmas Oficiais */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {/* Seletor das 5 Turmas Oficiais (Limpo, sem cores ou números repetidos) */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                 {TURMAS_MEDICINA.map((t) => {
                   const isSelected = selectedTurma === t.turma;
                   return (
@@ -613,56 +609,38 @@ export const RegistrationPage: React.FC = () => {
                       key={t.turma}
                       type="button"
                       onClick={() => setSelectedTurma(t.turma)}
-                      className={`p-3.5 rounded-2xl border-2 text-left transition-all relative overflow-hidden flex flex-col justify-between ${
+                      className={`p-3 rounded-2xl border-2 text-center transition-all flex flex-col items-center gap-2 ${
                         isSelected
-                          ? 'border-brand-blue bg-blue-50/70 shadow-md ring-2 ring-brand-blue/30'
+                          ? 'border-brand-blue bg-blue-50/70 shadow-sm ring-2 ring-brand-blue/20'
                           : 'border-brand-surface-border bg-white hover:border-slate-300 hover:bg-slate-50/70'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 shadow-sm flex items-center justify-center">
-                            <img
-                              src={t.crestUrl}
-                              alt={t.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                              Turma {t.number}
-                            </span>
-                            <span className="text-sm font-display font-black text-slate-900 leading-tight block">
-                              {t.name}
-                            </span>
-                          </div>
-                        </div>
-
-                        <span
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-black ${
-                            isSelected
-                              ? 'bg-brand-blue text-white'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          T{t.number}
+                      <div className="w-12 h-12 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0 shadow-xs flex items-center justify-center">
+                        <img
+                          src={t.crestUrl}
+                          alt={t.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-xs font-display font-black text-slate-900 leading-tight block">
+                          {t.name}
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400 block mt-0.5">
+                          Turma {t.number}
                         </span>
                       </div>
-
-                      <p className="text-[10px] text-slate-500 leading-tight">
-                        {t.description}
-                      </p>
                     </button>
                   );
                 })}
               </div>
 
               {/* Categoria: Masculino vs Feminino */}
-              <div className="space-y-1.5 pt-1">
+              <div className="space-y-1.5">
                 <label className="text-xs font-bold text-brand-text-primary block">
-                  Categoria Principal do(a) Atleta
+                  Categoria
                 </label>
-                <div className="grid grid-cols-2 gap-3 max-w-sm">
+                <div className="grid grid-cols-2 gap-3 max-w-xs">
                   {(['Masculino', 'Feminino'] as const).map((cat) => (
                     <button
                       key={cat}
@@ -680,57 +658,87 @@ export const RegistrationPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Dados do Atleta */}
-              <div className="border-t border-brand-surface-border pt-4 space-y-4">
+              {/* Dados do Atleta & Criação Automática da Conta */}
+              <div className="border-t border-brand-surface-border pt-5 space-y-4">
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                  2. Dados Pessoais &amp; Conta de Acesso
+                  2. Dados Pessoais &amp; Criar Conta de Login
                 </h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
                     label="Nome Completo *"
-                    placeholder="Ex: Lucas Ferreira Silva"
+                    placeholder="Ex: Lucas Ferreira"
                     value={athleteName}
-                    onChange={(e) => setAthleteName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAthleteName(val);
+                      if (!accountUsername && val.trim()) {
+                        const slug = val
+                          .trim()
+                          .toLowerCase()
+                          .normalize('NFD')
+                          .replace(/[\u0300-\u036f]/g, '')
+                          .replace(/[^a-z0-9]+/g, '.')
+                          .replace(/^\.+|\.+$/g, '');
+                        if (slug) setAccountUsername(slug);
+                      }
+                    }}
                     required
                   />
                   <Input
-                    label="E-mail de Contato (Usado para Login) *"
+                    label="E-mail *"
                     type="email"
-                    placeholder="lucas@aluno.uema.br"
+                    placeholder="lucas@email.com"
                     value={athleteEmail}
                     onChange={(e) => setAthleteEmail(e.target.value)}
                     required
                   />
                   <Input
-                    label="Telefone / WhatsApp *"
+                    label="WhatsApp *"
                     placeholder="(98) 98888-7777"
                     value={athletePhone}
                     onChange={(e) => setAthletePhone(e.target.value)}
                     required
                   />
                   <Input
-                    label="CPF ou Matrícula Universitária *"
+                    label="CPF ou Matrícula *"
                     placeholder="000.000.000-00"
                     value={athleteDocument}
                     onChange={(e) => setAthleteDocument(e.target.value)}
                     required
                   />
                 </div>
+
+                {/* Campos de Usuário e Senha para a Conta */}
+                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input
+                    label="Usuário de Login *"
+                    placeholder="Ex: lucas.ferreira"
+                    value={accountUsername}
+                    onChange={(e) =>
+                      setAccountUsername(
+                        e.target.value.toLowerCase().replace(/\s+/g, '')
+                      )
+                    }
+                    required
+                  />
+                  <Input
+                    label="Crie uma Senha *"
+                    type="password"
+                    placeholder="Mínimo 4 caracteres"
+                    value={accountPassword}
+                    onChange={(e) => setAccountPassword(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
 
-              {/* Perfil Social do Atleta (Foto, Camisa, Posição, Instagram e Modalidades) */}
-              <div className="border-t border-brand-surface-border pt-4 space-y-4">
-                <div>
-                  <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                    3. Seu Perfil na Comunidade IntraMed (Visível para Todos)
-                  </h2>
-                  <p className="text-xs text-brand-text-secondary mt-0.5">
-                    Personalize seu card de atleta para aparecer na listagem da sua turma e nas escalações ao vivo. Você poderá editar tudo depois quando quiser!
-                  </p>
-                </div>
+              {/* Perfil Social do Atleta (Foto, Camisa, Instagram e Modalidades — sem posição) */}
+              <div className="border-t border-brand-surface-border pt-5 space-y-4">
+                <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
+                  3. Perfil do Atleta
+                </h2>
 
-                {/* Upload de Foto + Camisa + Posição + Instagram */}
                 <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
                   <div className="relative shrink-0">
                     <div className="w-20 h-20 rounded-full bg-brand-blue/10 border-2 border-brand-blue/30 flex items-center justify-center overflow-hidden shadow-sm">
@@ -761,19 +769,13 @@ export const RegistrationPage: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input
-                      label="Nº da Camisa"
+                      label="Nº da Camisa (Opcional)"
                       type="number"
                       placeholder="Ex: 10"
                       value={jerseyNumber}
                       onChange={(e) => setJerseyNumber(e.target.value)}
-                    />
-                    <Input
-                      label="Posição / Função"
-                      placeholder="Ex: Ala / Fixo / Goleiro"
-                      value={position}
-                      onChange={(e) => setPosition(e.target.value)}
                     />
                     <Input
                       label="@Instagram (Opcional)"
@@ -784,35 +786,22 @@ export const RegistrationPage: React.FC = () => {
                   </div>
                 </div>
 
-                <Input
-                  label="Frase / Bio Esportiva no Perfil (Opcional)"
-                  placeholder="Ex: Rumo ao título pela Sanguinária! 🔥"
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                />
-
-                {/* Modalidades em que pretende atuar (Passaporte dá direito a todas) */}
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50/50 to-slate-50 border border-blue-200/80 space-y-2.5">
+                {/* Modalidades em que pretende atuar */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2 text-xs font-display font-extrabold text-blue-950">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      <span>
-                        Passaporte Geral: Selecione as Modalidades que você joga ({selectedModalities.length})
-                      </span>
-                    </div>
+                    <span className="text-xs font-display font-extrabold text-slate-900">
+                      Modalidades ({selectedModalities.length})
+                    </span>
                     <button
                       type="button"
                       onClick={() =>
                         setSelectedModalities(OFFICIAL_MODALITIES.map((m) => m.id))
                       }
-                      className="text-[10px] font-bold text-brand-blue underline"
+                      className="text-[11px] font-bold text-brand-blue underline"
                     >
-                      Marcar todas as 10
+                      Marcar todas
                     </button>
                   </div>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">
-                    Sua inscrição dá direito a todas as modalidades sem custo extra. Toque abaixo para destacar no seu perfil quais esportes você vai disputar pela <strong>{selectedTurmaObj.fullName}</strong>:
-                  </p>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {OFFICIAL_MODALITIES.map((mod) => {
                       const isModSelected = selectedModalities.includes(mod.id);
@@ -843,9 +832,9 @@ export const RegistrationPage: React.FC = () => {
               </div>
 
               {/* Seção de Sócio da Atlética */}
-              <div className="border-t border-brand-surface-border pt-4 space-y-3">
+              <div className="border-t border-brand-surface-border pt-5 space-y-3">
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                  4. Condição de Sócio da Atlética Cangaceira
+                  4. Sócio da Atlética Cangaceira
                 </h2>
 
                 <div
@@ -862,34 +851,23 @@ export const RegistrationPage: React.FC = () => {
                     onChange={(e) => setIsSocioClaim(e.target.checked)}
                     className="mt-1 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
                   />
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     <span className="text-sm font-display font-extrabold block">
-                      Solicitar Preço Promocional de Sócio da Atlética Cangaceira
+                      Sou Sócio da Atlética Cangaceira (R$ {activeLot?.priceMember.toFixed(2)})
                     </span>
-                    <p className="text-xs text-brand-text-secondary leading-relaxed">
-                      Marque esta opção se você é associado quite da A.A.A. Cangaceira.
-                      Sua solicitação será analisada manualmente pela diretoria antes de liberar o valor com desconto.
+                    <p className="text-xs text-brand-text-secondary">
+                      Sujeito à validação da diretoria antes da liberação do pagamento com desconto.
                     </p>
                   </div>
                 </div>
 
                 {isSocioClaim && (
-                  <div className="space-y-3 p-4 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs text-amber-900 leading-relaxed">
-                    <div className="flex items-center gap-2 font-bold">
-                      <Info className="w-4 h-4 text-amber-700" />
-                      <span>Regra Fundamental de Elegibilidade</span>
-                    </div>
-                    <p>
-                      A escolha desta opção <strong>não aplica o desconto imediatamente</strong>.
-                      A diretoria da Atlética irá conferir a lista de associados. Assim que aprovada, você receberá a confirmação para efetuar o pagamento de <strong>R$ {activeLot?.priceMember.toFixed(2)}</strong>.
-                    </p>
-                    <Input
-                      label="Nº da Carteirinha ou Comprovante de Matrícula (opcional)"
-                      placeholder="Ex: Matrícula UEMA 2023.2 ou nº de associado"
-                      value={socioDocumentProof}
-                      onChange={(e) => setSocioDocumentProof(e.target.value)}
-                    />
-                  </div>
+                  <Input
+                    label="Matrícula ou Nº de Associado (opcional)"
+                    placeholder="Ex: Matrícula 2023.2"
+                    value={socioDocumentProof}
+                    onChange={(e) => setSocioDocumentProof(e.target.value)}
+                  />
                 )}
               </div>
 
@@ -903,20 +881,16 @@ export const RegistrationPage: React.FC = () => {
                   disabled={isSubmitting}
                 >
                   {isSubmitting
-                    ? 'Criando Inscrição e Perfil Social...'
-                    : `Confirmar Inscrição & Criar Perfil • R$ ${currentDisplayPrice.toFixed(2)}`}
+                    ? 'Criando Conta e Inscrição...'
+                    : `Criar Conta & Confirmar Inscrição • R$ ${currentDisplayPrice.toFixed(2)}`}
                 </Button>
               </div>
             </form>
 
-            {/* Resumo Lateral do Pedido + Prévia do Card Social */}
-            <aside className="lg:col-span-4 space-y-5">
-              {/* Prévia ao vivo do Card na Comunidade */}
-              <div className="bg-white rounded-3xl border border-brand-surface-border p-5 shadow-card space-y-3">
-                <span className="text-[10px] font-display font-extrabold uppercase tracking-wider text-brand-blue block">
-                  Prévia do seu Card na Comunidade
-                </span>
-                <div className="flex items-center gap-3.5">
+            {/* Resumo Lateral Enxuto */}
+            <aside className="lg:col-span-4 space-y-4">
+              <div className="bg-white rounded-3xl border border-brand-surface-border p-5 shadow-card space-y-4">
+                <div className="flex items-center gap-3.5 pb-4 border-b border-brand-surface-border">
                   <div className="w-14 h-14 rounded-full bg-brand-blue/10 border-2 border-brand-blue/30 flex items-center justify-center overflow-hidden shrink-0">
                     {avatarUrl ? (
                       <img
@@ -930,89 +904,61 @@ export const RegistrationPage: React.FC = () => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="px-2 py-0.5 rounded-md bg-brand-blue text-white text-[10px] font-mono font-black">
-                        #{jerseyNumber || '—'}
-                      </span>
+                      {jerseyNumber && (
+                        <span className="px-2 py-0.5 rounded-md bg-brand-blue text-white text-[10px] font-mono font-black">
+                          #{jerseyNumber}
+                        </span>
+                      )}
                       <h4 className="text-sm font-display font-extrabold text-slate-900 truncate">
-                        {athleteName.trim() || 'Seu Nome de Atleta'}
+                        {athleteName.trim() || 'Seu Nome'}
                       </h4>
                     </div>
                     <p className="text-xs font-bold text-brand-blue truncate mt-0.5">
-                      {selectedTurmaObj.fullName}
+                      {selectedTurmaObj.name} • Turma {selectedTurmaObj.number}
                     </p>
-                    <p className="text-[11px] text-slate-500 truncate">
-                      {position.trim() || 'Atleta Oficial'} • {selectedModalities.length} modalidades
-                    </p>
+                    {accountUsername && (
+                      <p className="text-[11px] text-slate-500 truncate">
+                        Login: @{accountUsername}
+                      </p>
+                    )}
                   </div>
                 </div>
-                {bio.trim() && (
-                  <p className="text-xs text-slate-600 italic bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-                    &ldquo;{bio.trim()}&rdquo;
-                  </p>
-                )}
-              </div>
 
-              <div className="bg-white rounded-3xl border border-brand-surface-border p-6 shadow-card space-y-5">
-                <h3 className="text-base font-display font-extrabold text-brand-text-primary uppercase tracking-tight">
-                  Resumo da Inscrição
-                </h3>
-
-                <div className="space-y-3 text-xs divide-y divide-brand-surface-border">
-                  <div className="flex justify-between pt-2">
-                    <span className="text-brand-text-secondary">Competição:</span>
-                    <span className="font-bold text-brand-text-primary">INTRAMED IX (2026)</span>
-                  </div>
-                  <div className="flex justify-between pt-2">
-                    <span className="text-brand-text-secondary">Lote Vigente:</span>
-                    <span className="font-bold text-brand-text-primary">{activeLot?.name}</span>
-                  </div>
-                  <div className="flex justify-between pt-2">
-                    <span className="text-brand-text-secondary">Turma Escolhida:</span>
+                <div className="space-y-2.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-brand-text-secondary">Turma:</span>
                     <span className="font-bold text-brand-text-primary">
-                      {selectedTurmaObj.fullName}
+                      {selectedTurmaObj.name} (T{selectedTurmaObj.number})
                     </span>
                   </div>
-                  <div className="flex justify-between pt-2">
-                    <span className="text-brand-text-secondary">Modalidades:</span>
-                    <span className="font-bold text-emerald-600">
-                      {selectedModalities.length} selecionada(s)
-                    </span>
-                  </div>
-                  <div className="flex justify-between pt-2">
-                    <span className="text-brand-text-secondary">Categoria Principal:</span>
+                  <div className="flex justify-between">
+                    <span className="text-brand-text-secondary">Categoria:</span>
                     <span className="font-bold text-brand-text-primary">{categoryName}</span>
                   </div>
-                  <div className="flex justify-between pt-2">
-                    <span className="text-brand-text-secondary">Condição do Atleta:</span>
+                  <div className="flex justify-between">
+                    <span className="text-brand-text-secondary">Modalidades:</span>
+                    <span className="font-bold text-emerald-600">
+                      {selectedModalities.length} selecionadas
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-brand-text-secondary">Tipo:</span>
                     <span className="font-bold text-brand-text-primary">
-                      {isSocioClaim ? 'Sócio da Atlética (Em análise)' : 'Não Sócio (Integral)'}
+                      {isSocioClaim ? 'Sócio Cangaceira' : 'Não Sócio'}
                     </span>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-brand-surface-muted border border-brand-surface-border text-center space-y-1">
+                <div className="p-4 rounded-2xl bg-brand-surface-muted border border-brand-surface-border text-center space-y-0.5">
                   <span className="text-xs font-semibold text-brand-text-secondary block">
-                    Valor Estimado da Inscrição:
+                    Valor da Inscrição
                   </span>
                   <span className="text-3xl font-display font-extrabold text-brand-blue">
                     R$ {currentDisplayPrice.toFixed(2)}
                   </span>
                   <span className="text-[11px] text-brand-text-muted block">
-                    Pagamento seguro via Mercado Pago (Pix ou Cartão)
+                    Pix ou Cartão via Mercado Pago
                   </span>
-                </div>
-
-                <div className="text-[11px] text-brand-text-secondary space-y-2 leading-relaxed">
-                  <p className="flex items-start gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>
-                      Ao concluir, sua conta de atleta fica salva e você já pode acessar e editar seu perfil de qualquer aparelho.
-                    </span>
-                  </p>
-                  <p className="flex items-start gap-1.5">
-                    <QrCode className="w-4 h-4 text-brand-blue shrink-0 mt-0.5" />
-                    <span>QR Code Pix dinâmico gerado instantaneamente no checkout.</span>
-                  </p>
                 </div>
               </div>
             </aside>
@@ -1107,12 +1053,13 @@ export const RegistrationPage: React.FC = () => {
                         </div>
 
                         <div className="text-xs space-y-1 text-brand-text-secondary bg-slate-50 p-3 rounded-2xl border border-slate-200/70">
+                          {reg.accountUsername && (
+                            <p>
+                              <strong>Usuário:</strong> @{reg.accountUsername}
+                            </p>
+                          )}
                           <p>
-                            <strong>Camisa / Posição:</strong> #{reg.jerseyNumber || '—'} •{' '}
-                            {reg.position || 'Atleta Oficial'}
-                          </p>
-                          <p>
-                            <strong>E-mail da Conta:</strong> {reg.athleteEmail}
+                            <strong>E-mail:</strong> {reg.athleteEmail}
                           </p>
                           <p>
                             <strong>Condição:</strong>{' '}
@@ -1186,19 +1133,14 @@ export const RegistrationPage: React.FC = () => {
             {/* Barra de Busca e Filtro por Turma */}
             <div className="bg-white rounded-3xl border border-brand-surface-border p-4 sm:p-5 shadow-card space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-base sm:text-lg font-display font-extrabold text-slate-900 flex items-center gap-2">
-                    <Users className="w-5 h-5 text-brand-blue" />
-                    <span>Comunidade de Atletas • INTRAMED IX ({visibleAthletes.length})</span>
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Explore os participantes inscritos de todas as 5 turmas, veja as modalidades, siga seus colegas e acesse as fichas completas em tempo real.
-                  </p>
-                </div>
+                <h2 className="text-base sm:text-lg font-display font-extrabold text-slate-900 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-brand-blue" />
+                  <span>Comunidade ({visibleAthletes.length})</span>
+                </h2>
 
                 <div className="w-full sm:w-72">
                   <Input
-                    placeholder="Buscar por nome, posição ou @insta..."
+                    placeholder="Buscar atleta ou @insta..."
                     value={communitySearch}
                     onChange={(e) => setCommunitySearch(e.target.value)}
                     leftIcon={<Search className="w-4 h-4 text-slate-400" />}
@@ -1217,7 +1159,7 @@ export const RegistrationPage: React.FC = () => {
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  Todas as Turmas ({visibleAthletes.length})
+                  Todas ({visibleAthletes.length})
                 </button>
                 {TURMAS_MEDICINA.map((t) => {
                   const count = visibleAthletes.filter((a) => a.teamId === t.teamId).length;
@@ -1239,7 +1181,7 @@ export const RegistrationPage: React.FC = () => {
                         className="w-4 h-4 rounded-full object-cover"
                       />
                       <span>
-                        T{t.number} {t.name} ({count})
+                        {t.name} ({count})
                       </span>
                     </button>
                   );
@@ -1351,20 +1293,16 @@ export const RegistrationPage: React.FC = () => {
                             {ath.name}
                           </h3>
 
-                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                            <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
-                              <Shirt className="w-3.5 h-3.5 text-brand-blue" />
-                              {ath.position || 'Atleta Oficial'}
-                            </span>
-                            {ath.instagramHandle && (
-                              <span className="inline-flex items-center gap-0.5 text-pink-600 font-semibold truncate">
-                                <Instagram className="w-3 h-3" />
+                          {ath.instagramHandle && (
+                            <div className="flex items-center gap-1 text-xs text-pink-600 font-semibold mt-0.5 truncate">
+                              <Instagram className="w-3 h-3" />
+                              <span>
                                 {ath.instagramHandle.startsWith('@')
                                   ? ath.instagramHandle
                                   : `@${ath.instagramHandle}`}
                               </span>
-                            )}
-                          </div>
+                            </div>
+                          )}
 
                           {ath.bio && (
                             <p className="mt-2 text-xs text-slate-600 italic line-clamp-2 bg-slate-50 p-2 rounded-xl border border-slate-100">
