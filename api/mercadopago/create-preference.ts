@@ -3,7 +3,10 @@ import {
   computeAuthorizedServerPrice,
   computeCardFee,
   getCloudStore,
-} from '../_lib/serverStore';
+  parseJsonSafe,
+  parseSafeBody,
+  PRIMARY_GATEWAY_ORIGIN,
+} from '../_lib/serverStore.js';
 
 function isValidEmail(email: string): boolean {
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
@@ -13,7 +16,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With, X-Intramed-Proxy'
+  );
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -23,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Método não permitido. Utilize POST.' });
   }
 
+  const body = parseSafeBody(req.body);
   const {
     registrationId,
     athleteName,
@@ -31,7 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     lotId,
     requestedMemberDiscount,
     memberStatus: clientMemberStatus,
-  } = req.body || {};
+  } = body;
 
   if (!registrationId) {
     return res.status(400).json({
@@ -60,20 +67,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
-  const host = req.headers.host || '';
+  const mpAccessToken = (process.env.MERCADOPAGO_ACCESS_TOKEN || '').trim();
+  const host = String(req.headers.host || '');
+  const isProxied = req.headers['x-intramed-proxy'] === '1';
   const appBaseUrl =
     process.env.APP_BASE_URL ||
-    (host ? `https://${host}` : 'https://intramedix.vercel.app');
+    (host ? `https://${host}` : PRIMARY_GATEWAY_ORIGIN);
 
   if (!mpAccessToken) {
+    if (!host.includes('intramedix.vercel.app') && !isProxied) {
+      try {
+        const proxyRes = await fetch(
+          `${PRIMARY_GATEWAY_ORIGIN}/api/mercadopago/create-preference`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Intramed-Proxy': '1',
+            },
+            body: JSON.stringify(body),
+          }
+        );
+        const { data: proxyData } = await parseJsonSafe(proxyRes);
+        if (proxyData) {
+          return res.status(proxyRes.status).json(proxyData);
+        }
+      } catch (proxyErr) {
+        console.error('[MercadoPago Create Preference Proxy Error]', proxyErr);
+      }
+    }
+
     return res.status(500).json({
       error: 'Credencial MERCADOPAGO_ACCESS_TOKEN não configurada no servidor.',
     });
   }
 
   try {
-    // Cálculo 100% no servidor: base do lote + acréscimo obrigatório de 5% da operadora de cartão (Item 5 da Auditoria)
+    // Cálculo 100% no servidor: base do lote + acréscimo obrigatório de 5% da operadora de cartão
     const basePrice = computeAuthorizedServerPrice(
       String(storedReg?.lotId || lotId || 'lote-1-cangaceira'),
       effectiveMemberStatus,
@@ -84,24 +114,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const resolvedName = String(
       storedReg?.athleteName || athleteName || 'Atleta IntraMed'
     ).trim();
-    const resolvedTurma = String(storedReg?.turmaLabel || turmaLabel || '');
+    const resolvedTurma = String(storedReg?.turmaLabel || turmaLabel || '')
+      .replace(/[^\w\sÀ-ÿ-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
     const items = [
       {
         id: String(registrationId),
-        title: `Intramed Cangaceira — Inscrição ${
-          resolvedTurma ? resolvedTurma + ' • ' : ''
+        title: `Intramed Cangaceira - Inscricao ${
+          resolvedTurma ? resolvedTurma + ' - ' : ''
         }Passaporte (${resolvedName})`,
         description:
-          'Inscrição Oficial INTRAMED IX — Atlética Cangaceira Medicina UEMA',
+          'Inscricao Oficial INTRAMED IX - Atletica Cangaceira Medicina UEMA',
         quantity: 1,
         unit_price: basePrice,
         currency_id: 'BRL',
       },
       {
         id: `${registrationId}-taxa-cartao`,
-        title: 'Intramed Cangaceira — Acréscimo Operadora de Cartão (5%)',
-        description: 'Repasse de taxa administrativa do gateway de cartão',
+        title: 'Intramed Cangaceira - Acrescimo Operadora de Cartao (5%)',
+        description: 'Repasse de taxa administrativa do gateway de cartao',
         quantity: 1,
         unit_price: fee,
         currency_id: 'BRL',
@@ -165,9 +198,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     );
 
-    let data = await mpResponse.json();
+    let { data } = await parseJsonSafe(mpResponse);
 
-    if (!mpResponse.ok && mpResponse.status >= 400 && mpResponse.status < 500) {
+    if (!mpResponse.ok) {
       const fallbackEmail = `inscricao.${String(registrationId).replace(
         /[^a-zA-Z0-9]/g,
         ''
@@ -183,11 +216,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           body: JSON.stringify(buildPreferencePayload(fallbackEmail)),
         }
       );
-      data = await mpResponse.json();
+      const retryParsed = await parseJsonSafe(mpResponse);
+      data = retryParsed.data;
     }
 
-    if (!mpResponse.ok) {
-      return res.status(mpResponse.status).json({
+    if (!mpResponse.ok || !data) {
+      return res.status(mpResponse.status >= 400 ? mpResponse.status : 502).json({
         error: 'Falha ao criar checkout de cartão junto ao Mercado Pago.',
       });
     }

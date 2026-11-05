@@ -4,7 +4,9 @@ import {
   computeAuthorizedServerPrice,
   getCloudStore,
   markRegistrationPaidOnServer,
-} from '../_lib/serverStore';
+  parseJsonSafe,
+  parseSafeBody,
+} from '../_lib/serverStore.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -14,12 +16,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const mpWebhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
   const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
 
-  const { type, action, data, topic } = req.body || {};
+  const body = parseSafeBody(req.body);
+  const { type, action, topic } = body;
+  const data = (body.data as Record<string, unknown> | undefined) || {};
   const queryTopic = String(req.query.topic || req.query.type || '');
   const queryDataId = String(req.query['data.id'] || req.query.id || '').trim();
   const rawPaymentId = String(data?.id || queryDataId || '').trim();
 
-  // Validação Criptográfica HMAC-SHA256 em tempo constante (Item 7 da Auditoria)
+  // Validação Criptográfica HMAC-SHA256 em tempo constante
   const xSignature = String(req.headers['x-signature'] || '');
   const xRequestId = String(req.headers['x-request-id'] || '');
 
@@ -45,7 +49,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(401).json({ error: 'Cabeçalho x-signature malformado.' });
       }
 
-      // Janela de tolerância de timestamp (15 minutos) contra replay attacks
       const tsNum = Number(ts);
       const nowSec = Math.floor(Date.now() / 1000);
       if (
@@ -56,7 +59,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(401).json({ error: 'Timestamp do webhook expirado.' });
       }
 
-      // Mercado Pago assina `data.id` da query string (em minúsculas quando alfanumérico)
       const signedId = (queryDataId || rawPaymentId).toLowerCase();
       const manifest = `id:${signedId};request-id:${xRequestId};ts:${ts};`;
       const computedHash = crypto
@@ -92,8 +94,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       );
 
-      if (mpCheck.ok) {
-        const paymentData = await mpCheck.json();
+      const { data: paymentData } = await parseJsonSafe(mpCheck);
+
+      if (mpCheck.ok && paymentData) {
         const registrationId = String(paymentData.external_reference || '').trim();
         const status = String(paymentData.status || '');
         const amount = Number(paymentData.transaction_amount || 0);

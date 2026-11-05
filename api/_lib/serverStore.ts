@@ -42,6 +42,56 @@ export const OFFICIAL_SERVER_LOTS: Record<
 
 export const CARD_FEE_RATE = 0.05; // 5% repasse operadora de cartão
 
+/**
+ * Faz o parse seguro do body da requisição no Vercel Serverless sem risco de exceção.
+ */
+export function parseSafeBody(body: unknown): Record<string, unknown> {
+  if (!body) return {};
+  if (typeof body === 'object' && !Buffer.isBuffer(body)) {
+    return body as Record<string, unknown>;
+  }
+  if (Buffer.isBuffer(body)) {
+    try {
+      return JSON.parse(body.toString('utf-8')) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  if (typeof body === 'string') {
+    const trimmed = body.trim();
+    if (!trimmed) return {};
+    try {
+      return JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+/**
+ * Interpreta o JSON de uma Response sem lançar SyntaxError ("The string did not match the expected pattern" no Safari/iOS).
+ */
+export async function parseJsonSafe(
+  response: Response
+): Promise<{ data: Record<string, unknown> | null; rawText: string }> {
+  const rawText = await response.text().catch(() => '');
+  if (!rawText || !rawText.trim()) {
+    return { data: null, rawText: '' };
+  }
+  try {
+    const parsed = JSON.parse(rawText);
+    return {
+      data: parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null,
+      rawText,
+    };
+  } catch {
+    return { data: null, rawText };
+  }
+}
+
+export const PRIMARY_GATEWAY_ORIGIN = 'https://intramedix.vercel.app';
+
 export function computeAuthorizedServerPrice(
   lotId?: string,
   memberStatus?: string,

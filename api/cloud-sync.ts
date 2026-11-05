@@ -6,13 +6,14 @@ import {
   getCloudStore,
   hashSecretPin,
   MirrorDocumentToFirestoreRest,
+  parseSafeBody,
   sanitizeMatchForPublic,
   sanitizeRegistrationForPublic,
   saveCloudStore,
   verifyMasterAdminPassword,
   verifySignedOperatorToken,
   computeAuthorizedServerPrice,
-} from './_lib/serverStore';
+} from './_lib/serverStore.js';
 
 const ALLOWED_COLLECTIONS = new Set([
   'registrations',
@@ -275,7 +276,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const body = req.body || {};
+    const body = parseSafeBody(req.body);
     const { action, collectionName, docId, data, batch } = body;
 
     // AÇÃO 1: Autenticação no Servidor para Admin ou Mesário (Itens 4 e 8 da Auditoria)

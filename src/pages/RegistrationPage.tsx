@@ -253,12 +253,95 @@ export const RegistrationPage: React.FC = () => {
     setTimeout(() => setCopiedPix(false), 3000);
   };
 
-  // Helper de requisição de API (usa o servidor do próprio domínio sem proxy inseguro entre domínios)
-  const fetchGatewayApi = async (
+  // Helper resiliente de requisição de API:
+  // 1) Tenta no próprio domínio atual;
+  // 2) Se retornar erro 500+ ou texto não-JSON, faz fallback automático para https://intramedix.vercel.app;
+  // 3) Faz parse seguro do JSON para jamais disparar "The string did not match the expected pattern" no Safari/iOS.
+  const fetchGatewayJson = async (
     path: string,
     options?: RequestInit
-  ): Promise<Response> => {
-    return fetch(path, options);
+  ): Promise<{ ok: boolean; status: number; data: Record<string, any> }> => {
+    const parseRes = async (res: Response) => {
+      const rawText = await res.text().catch(() => '');
+      let parsed: Record<string, any> | null = null;
+      if (rawText && rawText.trim()) {
+        try {
+          const obj = JSON.parse(rawText);
+          if (obj && typeof obj === 'object') {
+            parsed = obj;
+          }
+        } catch {
+          parsed = null;
+        }
+      }
+      return { res, parsed, rawText };
+    };
+
+    try {
+      const first = await parseRes(await fetch(path, options));
+      if (first.parsed && first.res.status < 500) {
+        return {
+          ok: first.res.ok,
+          status: first.res.status,
+          data: first.parsed,
+        };
+      }
+
+      if (
+        typeof window !== 'undefined' &&
+        !window.location.hostname.includes('intramedix.vercel.app') &&
+        !window.location.hostname.includes('localhost')
+      ) {
+        const fallbackRes = await parseRes(
+          await fetch(`https://intramedix.vercel.app${path}`, options)
+        );
+        if (fallbackRes.parsed) {
+          return {
+            ok: fallbackRes.res.ok,
+            status: fallbackRes.res.status,
+            data: fallbackRes.parsed,
+          };
+        }
+      }
+
+      return {
+        ok: first.res.ok,
+        status: first.res.status,
+        data: first.parsed || {
+          error:
+            'O servidor de pagamentos está temporariamente indisponível. Aguarde alguns segundos e toque em Tentar Novamente.',
+        },
+      };
+    } catch {
+      if (
+        typeof window !== 'undefined' &&
+        !window.location.hostname.includes('intramedix.vercel.app') &&
+        !window.location.hostname.includes('localhost')
+      ) {
+        try {
+          const fallbackRes = await parseRes(
+            await fetch(`https://intramedix.vercel.app${path}`, options)
+          );
+          if (fallbackRes.parsed) {
+            return {
+              ok: fallbackRes.res.ok,
+              status: fallbackRes.res.status,
+              data: fallbackRes.parsed,
+            };
+          }
+        } catch {
+          // Ignore
+        }
+      }
+      return {
+        ok: false,
+        status: 503,
+        data: {
+          error:
+            'Falha de conexão com o gateway de pagamento. Verifique sua internet e tente novamente.',
+        },
+      };
+    }
   };
 
   // Retorno automático do Checkout Pro (Cartão de Crédito): verifica payment_id / collection_id com o servidor
@@ -271,14 +354,13 @@ export const RegistrationPage: React.FC = () => {
 
     if (statusParam === 'sucesso' && regParam && mpPaymentId && /^\d+$/.test(mpPaymentId)) {
       let isMounted = true;
-      fetchGatewayApi(
+      fetchGatewayJson(
         `/api/mercadopago/check-payment?paymentId=${encodeURIComponent(
           mpPaymentId
         )}&registrationId=${encodeURIComponent(regParam)}`
       )
-        .then((res) => (res.ok ? res.json() : null))
-        .then(async (data) => {
-          if (!isMounted || !data) return;
+        .then(async ({ ok, data }) => {
+          if (!isMounted || !ok || !data) return;
           if (data.isApproved) {
             await simulatePaymentConfirmation(
               regParam,
@@ -309,7 +391,7 @@ export const RegistrationPage: React.FC = () => {
     setPixError(null);
     setPaymentApprovedSuccess(false);
 
-    fetchGatewayApi('/api/mercadopago/create-pix', {
+    fetchGatewayJson('/api/mercadopago/create-pix', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -323,10 +405,11 @@ export const RegistrationPage: React.FC = () => {
         memberStatus: payingRegistration.memberStatus,
       }),
     })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Erro ao gerar Pix no Mercado Pago.');
+      .then(({ ok, data }) => {
+        if (!ok || !data?.qrCode) {
+          throw new Error(
+            data?.error || 'Não foi possível gerar o QR Code Pix no momento.'
+          );
         }
         return data;
       })
@@ -344,7 +427,12 @@ export const RegistrationPage: React.FC = () => {
       .catch((err) => {
         if (!isMounted) return;
         console.error('Pix generation error:', err);
-        setPixError(err.message || 'Falha ao gerar QR Code Pix.');
+        const rawMsg = err instanceof Error ? err.message : '';
+        const friendlyMsg =
+          rawMsg.includes('expected pattern') || rawMsg.includes('Unexpected token')
+            ? 'Erro temporário de comunicação com o servidor do Pix. Toque em Tentar Novamente.'
+            : rawMsg || 'Falha ao gerar QR Code Pix.';
+        setPixError(friendlyMsg);
       })
       .finally(() => {
         if (isMounted) setPixLoading(false);
@@ -361,13 +449,12 @@ export const RegistrationPage: React.FC = () => {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetchGatewayApi(
+        const { ok, data } = await fetchGatewayJson(
           `/api/mercadopago/check-payment?paymentId=${encodeURIComponent(
             String(pixData.paymentId)
           )}&registrationId=${encodeURIComponent(payingRegistration.id)}`
         );
-        if (!res.ok) return;
-        const data = await res.json();
+        if (!ok || !data) return;
         if (data.isApproved) {
           setPaymentApprovedSuccess(true);
           await simulatePaymentConfirmation(
@@ -393,13 +480,12 @@ export const RegistrationPage: React.FC = () => {
     if (!pixData?.paymentId || !payingRegistration) return;
     setIsCheckingPayment(true);
     try {
-      const res = await fetchGatewayApi(
+      const { ok, data } = await fetchGatewayJson(
         `/api/mercadopago/check-payment?paymentId=${encodeURIComponent(
           String(pixData.paymentId)
         )}&registrationId=${encodeURIComponent(payingRegistration.id)}`
       );
-      const data = await res.json();
-      if (data.isApproved) {
+      if (ok && data?.isApproved) {
         setPaymentApprovedSuccess(true);
         await simulatePaymentConfirmation(
           payingRegistration.id,
@@ -433,26 +519,28 @@ export const RegistrationPage: React.FC = () => {
     if (!payingRegistration) return;
     setIsCreatingCardPreference(true);
     try {
-      const res = await fetchGatewayApi('/api/mercadopago/create-preference', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          registrationId: payingRegistration.id,
-          lotId: payingRegistration.lotId,
-          athleteName: payingRegistration.athleteName,
-          athleteEmail: payingRegistration.athleteEmail,
-          athleteDocument: payingRegistration.athleteDocument,
-          turmaLabel: payingRegistration.turmaLabel,
-          requestedMemberDiscount: payingRegistration.requestedMemberDiscount,
-          memberStatus: payingRegistration.memberStatus,
-          isCreditCard: true,
-        }),
-      });
+      const { ok, data } = await fetchGatewayJson(
+        '/api/mercadopago/create-preference',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            registrationId: payingRegistration.id,
+            lotId: payingRegistration.lotId,
+            athleteName: payingRegistration.athleteName,
+            athleteEmail: payingRegistration.athleteEmail,
+            athleteDocument: payingRegistration.athleteDocument,
+            turmaLabel: payingRegistration.turmaLabel,
+            requestedMemberDiscount: payingRegistration.requestedMemberDiscount,
+            memberStatus: payingRegistration.memberStatus,
+            isCreditCard: true,
+          }),
+        }
+      );
 
-      const data = await res.json();
-      if (!res.ok || !data.initPoint) {
+      if (!ok || !data?.initPoint) {
         throw new Error(
-          data.error || 'Erro ao gerar checkout do cartão no Mercado Pago.'
+          data?.error || 'Erro ao gerar checkout do cartão no Mercado Pago.'
         );
       }
 

@@ -3,13 +3,18 @@ import {
   computeAuthorizedServerPrice,
   getCloudStore,
   markRegistrationPaidOnServer,
-} from '../_lib/serverStore';
+  parseJsonSafe,
+  PRIMARY_GATEWAY_ORIGIN,
+} from '../_lib/serverStore.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Intramed-Proxy'
+  );
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -24,13 +29,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ).trim();
   const registrationId = String(req.query.registrationId || req.query.reg || '').trim();
 
-  // Validação estrita do paymentId antes de interpolar na URL (Item 18 e 26 da Auditoria)
+  // Validação estrita do paymentId antes de interpolar na URL
   if (!rawPaymentId || !/^\d{5,25}$/.test(rawPaymentId)) {
     return res.status(400).json({ error: 'Identificador de pagamento inválido.' });
   }
 
-  const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const mpAccessToken = (process.env.MERCADOPAGO_ACCESS_TOKEN || '').trim();
+  const host = String(req.headers.host || '');
+  const isProxied = req.headers['x-intramed-proxy'] === '1';
+
   if (!mpAccessToken) {
+    if (!host.includes('intramedix.vercel.app') && !isProxied) {
+      try {
+        const proxyUrl = `${PRIMARY_GATEWAY_ORIGIN}/api/mercadopago/check-payment?paymentId=${encodeURIComponent(
+          rawPaymentId
+        )}&registrationId=${encodeURIComponent(registrationId)}`;
+        const proxyRes = await fetch(proxyUrl, {
+          headers: { 'X-Intramed-Proxy': '1' },
+        });
+        const { data: proxyData } = await parseJsonSafe(proxyRes);
+        if (proxyData) {
+          return res.status(proxyRes.status).json(proxyData);
+        }
+      } catch (proxyErr) {
+        console.error('[Check Payment Proxy Error]', proxyErr);
+      }
+    }
+
     return res.status(500).json({
       error: 'Configuração de pagamento indisponível no servidor.',
     });
@@ -46,18 +71,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     );
 
-    if (!mpCheck.ok) {
-      return res.status(mpCheck.status).json({
+    const { data: paymentData } = await parseJsonSafe(mpCheck);
+
+    if (!mpCheck.ok || !paymentData) {
+      return res.status(mpCheck.status >= 400 ? mpCheck.status : 502).json({
         error: 'Não foi possível consultar o pagamento no Mercado Pago.',
       });
     }
 
-    const paymentData = await mpCheck.json();
     const extRef = String(paymentData.external_reference || '').trim();
     const txAmount = Number(paymentData.transaction_amount || 0);
     const status = String(paymentData.status || '');
 
-    // Se o cliente informou registrationId, confere obrigatoriamente se pertence àquela inscrição (Item 6 da Auditoria)
+    // Se o cliente informou registrationId, confere obrigatoriamente se pertence àquela inscrição
     if (registrationId && extRef && extRef !== registrationId) {
       return res.status(403).json({
         error: 'Este pagamento não pertence à inscrição informada.',
