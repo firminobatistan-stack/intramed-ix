@@ -356,12 +356,20 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
           const hasAdminSession =
             typeof window !== 'undefined' &&
-            sessionStorage.getItem('intramed_admin_session') === 'true';
+            (sessionStorage.getItem('intramed_admin_session') === 'true' ||
+              sessionStorage.getItem('intramed_admin_session') === 'restricted_first_access');
 
           let resolvedUser: UserProfile | null = null;
           if (parsed.currentUser && parsed.currentUser.role === 'atleta') {
             resolvedUser = parsed.currentUser;
           } else if (hasAdminSession && parsed.currentUser) {
+            resolvedUser = parsed.currentUser;
+          } else if (
+            parsed.currentUser &&
+            ((parsed.currentUser.role as string) === 'moderador_master' ||
+              parsed.currentUser.role === 'moderador' ||
+              parsed.currentUser.role === 'administrador')
+          ) {
             resolvedUser = parsed.currentUser;
           }
 
@@ -600,7 +608,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     return (
       user.role === 'administrador' ||
       user.role === 'organizacao' ||
-      user.role === 'moderador'
+      user.role === 'moderador' ||
+      (user.role as string) === 'moderador_master'
     );
   };
 
@@ -2626,7 +2635,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         user &&
         (user.role === 'administrador' ||
           user.role === 'organizacao' ||
-          user.role === 'moderador')
+          user.role === 'moderador' ||
+          (user.role as string) === 'moderador_master' ||
+          user.role === 'mesario')
       ) {
         sessionStorage.setItem('intramed_admin_session', 'true');
       } else {
@@ -2642,7 +2653,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         user &&
         (user.role === 'administrador' ||
           user.role === 'organizacao' ||
-          user.role === 'moderador')
+          user.role === 'moderador' ||
+          (user.role as string) === 'moderador_master')
           ? prev.isTestMode
           : false,
     }));

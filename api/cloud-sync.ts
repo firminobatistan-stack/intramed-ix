@@ -662,6 +662,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         token: newToken,
         message: 'Senha atualizada com sucesso!',
         mustChangePassword: false,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          organization: user.organization,
+          mustChangePassword: false,
+        },
       });
     }
 

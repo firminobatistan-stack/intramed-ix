@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Lock, Eye, EyeOff, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Lock, Eye, EyeOff, AlertTriangle, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { BrandMark } from '../components/layout/BrandMark';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
@@ -13,6 +13,12 @@ import {
 export const FirstAccessPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, setCurrentUser } = useCompetitionStore();
+
+  React.useEffect(() => {
+    if (currentUser && currentUser.mustChangePassword === false) {
+      navigate('/admin', { replace: true });
+    }
+  }, [currentUser, navigate]);
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -79,12 +85,20 @@ export const FirstAccessPage: React.FC = () => {
         sessionStorage.setItem('intramed_admin_session', 'true');
       }
 
-      if (currentUser) {
-        setCurrentUser({
-          ...currentUser,
-          mustChangePassword: false,
-        });
-      }
+      const masterUserObj = {
+        id: data.user?.id || currentUser?.id || 'usr_master_cangaceira',
+        name: data.user?.name || currentUser?.name || 'Atlética Cangaceira',
+        email: data.user?.email || currentUser?.email || 'cangaceira@uema.com',
+        avatarUrl: '/assets/atletica/logo.png',
+        teamId: null,
+        teamName: data.user?.organization || 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+        modalityIds: [],
+        role: ((data.user?.role as string) || 'moderador_master') as any,
+        linkedAthleteId: null,
+        mustChangePassword: false,
+      };
+
+      setCurrentUser(masterUserObj);
 
       setSuccessMessage('Senha atualizada com sucesso! Redirecionando para o painel administrativo...');
       setTimeout(() => {
@@ -98,6 +112,17 @@ export const FirstAccessPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-brand-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md px-4 mb-4">
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Voltar ao início do site</span>
+        </button>
+      </div>
+
       <div className="sm:mx-auto sm:w-full sm:max-w-md px-4">
         <div className="flex justify-center mb-6">
           <BrandMark size="lg" />
