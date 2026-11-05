@@ -41,11 +41,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const host = req.headers.host || '';
   const appBaseUrl =
     process.env.APP_BASE_URL ||
-    (req.headers.host ? `https://${req.headers.host}` : 'https://intramedix.vercel.app');
+    (host ? `https://${host}` : 'https://intramedix.vercel.app');
 
   if (!mpAccessToken) {
+    // Se a requisição vier do domínio com hífen (intramed-ix.vercel.app),
+    // encaminha com segurança para a instância principal (intramedix.vercel.app) onde o token está configurado
+    if (!host.includes('intramedix.vercel.app')) {
+      try {
+        const proxyRes = await fetch('https://intramedix.vercel.app/api/mercadopago/create-pix', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req.body || {}),
+        });
+        const proxyData = await proxyRes.json();
+        return res.status(proxyRes.status).json(proxyData);
+      } catch (proxyErr) {
+        console.error('[MercadoPago Proxy Fallback Error]', proxyErr);
+      }
+    }
+
     return res.status(500).json({
       error: 'Credencial MERCADOPAGO_ACCESS_TOKEN não configurada no servidor.',
     });
@@ -96,10 +113,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let data = await mpResponse.json();
 
-    // Se o Mercado Pago recusar por conflito de e-mail (ex: titular testando com o próprio e-mail da conta recebedora)
-    // ou restrição de dados do pagador, executa fallback imediato com e-mail institucional de checkout
+    // Se o Mercado Pago recusar por conflito de e-mail ou restrição do pagador, executa fallback imediato
     if (!mpResponse.ok) {
-      console.warn('[MercadoPago Pix Retry] Primeira tentativa retornou erro, aplicando fallback seguro:', data);
+      console.warn('[MercadoPago Pix Retry] Aplicando fallback seguro:', data);
       const fallbackEmail = `inscricao.${Date.now()}@atleticacangaceira.com.br`;
       mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
         method: 'POST',

@@ -17,8 +17,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const host = req.headers.host || '';
 
   if (!mpAccessToken) {
+    if (!host.includes('intramedix.vercel.app')) {
+      try {
+        const proxyRes = await fetch(
+          `https://intramedix.vercel.app/api/mercadopago/check-payment?paymentId=${encodeURIComponent(paymentId)}`
+        );
+        const proxyData = await proxyRes.json();
+        return res.status(proxyRes.status).json(proxyData);
+      } catch (proxyErr) {
+        console.error('[Check Payment Proxy Error]', proxyErr);
+      }
+    }
+
     return res.status(500).json({
       error: 'MERCADOPAGO_ACCESS_TOKEN não configurado.',
     });

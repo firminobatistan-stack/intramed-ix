@@ -35,7 +35,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // Regra Fundamental de Segurança: Se for sócio, não pode gerar checkout se estiver pendente
   if (memberStatus === 'pendente') {
     return res.status(403).json({
       error:
@@ -44,11 +43,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const host = req.headers.host || '';
   const appBaseUrl =
     process.env.APP_BASE_URL ||
-    (req.headers.host ? `https://${req.headers.host}` : 'https://intramedix.vercel.app');
+    (host ? `https://${host}` : 'https://intramedix.vercel.app');
 
   if (!mpAccessToken) {
+    if (!host.includes('intramedix.vercel.app')) {
+      try {
+        const proxyRes = await fetch('https://intramedix.vercel.app/api/mercadopago/create-preference', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(req.body || {}),
+        });
+        const proxyData = await proxyRes.json();
+        return res.status(proxyRes.status).json(proxyData);
+      } catch (proxyErr) {
+        console.error('[MercadoPago Preference Proxy Fallback Error]', proxyErr);
+      }
+    }
+
     return res.status(500).json({
       error: 'Credencial MERCADOPAGO_ACCESS_TOKEN não configurada no servidor.',
     });

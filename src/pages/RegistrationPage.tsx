@@ -132,6 +132,16 @@ export const RegistrationPage: React.FC = () => {
     setTimeout(() => setCopiedPix(false), 3000);
   };
 
+  // Helper de requisição resiliente: tenta o domínio atual e, caso esteja em domínio secundário sem token,
+  // redireciona de forma transparente para o servidor principal (intramedix.vercel.app)
+  const fetchGatewayApi = async (path: string, options?: RequestInit): Promise<Response> => {
+    const localRes = await fetch(path, options).catch(() => null);
+    if (localRes && localRes.status !== 500 && localRes.status !== 404) {
+      return localRes;
+    }
+    return fetch(`https://intramedix.vercel.app${path}`, options);
+  };
+
   // Efeito para gerar o Pix Oficial via API do Mercado Pago
   useEffect(() => {
     if (!payingRegistration || paymentMethod !== 'pix') {
@@ -146,7 +156,7 @@ export const RegistrationPage: React.FC = () => {
     setPixError(null);
     setPaymentApprovedSuccess(false);
 
-    fetch('/api/mercadopago/create-pix', {
+    fetchGatewayApi('/api/mercadopago/create-pix', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -197,7 +207,7 @@ export const RegistrationPage: React.FC = () => {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/mercadopago/check-payment?paymentId=${pixData.paymentId}`);
+        const res = await fetchGatewayApi(`/api/mercadopago/check-payment?paymentId=${pixData.paymentId}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.isApproved) {
@@ -217,7 +227,7 @@ export const RegistrationPage: React.FC = () => {
     if (!pixData?.paymentId || !payingRegistration) return;
     setIsCheckingPayment(true);
     try {
-      const res = await fetch(`/api/mercadopago/check-payment?paymentId=${pixData.paymentId}`);
+      const res = await fetchGatewayApi(`/api/mercadopago/check-payment?paymentId=${pixData.paymentId}`);
       const data = await res.json();
       if (data.isApproved) {
         setPaymentApprovedSuccess(true);
@@ -247,7 +257,7 @@ export const RegistrationPage: React.FC = () => {
     if (!payingRegistration) return;
     setIsCreatingCardPreference(true);
     try {
-      const res = await fetch('/api/mercadopago/create-preference', {
+      const res = await fetchGatewayApi('/api/mercadopago/create-preference', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
