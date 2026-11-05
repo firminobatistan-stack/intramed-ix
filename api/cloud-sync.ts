@@ -1,18 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
+  appendServerSyncLog,
   CloudCollectionMap,
+  computeAuthorizedServerPrice,
   createSignedOperatorToken,
+  ensureCloudStoreHydrated,
   extractBearerOrHeaderToken,
   getCloudStore,
+  handleNonApprovedPaymentStatusOnServer,
   hashSecretPin,
+  markRegistrationPaidOnServer,
   MirrorDocumentToFirestoreRest,
+  parseJsonSafe,
   parseSafeBody,
   sanitizeMatchForPublic,
   sanitizeRegistrationForPublic,
   saveCloudStore,
   verifyMasterAdminPassword,
   verifySignedOperatorToken,
-  computeAuthorizedServerPrice,
 } from './_lib/serverStore.js';
 
 const ALLOWED_COLLECTIONS = new Set([
@@ -262,7 +267,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  const store = getCloudStore();
+  const store = await ensureCloudStoreHydrated();
   const rawToken = extractBearerOrHeaderToken(req.headers as Record<string, unknown>);
   const verifiedToken = verifySignedOperatorToken(rawToken);
   const isAdminRequest = verifiedToken?.role === 'admin';
@@ -306,6 +311,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       teams: Object.values(store.teams),
       matches: publicMatches,
       match_sheets: Object.values(store.match_sheets),
+      syncLogs: isAdminRequest ? store.sync_logs || [] : [],
     });
   }
 
@@ -480,6 +486,119 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // AÇÃO 2C: Reconciliação Geral de Pagamentos Pendentes no Mercado Pago (Restrito a Admin)
+    if (action === 'reconcile_pending_payments') {
+      if (!isAdminRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas administradores podem acionar a reconciliação com o Mercado Pago.',
+        });
+      }
+
+      const mpAccessToken = (process.env.MERCADOPAGO_ACCESS_TOKEN || '').trim();
+      if (!mpAccessToken) {
+        return res.status(500).json({
+          ok: false,
+          error: 'Credencial MERCADOPAGO_ACCESS_TOKEN não disponível nesta instância.',
+        });
+      }
+
+      const pendingRegs = Object.values(store.registrations).filter(
+        (r) => r.paymentStatus !== 'pago'
+      );
+
+      let reconciledCount = 0;
+      const checkedDetails: Array<{ id: string; status: string; paymentId?: string }> = [];
+
+      for (const reg of pendingRegs) {
+        const regId = String(reg.id || '');
+        const existingPaymentId = String(reg.mpPaymentId || '').trim();
+
+        try {
+          let paymentData: Record<string, unknown> | null = null;
+          if (existingPaymentId && /^\d{5,25}$/.test(existingPaymentId)) {
+            const checkRes = await fetch(
+              `https://api.mercadopago.com/v1/payments/${encodeURIComponent(existingPaymentId)}`,
+              { headers: { Authorization: `Bearer ${mpAccessToken}` } }
+            );
+            const parsed = await parseJsonSafe(checkRes);
+            paymentData = parsed.data;
+          } else if (regId) {
+            const searchRes = await fetch(
+              `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(
+                regId
+              )}&sort=date_created&criteria=desc&limit=1`,
+              { headers: { Authorization: `Bearer ${mpAccessToken}` } }
+            );
+            const searchParsed = await parseJsonSafe(searchRes);
+            const results = searchParsed.data?.results as Array<Record<string, unknown>> | undefined;
+            if (Array.isArray(results) && results.length > 0) {
+              paymentData = results[0];
+            }
+          }
+
+          if (paymentData) {
+            const status = String(paymentData.status || '');
+            const txAmount = Number(paymentData.transaction_amount || 0);
+            const pId = String(paymentData.id || existingPaymentId);
+
+            if (status === 'approved') {
+              const expectedMin = computeAuthorizedServerPrice(
+                String(reg.lotId || 'lote-1-cangaceira'),
+                String(reg.memberStatus || 'nao_solicitado'),
+                Boolean(reg.requestedMemberDiscount)
+              );
+              if (txAmount + 0.01 >= expectedMin) {
+                const method: 'pix' | 'credit_card' =
+                  paymentData.payment_type_id === 'credit_card' ||
+                  paymentData.payment_method_id !== 'pix'
+                    ? 'credit_card'
+                    : 'pix';
+
+                await markRegistrationPaidOnServer({
+                  registrationId: regId,
+                  mpPaymentId: pId,
+                  paymentMethod: method,
+                  paidAmount: txAmount,
+                });
+                reconciledCount++;
+                checkedDetails.push({ id: regId, status: 'approved', paymentId: pId });
+              }
+            } else if (
+              status === 'refunded' ||
+              status === 'charged_back' ||
+              status === 'cancelled' ||
+              status === 'rejected'
+            ) {
+              await handleNonApprovedPaymentStatusOnServer({
+                registrationId: regId,
+                mpPaymentId: pId,
+                mpStatus: status,
+                statusDetail: String(paymentData.status_detail || ''),
+              });
+              checkedDetails.push({ id: regId, status, paymentId: pId });
+            }
+          }
+        } catch {
+          // Continua para o próximo registro
+        }
+      }
+
+      appendServerSyncLog({
+        category: 'payment_reconcile',
+        level: 'info',
+        message: `Reconciliação manual concluída: ${reconciledCount} pagamentos aprovados de ${pendingRegs.length} verificados`,
+        details: { pendingTotal: pendingRegs.length, reconciledCount, checkedDetails },
+      });
+
+      return res.status(200).json({
+        ok: true,
+        checkedTotal: pendingRegs.length,
+        reconciledCount,
+        details: checkedDetails,
+      });
+    }
+
     // AÇÃO 3: Sincronização em Lote (Batch)
     if (Array.isArray(batch)) {
       for (const item of batch) {
@@ -497,6 +616,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           if (check.allowed) {
             store[targetCol][id] = check.sanitizedData;
+            void MirrorDocumentToFirestoreRest(col, id, check.sanitizedData);
             if (col === 'matches' && typeof payload.tableOfficialPassword === 'string' && payload.tableOfficialPassword.trim()) {
               const cleanPin = payload.tableOfficialPassword.trim().toUpperCase();
               store.match_secrets[id] = {

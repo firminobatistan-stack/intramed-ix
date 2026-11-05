@@ -51,6 +51,11 @@ import {
   isFoulEventType,
   recomputeMatchAndSheetFromEvents,
 } from '../utils/statsEngine';
+import {
+  enqueueOfflineMutation,
+  flushOfflineQueue,
+  getPendingQueueCount,
+} from '../utils/offlineSyncQueue';
 
 interface NewEventPayload {
   type: MatchEvent['type'];
@@ -246,6 +251,15 @@ interface CompetitionStoreContextValue {
     venue?: string;
     tableOfficialPassword?: string;
   }) => Match | null;
+  updateMatchSchedule: (
+    matchId: string,
+    params: {
+      scheduledDate?: string;
+      scheduledTime?: string;
+      venue?: string;
+      status?: Match['status'];
+    }
+  ) => void;
 }
 
 const STORAGE_KEY_STATE = 'intramed_ix_live_engine_v3';
@@ -418,14 +432,165 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   const isApplyingRemoteUpdate = useRef(false);
   const lastCloudUpdatedAtRef = useRef<string>('');
 
-  // Fila de sincronização fora do setState para eliminar efeitos colaterais duplicados (Item 14 da Auditoria)
-  const syncQueueRef = useRef<
-    Array<{ collectionName: string; docId: string; data: unknown }>
-  >([]);
+  const fetchCloudSnapshot = useCallback(async () => {
+    try {
+      const headers: Record<string, string> = {};
+      const opToken = getStoredOperatorToken();
+      if (opToken) {
+        headers['Authorization'] = `Bearer ${opToken}`;
+      }
+      const sinceQuery = lastCloudUpdatedAtRef.current
+        ? `?since=${encodeURIComponent(lastCloudUpdatedAtRef.current)}`
+        : '';
+      const res = await fetch(`/api/cloud-sync${sinceQuery}`, { headers });
+      if (!res || !res.ok) return;
+      const payload = await res.json();
+      if (!payload || !payload.success || payload.notModified) return;
+
+      if (payload.updatedAtIso) {
+        lastCloudUpdatedAtRef.current = payload.updatedAtIso;
+      }
+
+      // Dispara evento customizado para o RegistrationStoreContext aproveitar o mesmo payload sem fazer um 2º polling!
+      if (Array.isArray(payload.registrations)) {
+        window.dispatchEvent(
+          new CustomEvent('intramed-cloud-registrations', {
+            detail: payload.registrations,
+          })
+        );
+      }
+
+      setState((prev) => {
+        let changed = false;
+
+        let nextAthletes = prev.officialAthletes;
+        if (Array.isArray(payload.athletes) && payload.athletes.length > 0) {
+          const byId = new Map<string, Athlete>();
+          for (const a of prev.officialAthletes) byId.set(a.id, a);
+          for (const r of payload.athletes as Athlete[]) {
+            if (r && r.id && !r.isTestOnly) {
+              const ex = byId.get(r.id);
+              if (
+                !ex ||
+                ex.name !== r.name ||
+                ex.avatarUrl !== r.avatarUrl ||
+                ex.jerseyNumber !== r.jerseyNumber ||
+                ex.position !== r.position ||
+                ex.paymentStatus !== r.paymentStatus ||
+                ex.memberStatus !== r.memberStatus
+              ) {
+                byId.set(r.id, ex ? { ...ex, ...r } : r);
+                changed = true;
+              }
+            }
+          }
+          if (changed) {
+            nextAthletes = Array.from(byId.values());
+          }
+        }
+
+        let nextTeams = prev.officialTeams;
+        if (Array.isArray(payload.teams) && payload.teams.length > 0) {
+          const byId = new Map<string, Team>();
+          for (const t of prev.officialTeams) byId.set(t.id, t);
+          let teamChanged = false;
+          for (const rt of payload.teams as Team[]) {
+            if (rt && rt.id && !rt.isTestOnly) {
+              const ex = byId.get(rt.id);
+              if (!ex || ex.crestUrl !== rt.crestUrl || ex.name !== rt.name) {
+                byId.set(rt.id, ex ? { ...ex, ...rt } : rt);
+                teamChanged = true;
+                changed = true;
+              }
+            }
+          }
+          if (teamChanged) {
+            nextTeams = Array.from(byId.values());
+          }
+        }
+
+        let nextMatches = prev.officialMatches;
+        if (Array.isArray(payload.matches) && payload.matches.length > 0) {
+          const byId = new Map<string, Match>();
+          for (const m of prev.officialMatches) byId.set(m.id, m);
+          let matchChanged = false;
+          for (const rm of payload.matches as Match[]) {
+            if (rm && rm.id && !rm.isTestData) {
+              const ex = byId.get(rm.id);
+              const exRev = ex?.revision ?? 0;
+              const rmRev = rm.revision ?? 0;
+              // Só aceita o remoto se a revisão for maior ou se mudou status/placar sem regredir revisão
+              if (
+                !ex ||
+                rmRev > exRev ||
+                (rmRev === exRev &&
+                  (ex.status !== rm.status ||
+                    ex.homeTeam?.score !== rm.homeTeam?.score ||
+                    ex.awayTeam?.score !== rm.awayTeam?.score))
+              ) {
+                byId.set(rm.id, ex ? { ...ex, ...rm, tableOfficialPassword: rm.tableOfficialPassword ?? ex.tableOfficialPassword } : rm);
+                matchChanged = true;
+                changed = true;
+              }
+            }
+          }
+          if (matchChanged) {
+            nextMatches = Array.from(byId.values());
+          }
+        }
+
+        let nextSheets = prev.officialSheets;
+        if (Array.isArray(payload.match_sheets) && payload.match_sheets.length > 0) {
+          let sheetChanged = false;
+          const copySheets = { ...prev.officialSheets };
+          for (const rs of payload.match_sheets as MatchSheet[]) {
+            if (rs && rs.matchId && !rs.isTestMode) {
+              const ex = copySheets[rs.matchId];
+              const exRev = ex?.revision ?? 0;
+              const rsRev = rs.revision ?? 0;
+              const isStrictlyNewerTime =
+                !ex ||
+                (rs.lastUpdatedIso &&
+                  ex.lastUpdatedIso &&
+                  new Date(rs.lastUpdatedIso).getTime() >
+                    new Date(ex.lastUpdatedIso).getTime());
+
+              // Correção crítica Item 10 da Auditoria: usa `>` em vez de `!==` para jamais substituir súmula local mais nova por snapshot antigo
+              if (
+                !ex ||
+                rsRev > exRev ||
+                (rsRev >= exRev && isStrictlyNewerTime && !ex.timer.isRunning)
+              ) {
+                copySheets[rs.matchId] = rs;
+                sheetChanged = true;
+                changed = true;
+              }
+            }
+          }
+          if (sheetChanged) {
+            nextSheets = copySheets;
+          }
+        }
+
+        if (!changed) return prev;
+
+        isApplyingRemoteUpdate.current = true;
+        return {
+          ...prev,
+          officialAthletes: nextAthletes,
+          officialTeams: nextTeams,
+          officialMatches: nextMatches,
+          officialSheets: nextSheets,
+        };
+      });
+    } catch {
+      // Silencioso
+    }
+  }, []);
 
   const enqueueCloudSync = useCallback(
     (collectionName: string, docId: string, data: unknown) => {
-      syncQueueRef.current.push({ collectionName, docId, data });
+      enqueueOfflineMutation(collectionName as any, docId, data);
     },
     []
   );
@@ -438,43 +603,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       user.role === 'moderador'
     );
   };
-
-  const syncDocToFirestore = useCallback(
-    (collectionName: string, docId: string, data: unknown) => {
-      try {
-        const cleanData = JSON.parse(JSON.stringify(data));
-        setDoc(doc(db, collectionName, docId), cleanData, { merge: true }).catch(
-          () => {}
-        );
-        if (typeof window !== 'undefined') {
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-          };
-          const opToken = getStoredOperatorToken();
-          if (opToken) {
-            headers['Authorization'] = `Bearer ${opToken}`;
-          }
-          fetch('/api/cloud-sync', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ collectionName, docId, data: cleanData }),
-          }).catch(() => {});
-        }
-      } catch {
-        // Silencioso
-      }
-    },
-    []
-  );
-
-  // Processa a fila de sincronização fora do setState
-  useEffect(() => {
-    if (syncQueueRef.current.length === 0) return;
-    const items = syncQueueRef.current.splice(0, syncQueueRef.current.length);
-    for (const item of items) {
-      syncDocToFirestore(item.collectionName, item.docId, item.data);
-    }
-  });
 
   // Sincronização entre abas do mesmo navegador
   useEffect(() => {
@@ -512,19 +640,35 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
     const handleOnline = () => {
       setIsOnline(true);
-      setState((prev) => ({ ...prev, pendingSyncCount: 0 }));
+      void flushOfflineQueue().then((res) => {
+        setState((prev) => ({ ...prev, pendingSyncCount: res.remainingCount }));
+      });
+      // Sincroniza imediatamente com a nuvem ao reconectar
+      fetchCloudSnapshot();
     };
     const handleOffline = () => setIsOnline(false);
+
+    const handleQueueChanged = (ev: Event) => {
+      const customEv = ev as CustomEvent<{ count: number }>;
+      if (customEv.detail && typeof customEv.detail.count === 'number') {
+        setState((prev) => ({ ...prev, pendingSyncCount: customEv.detail.count }));
+      }
+    };
 
     window.addEventListener('storage', handleStorage);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('intramed-offline-queue-changed', handleQueueChanged);
+
+    // Inicializa contador da fila persistida
+    setState((prev) => ({ ...prev, pendingSyncCount: getPendingQueueCount() }));
 
     return () => {
       channelRef.current?.close();
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('intramed-offline-queue-changed', handleQueueChanged);
     };
   }, []);
 
@@ -719,167 +863,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   // Sincronização em tempo real via API Cloud Sync (/api/cloud-sync) com `?since=` e comparação estrita `>` (Itens 10, 23 da Auditoria)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
-    const fetchCloudSnapshot = async () => {
-      try {
-        const headers: Record<string, string> = {};
-        const opToken = getStoredOperatorToken();
-        if (opToken) {
-          headers['Authorization'] = `Bearer ${opToken}`;
-        }
-        const sinceQuery = lastCloudUpdatedAtRef.current
-          ? `?since=${encodeURIComponent(lastCloudUpdatedAtRef.current)}`
-          : '';
-        const res = await fetch(`/api/cloud-sync${sinceQuery}`, { headers });
-        if (!res || !res.ok) return;
-        const payload = await res.json();
-        if (!payload || !payload.success || payload.notModified) return;
-
-        if (payload.updatedAtIso) {
-          lastCloudUpdatedAtRef.current = payload.updatedAtIso;
-        }
-
-        // Dispara evento customizado para o RegistrationStoreContext aproveitar o mesmo payload sem fazer um 2º polling!
-        if (Array.isArray(payload.registrations)) {
-          window.dispatchEvent(
-            new CustomEvent('intramed-cloud-registrations', {
-              detail: payload.registrations,
-            })
-          );
-        }
-
-        setState((prev) => {
-          let changed = false;
-
-          let nextAthletes = prev.officialAthletes;
-          if (Array.isArray(payload.athletes) && payload.athletes.length > 0) {
-            const byId = new Map<string, Athlete>();
-            for (const a of prev.officialAthletes) byId.set(a.id, a);
-            for (const r of payload.athletes as Athlete[]) {
-              if (r && r.id && !r.isTestOnly) {
-                const ex = byId.get(r.id);
-                if (
-                  !ex ||
-                  ex.name !== r.name ||
-                  ex.avatarUrl !== r.avatarUrl ||
-                  ex.jerseyNumber !== r.jerseyNumber ||
-                  ex.position !== r.position ||
-                  ex.paymentStatus !== r.paymentStatus ||
-                  ex.memberStatus !== r.memberStatus
-                ) {
-                  byId.set(r.id, ex ? { ...ex, ...r } : r);
-                  changed = true;
-                }
-              }
-            }
-            if (changed) {
-              nextAthletes = Array.from(byId.values());
-            }
-          }
-
-          let nextTeams = prev.officialTeams;
-          if (Array.isArray(payload.teams) && payload.teams.length > 0) {
-            const byId = new Map<string, Team>();
-            for (const t of prev.officialTeams) byId.set(t.id, t);
-            let teamChanged = false;
-            for (const rt of payload.teams as Team[]) {
-              if (rt && rt.id && !rt.isTestOnly) {
-                const ex = byId.get(rt.id);
-                if (!ex || ex.crestUrl !== rt.crestUrl || ex.name !== rt.name) {
-                  byId.set(rt.id, ex ? { ...ex, ...rt } : rt);
-                  teamChanged = true;
-                  changed = true;
-                }
-              }
-            }
-            if (teamChanged) {
-              nextTeams = Array.from(byId.values());
-            }
-          }
-
-          let nextMatches = prev.officialMatches;
-          if (Array.isArray(payload.matches) && payload.matches.length > 0) {
-            const byId = new Map<string, Match>();
-            for (const m of prev.officialMatches) byId.set(m.id, m);
-            let matchChanged = false;
-            for (const rm of payload.matches as Match[]) {
-              if (rm && rm.id && !rm.isTestData) {
-                const ex = byId.get(rm.id);
-                const exRev = ex?.revision ?? 0;
-                const rmRev = rm.revision ?? 0;
-                // Só aceita o remoto se a revisão for maior ou se mudou status/placar sem regredir revisão
-                if (
-                  !ex ||
-                  rmRev > exRev ||
-                  (rmRev === exRev &&
-                    (ex.status !== rm.status ||
-                      ex.homeTeam?.score !== rm.homeTeam?.score ||
-                      ex.awayTeam?.score !== rm.awayTeam?.score))
-                ) {
-                  byId.set(rm.id, ex ? { ...ex, ...rm, tableOfficialPassword: rm.tableOfficialPassword ?? ex.tableOfficialPassword } : rm);
-                  matchChanged = true;
-                  changed = true;
-                }
-              }
-            }
-            if (matchChanged) {
-              nextMatches = Array.from(byId.values());
-            }
-          }
-
-          let nextSheets = prev.officialSheets;
-          if (Array.isArray(payload.match_sheets) && payload.match_sheets.length > 0) {
-            let sheetChanged = false;
-            const copySheets = { ...prev.officialSheets };
-            for (const rs of payload.match_sheets as MatchSheet[]) {
-              if (rs && rs.matchId && !rs.isTestMode) {
-                const ex = copySheets[rs.matchId];
-                const exRev = ex?.revision ?? 0;
-                const rsRev = rs.revision ?? 0;
-                const isStrictlyNewerTime =
-                  !ex ||
-                  (rs.lastUpdatedIso &&
-                    ex.lastUpdatedIso &&
-                    new Date(rs.lastUpdatedIso).getTime() >
-                      new Date(ex.lastUpdatedIso).getTime());
-
-                // Correção crítica Item 10 da Auditoria: usa `>` em vez de `!==` para jamais substituir súmula local mais nova por snapshot antigo
-                if (
-                  !ex ||
-                  rsRev > exRev ||
-                  (rsRev >= exRev && isStrictlyNewerTime && !ex.timer.isRunning)
-                ) {
-                  copySheets[rs.matchId] = rs;
-                  sheetChanged = true;
-                  changed = true;
-                }
-              }
-            }
-            if (sheetChanged) {
-              nextSheets = copySheets;
-            }
-          }
-
-          if (!changed) return prev;
-
-          isApplyingRemoteUpdate.current = true;
-          return {
-            ...prev,
-            officialAthletes: nextAthletes,
-            officialTeams: nextTeams,
-            officialMatches: nextMatches,
-            officialSheets: nextSheets,
-          };
-        });
-      } catch {
-        // Silencioso
-      }
-    };
-
     fetchCloudSnapshot();
     const interval = setInterval(fetchCloudSnapshot, 4500);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchCloudSnapshot]);
 
   // Motor de Cronômetro Preciso por Timestamp Real (`lastTickTimestamp` + `Date.now()`)
   // Corrige Itens 11, 12, 13, 14, 22 e 27 da Auditoria:
@@ -1133,6 +1120,102 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
         matchesList[matchIdx] = finalizedMatch;
         sheetsMap[matchId] = finalizedSheet;
+
+        // Avanço automático de chaveamento no mata-mata (Quartas -> Semifinais -> Final)
+        if (finalizedMatch.status === 'finished') {
+          const homeScore = finalizedMatch.homeTeam.score ?? 0;
+          const awayScore = finalizedMatch.awayTeam.score ?? 0;
+          const winnerSlot =
+            homeScore > awayScore ? finalizedMatch.homeTeam : finalizedMatch.awayTeam;
+
+          if (winnerSlot?.teamId) {
+            if (finalizedMatch.phase === 'quarterfinals') {
+              const semiMatch = matchesList.find(
+                (m) =>
+                  m.modalityId === finalizedMatch.modalityId &&
+                  m.phase === 'semifinals' &&
+                  (!m.homeTeam.teamId ||
+                    !m.awayTeam.teamId ||
+                    m.homeTeam.teamName?.includes('Quartas') ||
+                    m.awayTeam.teamName?.includes('Quartas') ||
+                    m.homeTeam.teamName?.includes('A Definir') ||
+                    m.awayTeam.teamName?.includes('A Definir'))
+              );
+              if (semiMatch) {
+                const sIdx = matchesList.findIndex((m) => m.id === semiMatch.id);
+                if (sIdx >= 0) {
+                  const updatedSemi = {
+                    ...semiMatch,
+                    revision: (semiMatch.revision ?? 0) + 1,
+                  };
+                  if (
+                    !updatedSemi.homeTeam.teamId ||
+                    updatedSemi.homeTeam.teamName?.includes('Quartas') ||
+                    updatedSemi.homeTeam.teamName?.includes('A Definir')
+                  ) {
+                    updatedSemi.homeTeam = {
+                      teamId: winnerSlot.teamId,
+                      teamName: winnerSlot.teamName,
+                      crestUrl: winnerSlot.crestUrl,
+                      score: 0,
+                    };
+                  } else {
+                    updatedSemi.awayTeam = {
+                      teamId: winnerSlot.teamId,
+                      teamName: winnerSlot.teamName,
+                      crestUrl: winnerSlot.crestUrl,
+                      score: 0,
+                    };
+                  }
+                  matchesList[sIdx] = updatedSemi;
+                  if (!isTest) enqueueCloudSync('matches', updatedSemi.id, updatedSemi);
+                }
+              }
+            } else if (finalizedMatch.phase === 'semifinals') {
+              const finalMatch = matchesList.find(
+                (m) =>
+                  m.modalityId === finalizedMatch.modalityId &&
+                  m.phase === 'final' &&
+                  (!m.homeTeam.teamId ||
+                    !m.awayTeam.teamId ||
+                    m.homeTeam.teamName?.includes('Semifinal') ||
+                    m.awayTeam.teamName?.includes('Semifinal') ||
+                    m.homeTeam.teamName?.includes('A Definir') ||
+                    m.awayTeam.teamName?.includes('A Definir'))
+              );
+              if (finalMatch) {
+                const fIdx = matchesList.findIndex((m) => m.id === finalMatch.id);
+                if (fIdx >= 0) {
+                  const updatedFinal = {
+                    ...finalMatch,
+                    revision: (finalMatch.revision ?? 0) + 1,
+                  };
+                  if (
+                    !updatedFinal.homeTeam.teamId ||
+                    updatedFinal.homeTeam.teamName?.includes('Semifinal') ||
+                    updatedFinal.homeTeam.teamName?.includes('A Definir')
+                  ) {
+                    updatedFinal.homeTeam = {
+                      teamId: winnerSlot.teamId,
+                      teamName: winnerSlot.teamName,
+                      crestUrl: winnerSlot.crestUrl,
+                      score: 0,
+                    };
+                  } else {
+                    updatedFinal.awayTeam = {
+                      teamId: winnerSlot.teamId,
+                      teamName: winnerSlot.teamName,
+                      crestUrl: winnerSlot.crestUrl,
+                      score: 0,
+                    };
+                  }
+                  matchesList[fIdx] = updatedFinal;
+                  if (!isTest) enqueueCloudSync('matches', updatedFinal.id, updatedFinal);
+                }
+              }
+            }
+          }
+        }
 
         if (!isTest) {
           enqueueCloudSync('matches', finalizedMatch.id, finalizedMatch);
@@ -3036,9 +3119,60 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             };
           }
 
+          // Atualiza súmulas em aberto (não encerradas) da equipe para incluir o atleta na escalação
+          const updatedSheets = { ...prev.officialSheets };
+          for (const m of prev.officialMatches) {
+            if (!athleteRecord.modalityIds.includes(m.modalityId)) continue;
+            const s = updatedSheets[m.id];
+            if (!s || s.isClosed) continue;
+
+            if (m.homeTeam.teamId === athleteRecord.teamId) {
+              const inLineup = s.homeLineup.some((l) => l.athleteId === athleteRecord.id);
+              if (!inLineup) {
+                const updatedSheet = {
+                  ...s,
+                  homeLineup: [
+                    ...s.homeLineup,
+                    {
+                      athleteId: athleteRecord.id,
+                      athleteName: athleteRecord.name,
+                      jerseyNumber: athleteRecord.jerseyNumber,
+                      isStarter: s.homeLineup.length < 5,
+                    },
+                  ],
+                  revision: (s.revision ?? 0) + 1,
+                  lastUpdatedIso: new Date().toISOString(),
+                };
+                updatedSheets[m.id] = updatedSheet;
+                enqueueCloudSync('match_sheets', m.id, updatedSheet);
+              }
+            } else if (m.awayTeam.teamId === athleteRecord.teamId) {
+              const inLineup = s.awayLineup.some((l) => l.athleteId === athleteRecord.id);
+              if (!inLineup) {
+                const updatedSheet = {
+                  ...s,
+                  awayLineup: [
+                    ...s.awayLineup,
+                    {
+                      athleteId: athleteRecord.id,
+                      athleteName: athleteRecord.name,
+                      jerseyNumber: athleteRecord.jerseyNumber,
+                      isStarter: s.awayLineup.length < 5,
+                    },
+                  ],
+                  revision: (s.revision ?? 0) + 1,
+                  lastUpdatedIso: new Date().toISOString(),
+                };
+                updatedSheets[m.id] = updatedSheet;
+                enqueueCloudSync('match_sheets', m.id, updatedSheet);
+              }
+            }
+          }
+
           return {
             ...prev,
             officialAthletes: nextOfficialAthletes,
+            officialSheets: updatedSheets,
             currentUser: nextUser,
           };
         });
@@ -3398,6 +3532,52 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     ]
   );
 
+  const updateMatchSchedule = useCallback(
+    (
+      matchId: string,
+      params: {
+        scheduledDate?: string;
+        scheduledTime?: string;
+        venue?: string;
+        status?: Match['status'];
+      }
+    ) => {
+      setState((prev) => {
+        const isTest = prev.isTestMode;
+        const targetList = isTest ? prev.testMatches : prev.officialMatches;
+        const target = targetList.find((m) => m.id === matchId);
+        if (!target) return prev;
+
+        const updatedMatch: Match = {
+          ...target,
+          ...(params.scheduledDate !== undefined ? { scheduledDate: params.scheduledDate } : {}),
+          ...(params.scheduledTime !== undefined ? { scheduledTime: params.scheduledTime } : {}),
+          ...(params.venue !== undefined ? { venue: params.venue } : {}),
+          ...(params.status !== undefined ? { status: params.status } : {}),
+          revision: (target.revision ?? 0) + 1,
+        };
+
+        const updatedList = targetList.map((m) => (m.id === matchId ? updatedMatch : m));
+
+        if (!isTest) {
+          enqueueCloudSync('matches', matchId, updatedMatch);
+        }
+
+        const nextState = {
+          ...prev,
+          ...(isTest ? { testMatches: updatedList } : { officialMatches: updatedList }),
+        };
+
+        if (channelRef.current) {
+          channelRef.current.postMessage({ type: 'STATE_SYNC', payload: nextState });
+        }
+
+        return nextState;
+      });
+    },
+    [enqueueCloudSync]
+  );
+
   // Item 22 da Auditoria: Context value memoizado com `useMemo` para evitar re-renders desnecessários
   const contextValue = useMemo<CompetitionStoreContextValue>(
     () => ({
@@ -3464,6 +3644,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       registerTeam,
       registerAthlete,
       createOfficialMatch,
+      updateMatchSchedule,
     }),
     [
       state.isTestMode,
@@ -3529,6 +3710,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       registerTeam,
       registerAthlete,
       createOfficialMatch,
+      updateMatchSchedule,
     ]
   );
 

@@ -27,6 +27,7 @@ import {
   getStoredOperatorToken,
 } from './CompetitionStoreContext';
 import { generateUniqueId } from '../utils/statsEngine';
+import { enqueueOfflineMutation } from '../utils/offlineSyncQueue';
 
 const REGISTRATIONS_STORAGE_KEY = 'intramed_registrations_store_v1';
 const MY_REGISTRATIONS_KEY = 'intramed_my_registered_ids_v1';
@@ -126,22 +127,7 @@ const pushRegistrationToCloud = (reg: Registration, accountPassword?: string) =>
     if (accountPassword) {
       cleanReg.accountPassword = accountPassword;
     }
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    const opToken = getStoredOperatorToken();
-    if (opToken) {
-      headers['Authorization'] = `Bearer ${opToken}`;
-    }
-    fetch('/api/cloud-sync', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        collectionName: 'registrations',
-        docId: reg.id,
-        data: cleanReg,
-      }),
-    }).catch(() => {});
+    enqueueOfflineMutation('registrations', reg.id, cleanReg);
   } catch {
     // Silencioso
   }

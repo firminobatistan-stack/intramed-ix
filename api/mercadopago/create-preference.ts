@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
+  attachPendingGatewayReferenceOnServer,
   computeAuthorizedServerPrice,
   computeCardTotalWithInstallments,
-  getCloudStore,
+  ensureCloudStoreHydrated,
   parseJsonSafe,
   parseSafeBody,
   PRIMARY_GATEWAY_ORIGIN,
@@ -47,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const store = getCloudStore();
+  const store = await ensureCloudStoreHydrated();
   const storedReg = store.registrations[String(registrationId)];
 
   const effectiveMemberStatus = String(
@@ -222,6 +223,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!mpResponse.ok || !data) {
       return res.status(mpResponse.status >= 400 ? mpResponse.status : 502).json({
         error: 'Falha ao criar checkout de cartão junto ao Mercado Pago.',
+      });
+    }
+
+    if (data.id) {
+      await attachPendingGatewayReferenceOnServer({
+        registrationId: String(registrationId),
+        mpPreferenceId: String(data.id),
+        paymentMethod: 'credit_card',
       });
     }
 

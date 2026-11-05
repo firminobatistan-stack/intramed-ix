@@ -277,11 +277,15 @@ export function computeAthleteModalityStats(
   let startersCount = 0;
 
   let goals = 0;
+  let officialGoals = 0;
+  let provisionalGoals = 0;
   let yellowCards = 0;
   let redCards = 0;
   let suspensions2Min = 0;
 
   let pointsTotal = 0;
+  let officialPointsTotal = 0;
+  let provisionalPointsTotal = 0;
   let baskets3Pt = 0;
   let baskets2Pt = 0;
   let freeThrows1Pt = 0;
@@ -439,6 +443,17 @@ export function computeAthleteModalityStats(
       }
     }
 
+    const isMatchOfficiallyFinished = match.status === 'finished' || sheet.isClosed;
+    const isMatchLive = match.status === 'live' || match.status === 'halftime';
+
+    if (isMatchOfficiallyFinished) {
+      officialGoals += matchGoals;
+      officialPointsTotal += matchPoints;
+    } else if (isMatchLive) {
+      provisionalGoals += matchGoals;
+      provisionalPointsTotal += matchPoints;
+    }
+
     goals += matchGoals;
     pointsTotal += matchPoints;
     baskets3Pt += match3Pt;
@@ -549,10 +564,15 @@ export function computeAthleteModalityStats(
     liveMatchesPlayed,
     startersCount,
     goals,
+    officialGoals,
+    provisionalGoals,
+    pointsTotal,
+    officialPointsTotal,
+    provisionalPointsTotal,
+    hasProvisionalLiveStats: provisionalGoals > 0 || provisionalPointsTotal > 0 || liveMatchesPlayed > 0,
     yellowCards,
     redCards,
     suspensions2Min,
-    pointsTotal,
     baskets3Pt,
     baskets2Pt,
     freeThrows1Pt,
@@ -689,15 +709,82 @@ export function computeModalityStandings(
   teams: Team[],
   matches: Match[]
 ): StandingEntry[] {
-  const filteredMatches =
-    modalityId === 'all'
-      ? matches
-      : matches.filter((m) => m.modalityId === modalityId);
+  if (modalityId === 'all') {
+    // Classificação Geral Ponderada das 16 Modalidades (Regulamento Oficial Item 04)
+    // Coletivas (peso 2): 1º=20, 2º=14, 3º=8, 4º=6 pts; Individuais (peso 1): 1º=10, 2º=7, 3º=4, 4º=3 pts
+    const COLLECTIVE_MODALITIES = new Set([
+      'futsal',
+      'basquete',
+      'handebol',
+      'volei',
+    ]);
+
+    const teamStandings = new Map<string, StandingEntry>();
+    for (const team of teams) {
+      teamStandings.set(team.id, {
+        teamId: team.id,
+        teamName: team.name,
+        crestUrl: team.crestUrl,
+        position: 0,
+        points: 0,
+        played: 0,
+        won: 0,
+        drawn: 0,
+        lost: 0,
+        scoreFor: 0,
+        scoreAgainst: 0,
+        scoreDifference: 0,
+      });
+    }
+
+    const distinctModalities = Array.from(
+      new Set(matches.map((m) => m.modalityId))
+    );
+
+    for (const modSlug of distinctModalities) {
+      const modMatches = matches.filter((m) => m.modalityId === modSlug);
+      const singleModStandings = computeModalityStandings(modSlug, teams, modMatches);
+      const isCollective = COLLECTIVE_MODALITIES.has(modSlug);
+
+      singleModStandings.forEach((entry, idx) => {
+        const teamRow = teamStandings.get(entry.teamId);
+        if (!teamRow) return;
+
+        let awardPoints = 0;
+        if (entry.played > 0) {
+          if (idx === 0) awardPoints = isCollective ? 20 : 10;
+          else if (idx === 1) awardPoints = isCollective ? 14 : 7;
+          else if (idx === 2) awardPoints = isCollective ? 8 : 4;
+          else if (idx === 3) awardPoints = isCollective ? 6 : 3;
+
+          teamRow.played += entry.played;
+          teamRow.won += entry.won;
+          teamRow.drawn += entry.drawn;
+          teamRow.lost += entry.lost;
+          teamRow.scoreFor += entry.scoreFor;
+          teamRow.scoreAgainst += entry.scoreAgainst;
+          teamRow.scoreDifference += entry.scoreDifference;
+          teamRow.points += awardPoints;
+        }
+      });
+    }
+
+    const rows = Array.from(teamStandings.values()).sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.won !== a.won) return b.won - a.won;
+      if (b.scoreDifference !== a.scoreDifference) return b.scoreDifference - a.scoreDifference;
+      return b.scoreFor - a.scoreFor;
+    });
+
+    return rows.map((r, i) => ({ ...r, position: i + 1 }));
+  }
+
+  const filteredMatches = matches.filter((m) => m.modalityId === modalityId);
 
   const map = new Map<string, StandingEntry>();
 
   for (const team of teams) {
-    if (modalityId !== 'all' && !team.modalityIds.includes(modalityId)) continue;
+    if (!team.modalityIds.includes(modalityId)) continue;
     map.set(team.id, {
       teamId: team.id,
       teamName: team.name,

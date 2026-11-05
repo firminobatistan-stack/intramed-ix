@@ -21,8 +21,12 @@ import {
   UserPlus,
   ExternalLink,
   KeyRound,
+  RefreshCw,
+  Activity,
+  ArrowUpRight,
 } from 'lucide-react';
-import { useCompetitionStore } from '../context/CompetitionStoreContext';
+import { useCompetitionStore, getStoredOperatorToken } from '../context/CompetitionStoreContext';
+import { flushOfflineQueue, getPendingQueueItems, QueuedSyncItem } from '../utils/offlineSyncQueue';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { MODALITY_RULE_ENGINE, formatSecondsToClock } from '../data/sportRulesConfig';
 import { ModalitySlug, TournamentPhaseType } from '../types/domain';
@@ -132,6 +136,89 @@ export const AdminDashboardPage: React.FC = () => {
 
   const liveCount = visibleMatches.filter((m) => m.status === 'live').length;
   const finishedCount = visibleMatches.filter((m) => m.status === 'finished').length;
+
+  // Estados de Monitoramento de Sincronização & Reconciliação
+  const [isReconciling, setIsReconciling] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState<string | null>(null);
+  const [serverSyncLogs, setServerSyncLogs] = useState<
+    Array<{
+      id: string;
+      timestampIso: string;
+      category: string;
+      level: string;
+      message: string;
+    }>
+  >([]);
+  const [pendingOfflineItems, setPendingOfflineItems] = useState<QueuedSyncItem[]>([]);
+  const [isFlushingQueue, setIsFlushingQueue] = useState(false);
+
+  const loadSyncDiagnostics = React.useCallback(async () => {
+    setPendingOfflineItems(getPendingQueueItems());
+    try {
+      const opToken = getStoredOperatorToken();
+      const headers: Record<string, string> = {};
+      if (opToken) headers['Authorization'] = `Bearer ${opToken}`;
+      const res = await fetch('/api/cloud-sync', { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.syncLogs)) {
+          setServerSyncLogs(data.syncLogs);
+        }
+      }
+    } catch {
+      // Offline
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'auditoria') {
+      loadSyncDiagnostics();
+    }
+  }, [activeTab, loadSyncDiagnostics]);
+
+  const handleReconcilePayments = async () => {
+    setIsReconciling(true);
+    setReconcileResult(null);
+    try {
+      const opToken = getStoredOperatorToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (opToken) headers['Authorization'] = `Bearer ${opToken}`;
+
+      const res = await fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'reconcile_pending_payments' }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setReconcileResult(
+          `Reconciliação concluída: ${data.reconciledCount} pagamentos aprovados de ${data.checkedTotal} verificados.`
+        );
+        await loadSyncDiagnostics();
+      } else {
+        setReconcileResult(`Aviso: ${data.error || 'Falha ao executar reconciliação.'}`);
+      }
+    } catch {
+      setReconcileResult('Erro ao conectar ao servidor para reconciliação.');
+    } finally {
+      setIsReconciling(false);
+    }
+  };
+
+  const handleFlushQueue = async () => {
+    setIsFlushingQueue(true);
+    try {
+      const res = await flushOfflineQueue();
+      setPendingOfflineItems(getPendingQueueItems());
+      if (res.flushedCount > 0) {
+        showNotice('ok', `${res.flushedCount} documentos sincronizados com a nuvem.`);
+      } else if (res.errors.length > 0) {
+        showNotice('err', `Erros na sincronização: ${res.errors[0]}`);
+      }
+    } finally {
+      setIsFlushingQueue(false);
+    }
+  };
 
   const showNotice = (type: 'ok' | 'err', text: string) => {
     setFeedbackBanner({ type, text });
@@ -1082,69 +1169,279 @@ export const AdminDashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* ABA 4: AUDITORIA DE CORREÇÕES E FILA DE SINCRONIZAÇÃO */}
+      {/* ABA 4: PAINEL DE MONITORAMENTO DE SINCRONIZAÇÃO & AUDITORIA */}
       {activeTab === 'auditoria' && (
-        <div className="space-y-4">
-          <div className="rounded-2xl bg-white border border-brand-surface-border p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-brand-blue-light text-brand-blue flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5" />
+        <div className="space-y-6">
+          {/* 1. SAÚDE DOS SERVIÇOS & INTEGRAÇÕES */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-2xl bg-white border border-brand-surface-border p-4 shadow-card">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase text-slate-400">
+                  Cloud Sync API
+                </span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               </div>
-              <div>
-                <h3 className="text-sm font-display font-bold text-brand-text-primary">
-                  Rastreabilidade e Auditoria de Súmula
-                </h3>
-                <p className="text-xs text-brand-text-secondary">
-                  Toda edição ou exclusão de evento durante a partida registra o valor original, a alteração e o horário.
-                </p>
+              <div className="text-base font-display font-black text-brand-blue">
+                Online • 4.5s Polling
               </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Sincronização em nuvem e delta ativo via /api/cloud-sync
+              </p>
             </div>
-            <StatusBadge
-              status="official"
-              label={`${allAuditLogs.length} alterações registradas`}
-            />
+
+            <div className="rounded-2xl bg-white border border-brand-surface-border p-4 shadow-card">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase text-slate-400">
+                  Mercado Pago
+                </span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+              </div>
+              <div className="text-base font-display font-black text-slate-900">
+                Webhooks & Pix Ativos
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Validação criptográfica HMAC e baixa automática
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white border border-brand-surface-border p-4 shadow-card">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase text-slate-400">
+                  Fila Offline Local
+                </span>
+                <span
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    pendingOfflineItems.length === 0 ? 'bg-slate-300' : 'bg-amber-500'
+                  }`}
+                />
+              </div>
+              <div className="flex items-baseline justify-between">
+                <div className="text-base font-display font-black text-slate-900">
+                  {pendingOfflineItems.length} {pendingOfflineItems.length === 1 ? 'item' : 'itens'}
+                </div>
+                {pendingOfflineItems.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isFlushingQueue}
+                    onClick={handleFlushQueue}
+                    className="text-xs py-1 px-2.5 h-7"
+                  >
+                    {isFlushingQueue ? 'Enviando...' : 'Descarregar'}
+                  </Button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                {pendingOfflineItems.length === 0
+                  ? 'Fila limpa — todas as alterações salvas na nuvem'
+                  : 'Alterações guardadas localmente aguardando envio'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl bg-white border border-brand-surface-border p-4 shadow-card flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-bold uppercase text-slate-400 block mb-1">
+                  Reconciliação MP
+                </span>
+                <div className="text-xs text-slate-600">
+                  Varredura de pagamentos pendentes no gateway
+                </div>
+              </div>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={isReconciling}
+                onClick={handleReconcilePayments}
+                className="mt-3 w-full text-xs flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isReconciling ? 'animate-spin' : ''}`} />
+                <span>{isReconciling ? 'Consultando...' : 'Reconciliar Agora'}</span>
+              </Button>
+            </div>
           </div>
 
-          {allAuditLogs.length === 0 ? (
-            <EmptyState
-              variant="stats"
-              message="Nenhuma correção ou exclusão de evento foi realizada até o momento."
-            />
-          ) : (
-            <div className="space-y-3">
-              {allAuditLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="rounded-2xl bg-white border border-brand-surface-border p-4 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-brand-yellow-dark" />
-                      <span className="text-xs font-bold uppercase text-brand-blue">
-                        {log.modalityName} — {log.action === 'deleted' ? 'Exclusão' : 'Edição'}
-                      </span>
-                      <span className="text-xs text-brand-text-muted">
-                        • {new Date(log.timestampIso).toLocaleTimeString('pt-BR')}
-                      </span>
-                    </div>
-                    <p className="text-xs text-brand-text-secondary">
-                      <strong>Original:</strong> {log.previousSummary}
-                    </p>
-                    <p className="text-xs text-brand-text-primary font-medium">
-                      <strong>Atualizado:</strong> {log.newSummary}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate(`/sumula/${log.matchId}`)}
-                  >
-                    Ver Súmula
-                  </Button>
-                </div>
-              ))}
+          {/* Banner de resultado da Reconciliação */}
+          {reconcileResult && (
+            <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-brand-blue shrink-0" />
+                <span>{reconcileResult}</span>
+              </div>
+              <button
+                onClick={() => setReconcileResult(null)}
+                className="text-blue-500 hover:text-blue-800 font-bold"
+              >
+                ✕
+              </button>
             </div>
           )}
+
+          {/* Fila de sincronização pendente detalhada (se houver itens) */}
+          {pendingOfflineItems.length > 0 && (
+            <div className="rounded-2xl bg-amber-50/80 border border-amber-200 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <span className="text-xs font-bold uppercase text-amber-900">
+                    Documentos na Fila Offline ({pendingOfflineItems.length})
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isFlushingQueue}
+                  onClick={handleFlushQueue}
+                  className="text-xs"
+                >
+                  Tentar Enviar Tudo
+                </Button>
+              </div>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {pendingOfflineItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-2.5 rounded-xl bg-white border border-amber-200 text-xs flex items-center justify-between gap-2"
+                  >
+                    <div>
+                      <span className="font-bold text-slate-800 uppercase mr-2">
+                        {item.collectionName}
+                      </span>
+                      <span className="text-slate-500 font-mono text-[11px]">
+                        ID: {item.docId}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-bold">
+                      {item.attempts > 0 ? `${item.attempts}ª tentativa` : 'Novo'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 2. LOGS DE SINCRONIZAÇÃO & WEBHOOKS DO SERVIDOR */}
+          <div className="rounded-2xl bg-white border border-brand-surface-border p-5 shadow-card space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-display font-bold text-brand-text-primary">
+                    Eventos de Sincronização & Webhooks Recentes
+                  </h3>
+                  <p className="text-xs text-brand-text-secondary">
+                    Notificações do Mercado Pago, reconciliações automáticas e deltas registrados no backend.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={loadSyncDiagnostics}
+                className="text-xs flex items-center gap-1.5 text-slate-600"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Atualizar Logs</span>
+              </Button>
+            </div>
+
+            {serverSyncLogs.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3 text-center">
+                Nenhum evento registrado nesta sessão do servidor.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto divide-y divide-slate-100">
+                {serverSyncLogs.slice(0, 30).map((log) => (
+                  <div key={log.id} className="pt-2 flex items-start justify-between gap-3 text-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            log.category === 'webhook'
+                              ? 'bg-purple-100 text-purple-700'
+                              : log.category === 'payment_reconcile'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {log.category}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          {new Date(log.timestampIso).toLocaleTimeString('pt-BR')}
+                        </span>
+                      </div>
+                      <p className="text-slate-700 font-medium">{log.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 3. AUDITORIA DE SÚMULA (HISTÓRICO DE ALTERAÇÕES) */}
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-white border border-brand-surface-border p-5 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-blue-light text-brand-blue flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-display font-bold text-brand-text-primary">
+                    Rastreabilidade e Auditoria de Súmula
+                  </h3>
+                  <p className="text-xs text-brand-text-secondary">
+                    Toda edição ou exclusão de evento durante a partida registra o valor original, a alteração e o horário.
+                  </p>
+                </div>
+              </div>
+              <StatusBadge
+                status="official"
+                label={`${allAuditLogs.length} alterações registradas`}
+              />
+            </div>
+
+            {allAuditLogs.length === 0 ? (
+              <EmptyState
+                variant="stats"
+                message="Nenhuma correção ou exclusão de evento foi realizada até o momento."
+              />
+            ) : (
+              <div className="space-y-3">
+                {allAuditLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="rounded-2xl bg-white border border-brand-surface-border p-4 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-brand-yellow-dark" />
+                        <span className="text-xs font-bold uppercase text-brand-blue">
+                          {log.modalityName} — {log.action === 'deleted' ? 'Exclusão' : 'Edição'}
+                        </span>
+                        <span className="text-xs text-brand-text-muted">
+                          • {new Date(log.timestampIso).toLocaleTimeString('pt-BR')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-brand-text-secondary">
+                        <strong>Original:</strong> {log.previousSummary}
+                      </p>
+                      <p className="text-xs text-brand-text-primary font-medium">
+                        <strong>Atualizado:</strong> {log.newSummary}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate(`/sumula/${log.matchId}`)}
+                    >
+                      Ver Súmula
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

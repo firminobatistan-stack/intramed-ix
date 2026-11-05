@@ -16,6 +16,7 @@ import {
   Edit3,
   Instagram,
   Check,
+  AlertTriangle,
 } from 'lucide-react';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { ModalitySlug } from '../types/domain';
@@ -843,10 +844,19 @@ export const AthleteDetailPage: React.FC = () => {
                 {stats && stats.liveMatchesPlayed > 0 && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
                     <Clock className="w-3 h-3 animate-pulse" />
-                    <span>Em andamento</span>
+                    <span>Ao Vivo • Provisório</span>
                   </span>
                 )}
               </div>
+
+              {stats?.hasProvisionalLiveStats && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    <strong>Dados Provisórios:</strong> Este atleta possui registros em partida ao vivo em andamento. Os números oficiais do torneio são consolidados apenas após a validação da súmula.
+                  </span>
+                </div>
+              )}
               {renderBasicStatsGrid()}
             </section>
           )}

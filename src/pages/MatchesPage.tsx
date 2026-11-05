@@ -59,6 +59,51 @@ export const MatchesPage: React.FC = () => {
     ) {
       return false;
     }
+
+    // Filtro por dia do campeonato
+    if (currentDay && currentDay.id !== 'todos') {
+      const dateStr = (match.scheduledDate || '').toLowerCase();
+      const phaseStr = (match.phase || '').toLowerCase();
+      const labelStr = (match.phaseLabel || '').toLowerCase();
+
+      if (currentDay.id === 'dia-1') {
+        const isDia1 =
+          dateStr.includes('dia 1') ||
+          dateStr.includes('dia-1') ||
+          dateStr.includes('abertura') ||
+          (phaseStr === 'group_stage' && !dateStr.includes('dia 2'));
+        if (!isDia1) return false;
+      } else if (currentDay.id === 'dia-2') {
+        const isDia2 =
+          dateStr.includes('dia 2') ||
+          dateStr.includes('dia-2') ||
+          dateStr.includes('classific');
+        if (!isDia2) return false;
+      } else if (currentDay.id === 'dia-3') {
+        const isDia3 =
+          dateStr.includes('dia 3') ||
+          dateStr.includes('dia-3') ||
+          phaseStr === 'quarterfinals' ||
+          labelStr.includes('quartas');
+        if (!isDia3) return false;
+      } else if (currentDay.id === 'dia-4') {
+        const isDia4 =
+          dateStr.includes('dia 4') ||
+          dateStr.includes('dia-4') ||
+          phaseStr === 'semifinals' ||
+          labelStr.includes('semi');
+        if (!isDia4) return false;
+      } else if (currentDay.id === 'dia-5') {
+        const isDia5 =
+          dateStr.includes('dia 5') ||
+          dateStr.includes('dia-5') ||
+          phaseStr === 'final' ||
+          phaseStr === 'third_place' ||
+          labelStr.includes('final');
+        if (!isDia5) return false;
+      }
+    }
+
     return true;
   });
 

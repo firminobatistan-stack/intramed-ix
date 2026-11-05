@@ -456,11 +456,16 @@ export interface DerivedAthleteModalityStats {
   startersCount: number;
   // Futsal & Handebol
   goals: number;
+  officialGoals?: number;
+  provisionalGoals?: number;
   yellowCards: number;
   redCards: number;
   suspensions2Min: number; // Handebol
   // Basquete (apenas pontos e faltas da súmula — sem tocos/rebotes)
   pointsTotal: number;
+  officialPointsTotal?: number;
+  provisionalPointsTotal?: number;
+  hasProvisionalLiveStats?: boolean;
   baskets3Pt: number;
   baskets2Pt: number;
   freeThrows1Pt: number;

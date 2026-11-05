@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'crypto';
 import {
+  appendServerSyncLog,
   computeAuthorizedServerPrice,
-  getCloudStore,
+  ensureCloudStoreHydrated,
+  handleNonApprovedPaymentStatusOnServer,
   markRegistrationPaidOnServer,
   parseJsonSafe,
   parseSafeBody,
@@ -102,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const amount = Number(paymentData.transaction_amount || 0);
 
         if (status === 'approved' && registrationId) {
-          const store = getCloudStore();
+          const store = await ensureCloudStoreHydrated();
           const storedReg = store.registrations[registrationId];
           const minPrice = storedReg
             ? computeAuthorizedServerPrice(
@@ -126,7 +128,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               paidAmount: amount,
             });
           }
+        } else if (
+          registrationId &&
+          (status === 'refunded' ||
+            status === 'charged_back' ||
+            status === 'cancelled' ||
+            status === 'rejected')
+        ) {
+          await ensureCloudStoreHydrated();
+          await handleNonApprovedPaymentStatusOnServer({
+            registrationId,
+            mpPaymentId: String(paymentData.id),
+            mpStatus: status,
+            statusDetail: String(paymentData.status_detail || ''),
+          });
         }
+
+        appendServerSyncLog({
+          category: 'webhook',
+          level: 'info',
+          message: `Webhook processado: paymentId=${rawPaymentId}, status=${status}, reg=${registrationId || 'N/A'}`,
+          details: { paymentId: rawPaymentId, status, registrationId },
+        });
 
         return res.status(200).json({
           received: true,

@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   computeAuthorizedServerPrice,
-  getCloudStore,
+  ensureCloudStoreHydrated,
+  handleNonApprovedPaymentStatusOnServer,
   markRegistrationPaidOnServer,
   parseJsonSafe,
   PRIMARY_GATEWAY_ORIGIN,
@@ -29,8 +30,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ).trim();
   const registrationId = String(req.query.registrationId || req.query.reg || '').trim();
 
-  // Validação estrita do paymentId antes de interpolar na URL
-  if (!rawPaymentId || !/^\d{5,25}$/.test(rawPaymentId)) {
+  // Precisa de pelo menos paymentId ou registrationId para conciliar
+  if (!rawPaymentId && !registrationId) {
+    return res.status(400).json({ error: 'Identificador de pagamento ou inscrição é obrigatório.' });
+  }
+
+  if (rawPaymentId && !/^\d{5,25}$/.test(rawPaymentId)) {
     return res.status(400).json({ error: 'Identificador de pagamento inválido.' });
   }
 
@@ -41,9 +46,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!mpAccessToken) {
     if (!host.includes('intramedix.vercel.app') && !isProxied) {
       try {
-        const proxyUrl = `${PRIMARY_GATEWAY_ORIGIN}/api/mercadopago/check-payment?paymentId=${encodeURIComponent(
-          rawPaymentId
-        )}&registrationId=${encodeURIComponent(registrationId)}`;
+        const queryParams = new URLSearchParams();
+        if (rawPaymentId) queryParams.set('paymentId', rawPaymentId);
+        if (registrationId) queryParams.set('registrationId', registrationId);
+        const proxyUrl = `${PRIMARY_GATEWAY_ORIGIN}/api/mercadopago/check-payment?${queryParams.toString()}`;
         const proxyRes = await fetch(proxyUrl, {
           headers: { 'X-Intramed-Proxy': '1' },
         });
@@ -62,28 +68,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const mpCheck = await fetch(
-      `https://api.mercadopago.com/v1/payments/${encodeURIComponent(rawPaymentId)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${mpAccessToken}`,
-        },
+    let paymentData: Record<string, unknown> | null = null;
+
+    if (rawPaymentId) {
+      const mpCheck = await fetch(
+        `https://api.mercadopago.com/v1/payments/${encodeURIComponent(rawPaymentId)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${mpAccessToken}`,
+          },
+        }
+      );
+      const parsed = await parseJsonSafe(mpCheck);
+      paymentData = parsed.data;
+    } else if (registrationId) {
+      // Reconciliação automática por external_reference se o modal fechou ou o webhook falhou
+      const searchRes = await fetch(
+        `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(
+          registrationId
+        )}&sort=date_created&criteria=desc&limit=1`,
+        {
+          headers: {
+            Authorization: `Bearer ${mpAccessToken}`,
+          },
+        }
+      );
+      const searchParsed = await parseJsonSafe(searchRes);
+      const results = searchParsed.data?.results as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(results) && results.length > 0) {
+        paymentData = results[0];
       }
-    );
+    }
 
-    const { data: paymentData } = await parseJsonSafe(mpCheck);
-
-    if (!mpCheck.ok || !paymentData) {
-      return res.status(mpCheck.status >= 400 ? mpCheck.status : 502).json({
-        error: 'Não foi possível consultar o pagamento no Mercado Pago.',
+    if (!paymentData) {
+      return res.status(404).json({
+        found: false,
+        isApproved: false,
+        message: 'Nenhum registro de pagamento encontrado no gateway para esta consulta.',
       });
     }
 
     const extRef = String(paymentData.external_reference || '').trim();
     const txAmount = Number(paymentData.transaction_amount || 0);
     const status = String(paymentData.status || '');
+    const currentPaymentId = String(paymentData.id || rawPaymentId);
 
-    // Se o cliente informou registrationId, confere obrigatoriamente se pertence àquela inscrição
+    // Se o cliente informou registrationId, confere se pertence àquela inscrição
     if (registrationId && extRef && extRef !== registrationId) {
       return res.status(403).json({
         error: 'Este pagamento não pertence à inscrição informada.',
@@ -92,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const targetRegId = registrationId || extRef;
-    const store = getCloudStore();
+    const store = await ensureCloudStoreHydrated();
     const storedReg = targetRegId ? store.registrations[targetRegId] : undefined;
 
     const expectedMinimumAmount = storedReg
@@ -106,7 +136,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isAmountValid = txAmount + 0.01 >= expectedMinimumAmount;
     const isApproved = status === 'approved' && isAmountValid && Boolean(targetRegId);
 
-    // Se foi aprovado e validado no servidor, já grava `pago` de forma idempotente no banco do servidor
     if (isApproved && targetRegId) {
       const method: 'pix' | 'credit_card' =
         paymentData.payment_type_id === 'credit_card' ||
@@ -116,14 +145,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       await markRegistrationPaidOnServer({
         registrationId: targetRegId,
-        mpPaymentId: String(paymentData.id),
+        mpPaymentId: currentPaymentId,
         paymentMethod: method,
         paidAmount: txAmount,
+      });
+    } else if (
+      targetRegId &&
+      (status === 'refunded' ||
+        status === 'charged_back' ||
+        status === 'cancelled' ||
+        status === 'rejected')
+    ) {
+      await handleNonApprovedPaymentStatusOnServer({
+        registrationId: targetRegId,
+        mpPaymentId: currentPaymentId,
+        mpStatus: status,
+        statusDetail: String(paymentData.status_detail || ''),
       });
     }
 
     return res.status(200).json({
-      paymentId: paymentData.id,
+      paymentId: currentPaymentId,
       status,
       isApproved,
       registrationId: targetRegId,

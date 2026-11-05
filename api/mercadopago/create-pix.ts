@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
+  attachPendingGatewayReferenceOnServer,
   computeAuthorizedServerPrice,
-  getCloudStore,
+  ensureCloudStoreHydrated,
   parseJsonSafe,
   parseSafeBody,
   PRIMARY_GATEWAY_ORIGIN,
@@ -46,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const store = getCloudStore();
+  const store = await ensureCloudStoreHydrated();
   const storedReg = store.registrations[String(registrationId)];
 
   // Status de sócio e pagamento validados contra o registro armazenado no servidor
@@ -229,6 +230,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const txData = pointOfInteraction?.transaction_data as
       | Record<string, unknown>
       | undefined;
+
+    if (data.id) {
+      await attachPendingGatewayReferenceOnServer({
+        registrationId: String(registrationId),
+        mpPaymentId: String(data.id),
+        paymentMethod: 'pix',
+      });
+    }
 
     return res.status(200).json({
       success: true,

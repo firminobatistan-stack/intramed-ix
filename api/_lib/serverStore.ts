@@ -4,6 +4,15 @@ import path from 'path';
 
 const CLOUD_STATE_FILE = path.join('/tmp', 'intramed_ix_cloud_sync_v2.json');
 
+export interface SyncDiagnosticLogEntry {
+  id: string;
+  timestampIso: string;
+  category: 'webhook' | 'payment_reconcile' | 'cloud_sync' | 'firestore_mirror' | 'conflict' | 'error';
+  level: 'info' | 'warning' | 'error';
+  message: string;
+  details?: Record<string, unknown>;
+}
+
 export interface CloudCollectionMap {
   registrations: Record<string, Record<string, unknown>>;
   athletes: Record<string, Record<string, unknown>>;
@@ -11,6 +20,8 @@ export interface CloudCollectionMap {
   matches: Record<string, Record<string, unknown>>;
   match_sheets: Record<string, Record<string, unknown>>;
   match_secrets: Record<string, { pinHash: string; pinDisplay?: string; updatedAtIso: string }>;
+  sync_logs?: SyncDiagnosticLogEntry[];
+  hydratedFromFirestoreAtIso?: string;
   updatedAtIso: string;
 }
 
@@ -353,6 +364,106 @@ function toFirestoreValue(val: unknown): Record<string, unknown> {
   return { stringValue: String(val) };
 }
 
+function fromFirestoreValue(val: Record<string, unknown> | undefined): unknown {
+  if (!val || typeof val !== 'object') return null;
+  if ('nullValue' in val) return null;
+  if ('booleanValue' in val) return Boolean(val.booleanValue);
+  if ('integerValue' in val) return Number(val.integerValue);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('stringValue' in val) return String(val.stringValue);
+  if ('timestampValue' in val) return String(val.timestampValue);
+  if ('arrayValue' in val) {
+    const arrObj = val.arrayValue as { values?: Array<Record<string, unknown>> } | undefined;
+    return Array.isArray(arrObj?.values)
+      ? arrObj.values.map((item) => fromFirestoreValue(item))
+      : [];
+  }
+  if ('mapValue' in val) {
+    const mapObj = val.mapValue as { fields?: Record<string, Record<string, unknown>> } | undefined;
+    const out: Record<string, unknown> = {};
+    if (mapObj?.fields && typeof mapObj.fields === 'object') {
+      for (const [k, v] of Object.entries(mapObj.fields)) {
+        out[k] = fromFirestoreValue(v);
+      }
+    }
+    return out;
+  }
+  return null;
+}
+
+export function appendServerSyncLog(
+  entry: Omit<SyncDiagnosticLogEntry, 'id' | 'timestampIso'>
+): void {
+  const store = getCloudStore();
+  const list = Array.isArray(store.sync_logs) ? store.sync_logs : [];
+  const fullEntry: SyncDiagnosticLogEntry = {
+    id: `slog-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    timestampIso: new Date().toISOString(),
+    ...entry,
+  };
+  store.sync_logs = [fullEntry, ...list].slice(0, 120);
+}
+
+/**
+ * Hidrata o store em memória a partir do Cloud Firestore REST API caso a instância serverless tenha sofrido cold-start.
+ */
+export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
+  const store = getCloudStore();
+  const hasData =
+    Object.keys(store.registrations).length > 0 ||
+    Object.keys(store.matches).length > 0 ||
+    Object.keys(store.match_sheets).length > 0;
+
+  if (hasData || store.hydratedFromFirestoreAtIso) {
+    return store;
+  }
+
+  store.hydratedFromFirestoreAtIso = new Date().toISOString();
+  const collectionsToHydrate: Array<
+    'registrations' | 'athletes' | 'teams' | 'matches' | 'match_sheets'
+  > = ['registrations', 'athletes', 'teams', 'matches', 'match_sheets'];
+
+  try {
+    await Promise.all(
+      collectionsToHydrate.map(async (colName) => {
+        const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(
+          colName
+        )}?pageSize=300`;
+        const res = await fetch(url).catch(() => null);
+        if (!res || !res.ok) return;
+        const { data } = await parseJsonSafe(res);
+        const docs = Array.isArray(data?.documents)
+          ? (data.documents as Array<{
+              name?: string;
+              fields?: Record<string, Record<string, unknown>>;
+            }>)
+          : [];
+        for (const doc of docs) {
+          if (!doc?.fields) continue;
+          const parsedDoc: Record<string, unknown> = {};
+          for (const [k, v] of Object.entries(doc.fields)) {
+            parsedDoc[k] = fromFirestoreValue(v);
+          }
+          const docId =
+            String(parsedDoc.id || '') ||
+            String(doc.name || '')
+              .split('/')
+              .pop() ||
+            '';
+          if (docId && !store[colName][docId]) {
+            store[colName][docId] = { ...parsedDoc, id: docId };
+          }
+        }
+      })
+    );
+    saveCloudStore(store);
+  } catch {
+    // Non-blocking best-effort hydration
+  }
+
+  return store;
+}
+
 export async function MirrorDocumentToFirestoreRest(
   collectionName: string,
   docId: string,
@@ -380,6 +491,33 @@ export async function MirrorDocumentToFirestoreRest(
 }
 
 /**
+ * Registra o ID de pagamento ou preferência do Mercado Pago na inscrição assim que gerado,
+ * permitindo reconciliação automática mesmo se o usuário fechar o modal ou o webhook atrasar.
+ */
+export async function attachPendingGatewayReferenceOnServer(params: {
+  registrationId: string;
+  mpPaymentId?: string;
+  mpPreferenceId?: string;
+  paymentMethod?: 'pix' | 'credit_card';
+}): Promise<void> {
+  const store = getCloudStore();
+  const existing = store.registrations[params.registrationId];
+  if (!existing || existing.paymentStatus === 'pago') return;
+
+  const nowIso = new Date().toISOString();
+  const updated: Record<string, unknown> = {
+    ...existing,
+    ...(params.mpPaymentId ? { mpPaymentId: String(params.mpPaymentId) } : {}),
+    ...(params.mpPreferenceId ? { mpPreferenceId: String(params.mpPreferenceId) } : {}),
+    ...(params.paymentMethod ? { paymentMethod: params.paymentMethod } : {}),
+    updatedAtIso: nowIso,
+  };
+  store.registrations[params.registrationId] = updated;
+  saveCloudStore(store);
+  await MirrorDocumentToFirestoreRest('registrations', params.registrationId, updated);
+}
+
+/**
  * Confirma o pagamento de uma inscrição no servidor de maneira idempotente e auditável.
  */
 export async function markRegistrationPaidOnServer(params: {
@@ -397,11 +535,21 @@ export async function markRegistrationPaidOnServer(params: {
     existing.paymentStatus === 'pago' &&
     existing.mpPaymentId === String(params.mpPaymentId)
   ) {
+    appendServerSyncLog({
+      category: 'webhook',
+      level: 'info',
+      message: `Notificação duplicada ignorada (idempotente) para inscrição ${params.registrationId}`,
+      details: { registrationId: params.registrationId, mpPaymentId: params.mpPaymentId },
+    });
     return existing;
   }
 
   const nowIso = new Date().toISOString();
   const nextRevision = Number(existing.revision || 0) + 1;
+  const qrToken =
+    typeof existing.qrValidationToken === 'string' && existing.qrValidationToken
+      ? existing.qrValidationToken
+      : `INTRAMED-IX-${params.registrationId.toUpperCase()}-VERIFIED`;
 
   const updated: Record<string, unknown> = {
     ...existing,
@@ -409,6 +557,8 @@ export async function markRegistrationPaidOnServer(params: {
     paymentStatus: 'pago',
     paymentMethod: params.paymentMethod,
     mpPaymentId: String(params.mpPaymentId),
+    paidAmount: params.paidAmount,
+    qrValidationToken: qrToken,
     paidAtIso: nowIso,
     updatedAtIso: nowIso,
     revision: nextRevision,
@@ -423,9 +573,23 @@ export async function markRegistrationPaidOnServer(params: {
     store.athletes[linkedAthId] = {
       ...store.athletes[linkedAthId],
       paymentStatus: 'pago',
+      status: 'confirmado',
       updatedAtIso: nowIso,
+      revision: Number(store.athletes[linkedAthId].revision || 0) + 1,
     };
+    void MirrorDocumentToFirestoreRest('athletes', linkedAthId, store.athletes[linkedAthId]);
   }
+
+  appendServerSyncLog({
+    category: 'payment_reconcile',
+    level: 'info',
+    message: `Pagamento confirmado automaticamente (${params.paymentMethod.toUpperCase()} - R$ ${params.paidAmount.toFixed(2)}) para ${String(existing.athleteName || params.registrationId)}`,
+    details: {
+      registrationId: params.registrationId,
+      mpPaymentId: params.mpPaymentId,
+      paidAmount: params.paidAmount,
+    },
+  });
 
   saveCloudStore(store);
   await MirrorDocumentToFirestoreRest(
@@ -433,5 +597,88 @@ export async function markRegistrationPaidOnServer(params: {
     params.registrationId,
     updated
   );
+  return updated;
+}
+
+/**
+ * Trata pagamentos estornados, cancelados ou recusados pelo Mercado Pago.
+ * Se uma inscrição estava paga e sofreu estorno/chargeback, reverte a habilitação do atleta.
+ */
+export async function handleNonApprovedPaymentStatusOnServer(params: {
+  registrationId: string;
+  mpPaymentId: string;
+  mpStatus: string;
+  statusDetail?: string;
+}): Promise<Record<string, unknown> | null> {
+  const store = getCloudStore();
+  const existing = store.registrations[params.registrationId];
+  if (!existing) return null;
+
+  const nowIso = new Date().toISOString();
+  const isRefundOrChargeback =
+    params.mpStatus === 'refunded' || params.mpStatus === 'charged_back';
+  const isRejectedOrCancelled =
+    params.mpStatus === 'rejected' || params.mpStatus === 'cancelled';
+
+  // Se já está pago por OUTRO pagamento legítimo e este que cancelou é apenas um QR code antigo expirado, não desativa!
+  if (
+    existing.paymentStatus === 'pago' &&
+    isRejectedOrCancelled &&
+    existing.mpPaymentId &&
+    String(existing.mpPaymentId) !== String(params.mpPaymentId)
+  ) {
+    return existing;
+  }
+
+  let nextPaymentStatus = String(existing.paymentStatus || 'pendente');
+  if (isRefundOrChargeback) {
+    nextPaymentStatus = 'cancelado';
+  } else if (isRejectedOrCancelled && existing.paymentStatus !== 'pago') {
+    nextPaymentStatus = 'pendente';
+  }
+
+  const nextRevision = Number(existing.revision || 0) + 1;
+  const updated: Record<string, unknown> = {
+    ...existing,
+    mpPaymentId: String(params.mpPaymentId),
+    mpLastGatewayStatus: params.mpStatus,
+    mpLastStatusDetail: params.statusDetail || '',
+    paymentStatus: nextPaymentStatus,
+    ...(isRefundOrChargeback ? { qrValidationToken: undefined } : {}),
+    updatedAtIso: nowIso,
+    revision: nextRevision,
+  };
+
+  store.registrations[params.registrationId] = updated;
+
+  if (isRefundOrChargeback) {
+    const linkedAthId =
+      (existing.linkedAthleteId as string) || `ath-${params.registrationId}`;
+    if (store.athletes[linkedAthId]) {
+      store.athletes[linkedAthId] = {
+        ...store.athletes[linkedAthId],
+        paymentStatus: 'cancelado',
+        status: 'pendente',
+        updatedAtIso: nowIso,
+        revision: Number(store.athletes[linkedAthId].revision || 0) + 1,
+      };
+      void MirrorDocumentToFirestoreRest('athletes', linkedAthId, store.athletes[linkedAthId]);
+    }
+  }
+
+  appendServerSyncLog({
+    category: 'payment_reconcile',
+    level: isRefundOrChargeback ? 'warning' : 'info',
+    message: `Status Mercado Pago [${params.mpStatus}] registrado para inscrição ${params.registrationId}`,
+    details: {
+      registrationId: params.registrationId,
+      mpPaymentId: params.mpPaymentId,
+      mpStatus: params.mpStatus,
+      nextPaymentStatus,
+    },
+  });
+
+  saveCloudStore(store);
+  await MirrorDocumentToFirestoreRest('registrations', params.registrationId, updated);
   return updated;
 }
