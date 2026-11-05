@@ -187,6 +187,13 @@ interface CompetitionStoreContextValue {
   setCurrentUser: (user: UserProfile | null) => void;
   canEditAthleteProfile: (athleteId: string) => boolean;
   canOperateOfficialData: () => boolean;
+  canOperateMatch: (matchId?: string) => boolean;
+  unlockMatchAsTableOfficial: (
+    matchId: string,
+    passwordInput: string,
+    officialName?: string
+  ) => { ok: boolean; error?: string };
+  updateMatchTablePassword: (matchId: string, newPassword: string) => boolean;
   updateAthleteAvatar: (athleteId: string, avatarDataUrl: string) => boolean;
   updateTeamCrest: (teamId: string, crestDataUrl: string) => void;
   updateAthletePersonalInfo: (
@@ -243,6 +250,7 @@ interface CompetitionStoreContextValue {
     scheduledDate?: string;
     scheduledTime?: string;
     venue?: string;
+    tableOfficialPassword?: string;
   }) => Match | null;
 }
 
@@ -385,6 +393,7 @@ function buildInitialTestWorkbench(): {
         isWinner: false,
       },
       matchSheetId: sheetId,
+      tableOfficialPassword: `MESA-${101 + index}`,
       isTestData: true,
     };
 
@@ -640,6 +649,15 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       favoriteAthleteIds: [],
       notifications: [],
     };
+  });
+
+  const [unlockedMatchIds, setUnlockedMatchIds] = useState<string[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('intramed_unlocked_match_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [isOnline, setIsOnline] = useState<boolean>(
@@ -914,7 +932,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                   !ex ||
                   ex.status !== rm.status ||
                   ex.homeTeam?.score !== rm.homeTeam?.score ||
-                  ex.awayTeam?.score !== rm.awayTeam?.score
+                  ex.awayTeam?.score !== rm.awayTeam?.score ||
+                  ex.tableOfficialPassword !== rm.tableOfficialPassword ||
+                  ex.scheduledTime !== rm.scheduledTime ||
+                  ex.venue !== rm.venue
                 ) {
                   byId.set(rm.id, ex ? { ...ex, ...rm } : rm);
                   matchChanged = true;
@@ -1049,13 +1070,36 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           }
 
           if (changed) {
-            updatedSheets[mId] = {
+            const nextSheetObj: MatchSheet = {
               ...sheet,
               timer: nextTimer,
               activeTimeout: nextTimeout,
               activeSuspensions: nextSuspensions,
               lastUpdatedIso: new Date().toISOString(),
             };
+            updatedSheets[mId] = nextSheetObj;
+
+            // Se este dispositivo é o mesário/operador da partida oficial, sincroniza o relógio na nuvem a cada 3 segundos
+            if (
+              !prev.isTestMode &&
+              nextTimer.elapsedSeconds % 3 === 0 &&
+              (isUserAdmin(prev.currentUser) || unlockedMatchIds.includes(mId))
+            ) {
+              try {
+                const cleanSheet = JSON.parse(JSON.stringify(nextSheetObj));
+                fetch('/api/cloud-sync', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    collectionName: 'match_sheets',
+                    docId: mId,
+                    data: cleanSheet,
+                  }),
+                }).catch(() => {});
+              } catch {
+                // Silencioso
+              }
+            }
           }
         });
 
@@ -1117,7 +1161,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updater: (match: Match, sheet: MatchSheet) => { match: Match; sheet: MatchSheet }
     ) => {
       setState((prev) => {
-        if (!isUserAdmin(prev.currentUser)) return prev;
+        const hasMatchUnlock = unlockedMatchIds.includes(matchId);
+        if (!isUserAdmin(prev.currentUser) && !hasMatchUnlock) return prev;
         const isTest = matchId.startsWith('test-');
         const matchesList = isTest ? [...prev.testMatches] : [...prev.officialMatches];
         const sheetsMap = isTest ? { ...prev.testSheets } : { ...prev.officialSheets };
@@ -1154,7 +1199,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         };
       });
     },
-    [isOnline, syncDocToFirestore]
+    [isOnline, syncDocToFirestore, unlockedMatchIds]
   );
 
   const setTestMode = useCallback((enabled: boolean) => {
@@ -2605,6 +2650,136 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     );
   }, [state.currentUser]);
 
+  const canOperateMatch = useCallback(
+    (matchId?: string): boolean => {
+      if (canOperateOfficialData()) return true;
+      if (!matchId) return false;
+      return unlockedMatchIds.includes(matchId);
+    },
+    [canOperateOfficialData, unlockedMatchIds]
+  );
+
+  const unlockMatchAsTableOfficial = useCallback(
+    (
+      matchId: string,
+      passwordInput: string,
+      officialName?: string
+    ): { ok: boolean; error?: string } => {
+      const cleanPass = passwordInput.trim();
+      if (!cleanPass) {
+        return { ok: false, error: 'Digite a senha da partida ou a senha da organização.' };
+      }
+
+      // 1. Senha mestra da Comissão ("bicoduro") desbloqueia o modo Admin completo
+      if (cleanPass.toLowerCase() === 'bicoduro') {
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('intramed_admin_session', 'true');
+        }
+        setCurrentUser({
+          id: 'usr-admin-intramed',
+          name: officialName?.trim()
+            ? `Comissão (${officialName.trim()})`
+            : 'Comissão Organizadora • A.A.A. Cangaceira',
+          email: 'organizacao@intramed.uema.br',
+          avatarUrl: '/assets/atletica/logo.png',
+          teamId: null,
+          teamName: 'Arbitragem & Organização INTRAMED IX',
+          modalityIds: [],
+          role: 'administrador',
+          linkedAthleteId: null,
+        });
+        return { ok: true };
+      }
+
+      // 2. Verifica a senha exclusiva do mesário cadastrada para esta partida
+      const match =
+        state.officialMatches.find((m) => m.id === matchId) ||
+        state.testMatches.find((m) => m.id === matchId);
+
+      if (!match) {
+        return { ok: false, error: 'Partida não localizada.' };
+      }
+
+      const expectedPin = (match.tableOfficialPassword || '').trim();
+      if (!expectedPin) {
+        return {
+          ok: false,
+          error:
+            'A senha de mesário desta partida ainda não foi definida pela comissão. Use a senha geral da organização.',
+        };
+      }
+
+      if (cleanPass.toLowerCase() !== expectedPin.toLowerCase()) {
+        return {
+          ok: false,
+          error: 'Senha da partida incorreta. Confira o código com a comissão organizadora.',
+        };
+      }
+
+      setUnlockedMatchIds((prev) => {
+        const next = prev.includes(matchId) ? prev : [...prev, matchId];
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('intramed_unlocked_match_ids', JSON.stringify(next));
+        }
+        return next;
+      });
+
+      // Se o mesário informou seu nome, já preenche na súmula da partida
+      if (officialName && officialName.trim()) {
+        const cleanOfficial = officialName.trim();
+        setState((prev) => {
+          const isTest = matchId.startsWith('test-');
+          const sheetsMap = isTest ? { ...prev.testSheets } : { ...prev.officialSheets };
+          const currentSheet = sheetsMap[matchId];
+          if (!currentSheet) return prev;
+          const updatedSheet: MatchSheet = {
+            ...currentSheet,
+            tableOfficialName: cleanOfficial,
+            lastUpdatedIso: new Date().toISOString(),
+          };
+          sheetsMap[matchId] = updatedSheet;
+          if (!isTest) {
+            syncDocToFirestore('match_sheets', matchId, updatedSheet);
+          }
+          return {
+            ...prev,
+            ...(isTest ? { testSheets: sheetsMap } : { officialSheets: sheetsMap }),
+          };
+        });
+      }
+
+      return { ok: true };
+    },
+    [state.officialMatches, state.testMatches, setCurrentUser, syncDocToFirestore]
+  );
+
+  const updateMatchTablePassword = useCallback(
+    (matchId: string, newPassword: string): boolean => {
+      if (!canOperateOfficialData()) return false;
+      const cleanPin = newPassword.trim();
+      setState((prev) => {
+        const isTest = matchId.startsWith('test-');
+        const list = isTest ? [...prev.testMatches] : [...prev.officialMatches];
+        const idx = list.findIndex((m) => m.id === matchId);
+        if (idx === -1) return prev;
+        const updatedMatch: Match = {
+          ...list[idx],
+          tableOfficialPassword: cleanPin || null,
+        };
+        list[idx] = updatedMatch;
+        if (!isTest) {
+          syncDocToFirestore('matches', matchId, updatedMatch);
+        }
+        return {
+          ...prev,
+          ...(isTest ? { testMatches: list } : { officialMatches: list }),
+        };
+      });
+      return true;
+    },
+    [canOperateOfficialData, syncDocToFirestore]
+  );
+
   const canEditAthleteProfile = useCallback(
     (athleteId: string): boolean => {
       if (!state.currentUser) return false;
@@ -3044,6 +3219,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       scheduledDate?: string;
       scheduledTime?: string;
       venue?: string;
+      tableOfficialPassword?: string;
     }): Match | null => {
       if (!isUserAdmin(state.currentUser)) return null;
       const teamsPool = state.isTestMode ? state.testTeams : state.officialTeams;
@@ -3075,6 +3251,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           a.teamId === awayTeam.id && a.modalityIds.includes(payload.modalityId)
       );
 
+      const generatedPin =
+        payload.tableOfficialPassword?.trim() ||
+        `MESA-${Math.floor(1000 + Math.random() * 9000)}`;
+
       const newMatch: Match = {
         id: matchId,
         modalityId: payload.modalityId,
@@ -3103,6 +3283,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           isWinner: false,
         },
         matchSheetId: sheetId,
+        tableOfficialPassword: generatedPin,
         isTestData: state.isTestMode,
       };
 
@@ -3250,6 +3431,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         setCurrentUser,
         canEditAthleteProfile,
         canOperateOfficialData,
+        canOperateMatch,
+        unlockMatchAsTableOfficial,
+        updateMatchTablePassword,
         updateAthleteAvatar,
         updateTeamCrest,
         updateAthletePersonalInfo,

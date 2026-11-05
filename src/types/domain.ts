@@ -365,6 +365,7 @@ export interface Match {
   homeTeam: MatchTeamSlot;
   awayTeam: MatchTeamSlot;
   matchSheetId?: string | null;
+  tableOfficialPassword?: string | null; // Senha exclusiva do mesário daquela partida
   isTestData?: boolean;
 }
 

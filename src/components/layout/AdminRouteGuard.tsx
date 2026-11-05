@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Lock, ShieldAlert, ArrowLeft, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import {
+  Lock,
+  ShieldAlert,
+  ArrowLeft,
+  KeyRound,
+  Eye,
+  EyeOff,
+  UserCheck,
+  ClipboardList,
+} from 'lucide-react';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 import { BrandMark } from './BrandMark';
 import { Button } from '../ui/Button';
@@ -12,28 +21,68 @@ interface AdminRouteGuardProps {
 }
 
 /**
- * Guardião de Rotas Restritas à Comissão / Arbitragem / Administração (`/admin` e `/sumula/:matchId`).
- * Senha oficial de desbloqueio: "bicoduro".
+ * Guardião de Rotas Restritas à Comissão / Arbitragem / Mesários (`/admin` e `/sumula/:matchId`).
+ * - Para rotas de súmula (`/sumula/:matchId`), permite desbloqueio por:
+ *   1. Senha individual do Mesário daquela partida (`match.tableOfficialPassword`); ou
+ *   2. Senha geral da Comissão Organizadora (`"bicoduro"`).
+ * - Para rotas administrativas gerais (`/admin`), exige a senha da Comissão Organizadora (`"bicoduro"`).
  */
 export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
   children,
   title = 'Área Restrita da Organização',
 }) => {
-  const { currentUser, setCurrentUser, canOperateOfficialData } = useCompetitionStore();
+  const {
+    setCurrentUser,
+    canOperateOfficialData,
+    canOperateMatch,
+    unlockMatchAsTableOfficial,
+    getMatchById,
+  } = useCompetitionStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const params = useParams<{ matchId?: string }>();
 
+  // Identifica se o acesso é para operar a súmula de uma partida específica
+  const matchIdFromPath =
+    params.matchId ||
+    (location.pathname.startsWith('/sumula/')
+      ? location.pathname.split('/')[2]
+      : undefined);
+
+  const isMatchSheetRoute = Boolean(
+    matchIdFromPath && location.pathname.startsWith('/sumula/')
+  );
+
+  const targetMatch = matchIdFromPath ? getMatchById(matchIdFromPath) : undefined;
+
+  const [officialName, setOfficialName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (canOperateOfficialData()) {
+  if (isMatchSheetRoute && matchIdFromPath && canOperateMatch(matchIdFromPath)) {
+    return <>{children}</>;
+  }
+
+  if (!isMatchSheetRoute && canOperateOfficialData()) {
     return <>{children}</>;
   }
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (isMatchSheetRoute && matchIdFromPath) {
+      const result = unlockMatchAsTableOfficial(
+        matchIdFromPath,
+        password,
+        officialName
+      );
+      if (!result.ok) {
+        setError(result.error || 'Senha incorreta para esta partida.');
+      }
+      return;
+    }
 
     if (password.trim() !== 'bicoduro') {
       setError('Senha incorreta. Acesso não autorizado.');
@@ -58,36 +107,76 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-10">
+    <div className="min-h-[85vh] flex items-center justify-center px-4 py-10 bg-[#F4F6FB]">
       <div className="w-full max-w-md all-sports-card p-6 sm:p-8 text-center space-y-5 border border-slate-200/90 shadow-xl bg-white rounded-3xl">
         <div className="w-16 h-16 rounded-2xl bg-[#0B218A] text-brand-yellow mx-auto flex items-center justify-center shadow-lg">
-          <Lock className="w-8 h-8" />
+          {isMatchSheetRoute ? (
+            <ClipboardList className="w-8 h-8" />
+          ) : (
+            <Lock className="w-8 h-8" />
+          )}
         </div>
 
         <div className="space-y-1.5">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-display font-extrabold uppercase tracking-wider text-slate-700">
             <Lock className="w-3.5 h-3.5 text-[#0B218A]" />
-            <span>Acesso Restrito</span>
+            <span>
+              {isMatchSheetRoute
+                ? 'Acesso do Mesário da Partida'
+                : 'Acesso Restrito da Comissão'}
+            </span>
           </span>
           <h2 className="text-xl sm:text-2xl font-display font-extrabold text-slate-900 pt-1">
-            {title}
+            {isMatchSheetRoute ? 'Mesa Oficial & Súmula Ao Vivo' : title}
           </h2>
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Esta seção requer credencial administrativa para operação de súmula, placares ou gestão de inscrições.
-          </p>
+          {targetMatch ? (
+            <div className="p-3 rounded-2xl bg-blue-50/80 border border-blue-200/80 text-xs text-[#0B218A] font-display font-bold mt-2">
+              <span className="block uppercase text-[10px] text-blue-600">
+                {targetMatch.modalityName} • {targetMatch.phaseLabel}
+              </span>
+              <span className="text-sm font-extrabold text-slate-900">
+                {targetMatch.homeTeam.teamName} × {targetMatch.awayTeam.teamName}
+              </span>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 leading-relaxed">
+              {isMatchSheetRoute
+                ? 'Digite a senha exclusiva fornecida para o mesário desta partida para abrir o painel de marcação ao vivo (gols, cartões, faltas e cronômetro).'
+                : 'Esta seção requer credencial administrativa para gestão geral do campeonato.'}
+            </p>
+          )}
         </div>
 
         <form onSubmit={handleUnlock} className="space-y-4 pt-1 text-left">
+          {isMatchSheetRoute && (
+            <Input
+              label="Seu Nome (Mesário / Árbitro de Mesa)"
+              type="text"
+              value={officialName}
+              onChange={(e) => setOfficialName(e.target.value)}
+              placeholder="Ex: João Pedro (Mesário)"
+              leftIcon={<UserCheck className="w-4 h-4 text-slate-400" />}
+            />
+          )}
+
           <div className="space-y-1">
             <Input
-              label="Senha de Acesso"
+              label={
+                isMatchSheetRoute
+                  ? 'Senha da Partida (Código do Mesário) *'
+                  : 'Senha de Acesso *'
+              }
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
                 if (error) setError(null);
               }}
-              placeholder="Digite a senha"
+              placeholder={
+                isMatchSheetRoute
+                  ? 'Ex: MESA-2026 ou código da partida'
+                  : 'Digite a senha'
+              }
               leftIcon={<KeyRound className="w-4 h-4 text-slate-400" />}
               rightElement={
                 <button
@@ -95,7 +184,11 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
                   onClick={() => setShowPassword(!showPassword)}
                   className="p-1 text-slate-400 hover:text-slate-600"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
                 </button>
               }
               required
@@ -110,13 +203,8 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
           )}
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              fullWidth
-            >
-              Desbloquear Painel
+            <Button type="submit" variant="primary" size="md" fullWidth>
+              {isMatchSheetRoute ? 'Entrar na Súmula Ao Vivo' : 'Desbloquear Painel'}
             </Button>
             <Button
               type="button"
@@ -124,9 +212,15 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
               size="md"
               fullWidth
               leftIcon={<ArrowLeft className="w-4 h-4" />}
-              onClick={() => navigate('/')}
+              onClick={() =>
+                navigate(
+                  isMatchSheetRoute && matchIdFromPath
+                    ? `/placar/${matchIdFromPath}`
+                    : '/'
+                )
+              }
             >
-              Voltar ao Início
+              {isMatchSheetRoute ? 'Voltar ao Placar' : 'Voltar ao Início'}
             </Button>
           </div>
         </form>

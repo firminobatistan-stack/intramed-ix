@@ -20,6 +20,7 @@ import {
   Shield,
   UserPlus,
   ExternalLink,
+  KeyRound,
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
@@ -78,6 +79,7 @@ export const AdminDashboardPage: React.FC = () => {
     registerTeam,
     registerAthlete,
     createOfficialMatch,
+    updateMatchTablePassword,
   } = useCompetitionStore();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('partidas');
@@ -106,6 +108,9 @@ export const AdminDashboardPage: React.FC = () => {
   const [matchDate, setMatchDate] = useState('Hoje');
   const [matchTime, setMatchTime] = useState('19:00');
   const [matchVenue, setMatchVenue] = useState('Ginásio Oficial • Medicina UEMA');
+  const [matchTablePin, setMatchTablePin] = useState('');
+  const [editingPinMatchId, setEditingPinMatchId] = useState<string | null>(null);
+  const [editingPinValue, setEditingPinValue] = useState('');
 
   const filteredMatches = visibleMatches.filter((m) =>
     modalityFilter === 'todas' ? true : m.modalityId === modalityFilter
@@ -214,12 +219,14 @@ export const AdminDashboardPage: React.FC = () => {
       scheduledDate: matchDate,
       scheduledTime: matchTime,
       venue: matchVenue,
+      tableOfficialPassword: matchTablePin || undefined,
     });
 
     if (created) {
+      setMatchTablePin('');
       showNotice(
         'ok',
-        `Partida de ${created.modalityName} criada com súmula e elencos prontos!`
+        `Partida de ${created.modalityName} criada! Senha do Mesário: ${created.tableOfficialPassword}`
       );
     }
   };
@@ -537,6 +544,59 @@ export const AdminDashboardPage: React.FC = () => {
                             </div>
                           </div>
                         )}
+
+                        {/* Senha da Partida (Código do Mesário) */}
+                        <div className="rounded-xl bg-amber-50/70 border border-amber-200 px-3 py-2 flex flex-col gap-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-900">
+                              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                              Senha do Mesário:
+                              <code className="px-2 py-0.5 rounded bg-white border border-amber-300 font-mono text-xs font-extrabold text-amber-950">
+                                {match.tableOfficialPassword || 'Não definida (Use bicoduro ou defina)'}
+                              </code>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (editingPinMatchId === match.id) {
+                                  setEditingPinMatchId(null);
+                                } else {
+                                  setEditingPinMatchId(match.id);
+                                  setEditingPinValue(match.tableOfficialPassword || '');
+                                }
+                              }}
+                              className="text-[11px] font-bold text-brand-blue hover:underline"
+                            >
+                              {editingPinMatchId === match.id ? 'Cancelar' : 'Definir / Trocar Senha'}
+                            </button>
+                          </div>
+
+                          {editingPinMatchId === match.id && (
+                            <div className="flex items-center gap-2 pt-1">
+                              <input
+                                type="text"
+                                value={editingPinValue}
+                                onChange={(e) => setEditingPinValue(e.target.value.toUpperCase())}
+                                placeholder="Ex: MESA-FUT1 ou 1234"
+                                className="flex-1 px-2.5 py-1 rounded-lg border border-amber-300 bg-white text-xs font-mono font-bold uppercase focus:outline-none focus:border-brand-blue"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateMatchTablePassword(match.id, editingPinValue.trim());
+                                  setEditingPinMatchId(null);
+                                  setFeedbackBanner({
+                                    type: 'ok',
+                                    text: `Senha do mesário da partida ${match.homeTeam.teamName} × ${match.awayTeam.teamName} atualizada para: ${editingPinValue.trim() || 'Padrão'}`,
+                                  });
+                                }}
+                                className="px-3 py-1 rounded-lg bg-brand-blue text-white text-xs font-bold hover:bg-brand-blue-hover"
+                              >
+                                Salvar Senha
+                              </button>
+                            </div>
+                          )}
+                        </div>
 
                         {/* Botões de Ação da Partida: Abrir Súmula, Placar ao Vivo e Súmula Final */}
                         <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -902,6 +962,19 @@ export const AdminDashboardPage: React.FC = () => {
                   value={matchVenue}
                   onChange={(e) => setMatchVenue(e.target.value)}
                   className="w-full px-3.5 py-2 rounded-xl border border-brand-surface-border text-sm"
+                />
+              </div>
+
+              <div className="sm:col-span-3">
+                <label className="block text-xs font-bold text-brand-text-secondary mb-1">
+                  Senha do Mesário da Partida (Opcional — se deixar em branco, o sistema gera um código automático e você pode mudar depois)
+                </label>
+                <input
+                  type="text"
+                  value={matchTablePin}
+                  onChange={(e) => setMatchTablePin(e.target.value.toUpperCase())}
+                  placeholder="Ex: MESA-FUT01 (código que o mesário usará para abrir a súmula ao vivo desta partida)"
+                  className="w-full px-3.5 py-2 rounded-xl border border-brand-surface-border text-sm font-mono uppercase focus:outline-none focus:border-brand-blue"
                 />
               </div>
             </div>

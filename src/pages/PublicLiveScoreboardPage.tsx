@@ -67,6 +67,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
     getSheetByMatchId,
     getModalityStandings,
     canOperateOfficialData,
+    canOperateMatch,
   } = useCompetitionStore();
   const isAdmin = canOperateOfficialData();
 
@@ -191,14 +192,19 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {resolvedMatch && isAdmin && (
+            {resolvedMatch && (
               <button
                 type="button"
                 onClick={() => navigate(`/sumula/${resolvedMatch.id}`)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-yellow text-[#0B218A] text-xs font-display font-extrabold shadow-sm hover:bg-brand-yellow-dark transition-colors"
+                title="Acesso para o Mesário desta partida (solicita senha da partida)"
               >
                 <Play className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Operar Súmula</span>
+                <span className="hidden sm:inline">
+                  {canOperateMatch(resolvedMatch.id)
+                    ? 'Operar Súmula Ao Vivo'
+                    : 'Sou Mesário (Súmula)'}
+                </span>
               </button>
             )}
 
@@ -392,7 +398,107 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   }`
                 : 'Aguardando início da partida'}
             </p>
+            {sheet?.tableOfficialName && (
+              <p className="text-[11px] font-bold text-emerald-700 pt-1">
+                Mesário Oficial: {sheet.tableOfficialName}
+              </p>
+            )}
           </div>
+        </section>
+
+        {/* LINHA DO TEMPO COMPLETA LANCE A LANCE (Estilo Sofascore / Flashscore) */}
+        <section className="all-sports-card p-5 sm:p-6 space-y-4">
+          <div className="all-sports-section-pill flex items-center justify-between gap-2 px-4">
+            <span>Linha do Tempo ao Vivo (Lance a Lance)</span>
+            <span className="text-[10px] font-mono font-bold text-[#0B218A]">
+              {events.length} lance(s)
+            </span>
+          </div>
+
+          {events.length > 0 ? (
+            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
+              {events.map((ev) => {
+                const isHome = ev.teamSide === 'home';
+                const isAway = ev.teamSide === 'away';
+                const isScore = SCORING_TYPES.includes(ev.type);
+                const isYellow = ev.type === 'yellow_card';
+                const isRed = ev.type === 'red_card' || ev.type === 'expulsion';
+
+                return (
+                  <div
+                    key={ev.id}
+                    className={`p-3 rounded-2xl border flex items-center justify-between gap-3 transition-all ${
+                      isScore
+                        ? 'bg-emerald-50/70 border-emerald-200'
+                        : isRed
+                        ? 'bg-rose-50/70 border-rose-200'
+                        : isYellow
+                        ? 'bg-amber-50/70 border-amber-200'
+                        : 'bg-[#F8FAFC] border-slate-200/80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="px-2.5 py-1 rounded-xl bg-white border border-slate-200 text-xs font-mono font-extrabold text-[#0B218A] shrink-0">
+                        {ev.matchClockDisplay || '--:--'}
+                      </span>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`text-xs font-display font-extrabold ${
+                              isScore
+                                ? 'text-emerald-800'
+                                : isRed
+                                ? 'text-rose-700'
+                                : isYellow
+                                ? 'text-amber-800'
+                                : 'text-slate-900'
+                            }`}
+                          >
+                            {ev.typeLabel}
+                          </span>
+                          {ev.periodLabel && (
+                            <span className="text-[10px] font-bold text-slate-400">
+                              • {ev.periodLabel}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-semibold text-slate-700 truncate">
+                          {ev.athleteName
+                            ? `${ev.athleteNumber ? `#${ev.athleteNumber} ` : ''}${ev.athleteName}`
+                            : ev.teamName || 'Arbitragem / Mesa Oficial'}
+                          {ev.secondaryAthleteName
+                            ? ` (Assist./Troca: ${ev.secondaryAthleteName})`
+                            : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    {(isHome || isAway) && (
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-display font-extrabold shrink-0 ${
+                          isHome
+                            ? 'bg-[#0B218A] text-white'
+                            : 'bg-[#10B981] text-white'
+                        }`}
+                      >
+                        {isHome ? homeName : awayName}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-6 text-center space-y-1.5">
+              <p className="text-xs font-display font-bold text-slate-600">
+                Aguardando início dos lances na Súmula Ao Vivo
+              </p>
+              <p className="text-[11px] text-slate-400 max-w-md mx-auto">
+                Assim que o mesário iniciar o cronômetro e marcar gols, pontos, cartões ou substituições, todos os lances aparecerão aqui em tempo real!
+              </p>
+            </div>
+          )}
         </section>
 
         {/* ABA 1: DETALHES (Inclui Pressing Threat, Who Will Win?, Short Analysis e Referee) */}

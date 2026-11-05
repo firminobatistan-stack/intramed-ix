@@ -253,7 +253,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
 
-          {showOperatorActions && isAdmin && (
+          {showOperatorActions && (
             <>
               <span className="text-slate-200">|</span>
               <button
@@ -262,7 +262,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 className="inline-flex items-center gap-1 text-xs font-display font-bold text-[#0B218A] hover:underline"
               >
                 <Play className="w-3 h-3" />
-                <span>Abrir Súmula (Mesa)</span>
+                <span>{isAdmin ? 'Abrir Súmula (Admin)' : 'Sou Mesário (Operar)'}</span>
               </button>
             </>
           )}
