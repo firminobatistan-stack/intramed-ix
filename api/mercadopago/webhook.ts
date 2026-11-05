@@ -110,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 String(storedReg.memberStatus || 'nao_solicitado'),
                 Boolean(storedReg.requestedMemberDiscount)
               )
-            : 45.0;
+            : 55.0;
 
           if (amount + 0.01 >= minPrice) {
             const method: 'pix' | 'credit_card' =

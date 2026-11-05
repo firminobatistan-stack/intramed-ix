@@ -27,20 +27,48 @@ export const OFFICIAL_SERVER_LOTS: Record<
   'lote-1-cangaceira': {
     id: 'lote-1-cangaceira',
     name: '1º Lote Oficial — IntraMed IX',
-    priceMember: 45.0,
-    priceNonMember: 80.0,
+    priceMember: 55.0,
+    priceNonMember: 65.0,
     isActive: true,
   },
   'lote-2-cangaceira': {
     id: 'lote-2-cangaceira',
     name: '2º Lote Final — IntraMed IX',
-    priceMember: 55.0,
-    priceNonMember: 95.0,
+    priceMember: 65.0,
+    priceNonMember: 80.0,
     isActive: false,
   },
 };
 
-export const CARD_FEE_RATE = 0.05; // 5% repasse operadora de cartão
+export const CARD_FEE_RATE = 0.05; // 5% repasse base operadora de cartão
+
+/**
+ * Calcula o valor final no cartão de crédito com repasse integral das taxas de processamento e parcelamento
+ * (1x a 6x) para o comprador, garantindo que a Atlética receba o valor líquido integral.
+ */
+export function computeCardTotalWithInstallments(
+  basePrice: number,
+  installments = 1
+): {
+  installments: number;
+  totalAmount: number;
+  installmentAmount: number;
+  feeAmount: number;
+} {
+  const safeInstallments = Math.max(1, Math.min(6, Math.floor(Number(installments) || 1)));
+  // Taxa base de cartão (5%) + acréscimo de parcelamento por parcela adicional (~2% a.m.)
+  const extraInstallmentRate = (safeInstallments - 1) * 0.02;
+  const totalRate = CARD_FEE_RATE + extraInstallmentRate;
+  const totalAmount = Math.round(basePrice * (1 + totalRate) * 100) / 100;
+  const installmentAmount = Math.round((totalAmount / safeInstallments) * 100) / 100;
+  const feeAmount = Math.round((totalAmount - basePrice) * 100) / 100;
+  return {
+    installments: safeInstallments,
+    totalAmount,
+    installmentAmount,
+    feeAmount,
+  };
+}
 
 /**
  * Faz o parse seguro do body da requisição no Vercel Serverless sem risco de exceção.

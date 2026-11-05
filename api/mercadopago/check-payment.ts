@@ -101,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           String(storedReg.memberStatus || 'nao_solicitado'),
           Boolean(storedReg.requestedMemberDiscount)
         )
-      : 45.0;
+      : 55.0;
 
     const isAmountValid = txAmount + 0.01 >= expectedMinimumAmount;
     const isApproved = status === 'approved' && isAmountValid && Boolean(targetRegId);

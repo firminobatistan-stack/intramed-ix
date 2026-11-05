@@ -88,8 +88,8 @@ export const INITIAL_TOURNAMENT_EVENT: TournamentEvent = {
       id: 'lote-1-cangaceira',
       eventId: 'intramed-ix-2026',
       name: '1º Lote Oficial — IntraMed IX',
-      priceMember: 45.0, // Preço Sócio da Atlética
-      priceNonMember: 80.0, // Preço Não Sócio
+      priceMember: 55.0, // Preço Sócio da Atlética
+      priceNonMember: 65.0, // Preço Não Sócio
       startDateIso: '2026-10-01T00:00:00Z',
       endDateIso: '2026-11-05T23:59:59Z',
       isActive: true,
@@ -98,8 +98,8 @@ export const INITIAL_TOURNAMENT_EVENT: TournamentEvent = {
       id: 'lote-2-cangaceira',
       eventId: 'intramed-ix-2026',
       name: '2º Lote Final',
-      priceMember: 60.0,
-      priceNonMember: 100.0,
+      priceMember: 65.0,
+      priceNonMember: 80.0,
       startDateIso: '2026-11-06T00:00:00Z',
       endDateIso: '2026-11-11T23:59:59Z',
       isActive: false,
@@ -129,7 +129,7 @@ export const INITIAL_DEMO_REGISTRATIONS: Registration[] = [
     memberDocumentProofUrl: 'Matrícula UEMA 2022.1 • Sócio Cangaceira Ativo',
     memberNotes: 'Aguardando verificação na lista oficial de associados 2026.',
     paymentStatus: 'aguardando_validacao',
-    authorizedPrice: 45.0,
+    authorizedPrice: 55.0,
     createdAtIso: '2026-10-22T14:20:00Z',
     updatedAtIso: '2026-10-22T14:20:00Z',
   },
@@ -157,7 +157,7 @@ export const INITIAL_DEMO_REGISTRATIONS: Registration[] = [
     validatedByAdminName: 'Diretoria de Esportes Cangaceira',
     validatedAtIso: '2026-10-22T16:00:00Z',
     paymentStatus: 'pendente',
-    authorizedPrice: 45.0,
+    authorizedPrice: 55.0,
     createdAtIso: '2026-10-22T15:10:00Z',
     updatedAtIso: '2026-10-22T16:00:00Z',
   },
@@ -180,7 +180,7 @@ export const INITIAL_DEMO_REGISTRATIONS: Registration[] = [
     requestedMemberDiscount: false,
     memberStatus: 'nao_solicitado',
     paymentStatus: 'pago',
-    authorizedPrice: 80.0,
+    authorizedPrice: 65.0,
     paymentMethod: 'pix',
     mpPaymentId: 'MP-PIX-8930219482',
     paidAtIso: '2026-10-22T18:45:00Z',

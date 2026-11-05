@@ -177,8 +177,9 @@ export const HomePage: React.FC = () => {
               Inscrições Abertas • INTRAMED IX
             </h2>
             <p className="text-xs sm:text-sm font-medium text-slate-800 max-w-xl">
-              Passaporte único com acesso a todas as 16 modalidades (Pix ou Cartão). Sócios Cangaceira pagam{' '}
-              <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 45,00</strong>.
+              Passaporte único com acesso a todas as 16 modalidades (Pix ou Cartão). Sócios Cangaceira:{' '}
+              <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 55,00</strong> • Não Sócios:{' '}
+              <strong className="font-extrabold text-slate-950">R$ 65,00</strong>.
             </p>
           </div>
 

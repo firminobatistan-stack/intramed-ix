@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   computeAuthorizedServerPrice,
-  computeCardFee,
+  computeCardTotalWithInstallments,
   getCloudStore,
   parseJsonSafe,
   parseSafeBody,
@@ -38,6 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     lotId,
     requestedMemberDiscount,
     memberStatus: clientMemberStatus,
+    installments: requestedInstallments,
   } = body;
 
   if (!registrationId) {
@@ -103,13 +104,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Cálculo 100% no servidor: base do lote + acréscimo obrigatório de 5% da operadora de cartão
+    // Cálculo 100% no servidor com taxas embutidas no valor único da inscrição (sem item separado de taxa)
     const basePrice = computeAuthorizedServerPrice(
       String(storedReg?.lotId || lotId || 'lote-1-cangaceira'),
       effectiveMemberStatus,
       Boolean(storedReg?.requestedMemberDiscount ?? requestedMemberDiscount)
     );
-    const fee = computeCardFee(basePrice);
+    const {
+      installments: safeInstallments,
+      totalAmount,
+      installmentAmount,
+      feeAmount,
+    } = computeCardTotalWithInstallments(basePrice, Number(requestedInstallments) || 1);
 
     const resolvedName = String(
       storedReg?.athleteName || athleteName || 'Atleta IntraMed'
@@ -128,15 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         description:
           'Inscricao Oficial INTRAMED IX - Atletica Cangaceira Medicina UEMA',
         quantity: 1,
-        unit_price: basePrice,
-        currency_id: 'BRL',
-      },
-      {
-        id: `${registrationId}-taxa-cartao`,
-        title: 'Intramed Cangaceira - Acrescimo Operadora de Cartao (5%)',
-        description: 'Repasse de taxa administrativa do gateway de cartao',
-        quantity: 1,
-        unit_price: fee,
+        unit_price: totalAmount,
         currency_id: 'BRL',
       },
     ];
@@ -172,7 +170,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         auto_return: 'approved',
         external_reference: String(registrationId),
         payment_methods: {
-          installments: 6,
+          default_installments: safeInstallments,
+          installments: safeInstallments,
         },
       };
 
@@ -232,8 +231,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sandboxInitPoint: data.sandbox_init_point,
       externalReference: registrationId,
       baseAmount: basePrice,
-      feeAmount: fee,
-      totalAmount: Math.round((basePrice + fee) * 100) / 100,
+      feeAmount,
+      installments: safeInstallments,
+      installmentAmount,
+      totalAmount,
     });
   } catch (err) {
     console.error('[MercadoPago Create Preference Error]', err);

@@ -126,6 +126,23 @@ const pushRegistrationToCloud = (reg: Registration, accountPassword?: string) =>
 };
 
 /**
+ * Calcula o preço vigente oficial para inscrições pendentes (Sócio: R$ 55,00 | Não Sócio: R$ 65,00).
+ */
+function normalizePendingRegistrationPrice(reg: Registration): Registration {
+  if (reg.paymentStatus === 'pago') return reg;
+  const expectedPrice =
+    reg.memberStatus === 'aprovado' ||
+    (reg.memberStatus === 'pendente' && reg.requestedMemberDiscount)
+      ? 55.0
+      : 65.0;
+  if (reg.authorizedPrice === expectedPrice) return reg;
+  return {
+    ...reg,
+    authorizedPrice: expectedPrice,
+  };
+}
+
+/**
  * Mascara dados pessoais sensíveis (CPF e Telefone) de terceiros ao salvar no localStorage (Item 21 da Auditoria).
  */
 function sanitizeRegistrationPiiForLocalCache(
@@ -133,12 +150,13 @@ function sanitizeRegistrationPiiForLocalCache(
   myIds: string[],
   isAdmin: boolean
 ): Registration {
-  if (isAdmin || myIds.includes(reg.id)) {
-    return reg;
+  const normalized = normalizePendingRegistrationPrice(reg);
+  if (isAdmin || myIds.includes(normalized.id)) {
+    return normalized;
   }
-  const cleanDoc = (reg.athleteDocument || '').replace(/\D/g, '');
+  const cleanDoc = (normalized.athleteDocument || '').replace(/\D/g, '');
   return {
-    ...reg,
+    ...normalized,
     athleteDocument:
       cleanDoc.length >= 4 ? `***.***.*${cleanDoc.slice(-4)}` : '***',
     athletePhone: '',
@@ -172,7 +190,9 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.registrations)) {
-          return parsed.registrations;
+          return (parsed.registrations as Registration[]).map((r) =>
+            normalizePendingRegistrationPrice(r)
+          );
         }
       }
     } catch {
@@ -348,17 +368,19 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
                 ex.memberStatus !== cr.memberStatus))
           ) {
             // Se este dispositivo é o titular da inscrição e o servidor mascarou o CPF no GET público, preserva o CPF local do titular
-            const mergedReg: Registration = ex
-              ? {
-                  ...ex,
-                  ...cr,
-                  athleteDocument:
-                    cr.athleteDocument?.startsWith('***') && ex.athleteDocument
-                      ? ex.athleteDocument
-                      : cr.athleteDocument,
-                  athletePhone: cr.athletePhone || ex.athletePhone,
-                }
-              : cr;
+            const mergedReg: Registration = normalizePendingRegistrationPrice(
+              ex
+                ? {
+                    ...ex,
+                    ...cr,
+                    athleteDocument:
+                      cr.athleteDocument?.startsWith('***') && ex.athleteDocument
+                        ? ex.athleteDocument
+                        : cr.athleteDocument,
+                    athletePhone: cr.athletePhone || ex.athletePhone,
+                  }
+                : cr
+            );
             byId.set(cr.id, mergedReg);
             hasDiff = true;
           }

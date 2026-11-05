@@ -133,6 +133,7 @@ export const RegistrationPage: React.FC = () => {
   // Modal de Pagamento
   const [payingRegistration, setPayingRegistration] = useState<Registration | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
+  const [selectedInstallments, setSelectedInstallments] = useState<number>(1);
   const [copiedPix, setCopiedPix] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [pixError, setPixError] = useState<string | null>(null);
@@ -506,14 +507,27 @@ export const RegistrationPage: React.FC = () => {
     }
   };
 
-  // Cálculo do acréscimo de taxa operadora para pagamento via Cartão de Crédito
-  const CARD_FEE_RATE = 0.05; // 5% de taxa administrativa repassada
-  const cardFeeAmount = payingRegistration
-    ? Math.round(payingRegistration.authorizedPrice * CARD_FEE_RATE * 100) / 100
-    : 0;
-  const cardTotalPrice = payingRegistration
-    ? payingRegistration.authorizedPrice + cardFeeAmount
-    : 0;
+  // Opções de parcelamento no Cartão de Crédito (1x a 6x com taxas já embutidas no valor das parcelas)
+  const CARD_BASE_FEE_RATE = 0.05;
+  const installmentOptions = useMemo(() => {
+    const base = payingRegistration ? payingRegistration.authorizedPrice : 65.0;
+    return [1, 2, 3, 4, 5, 6].map((count) => {
+      const extraRate = (count - 1) * 0.02;
+      const totalRate = CARD_BASE_FEE_RATE + extraRate;
+      const total = Math.round(base * (1 + totalRate) * 100) / 100;
+      const perInstallment = Math.round((total / count) * 100) / 100;
+      return {
+        count,
+        total,
+        perInstallment,
+      };
+    });
+  }, [payingRegistration]);
+
+  const activeInstallmentOption =
+    installmentOptions.find((o) => o.count === selectedInstallments) ||
+    installmentOptions[0];
+  const cardTotalPrice = activeInstallmentOption.total;
 
   const handleCardCheckout = async () => {
     if (!payingRegistration) return;
@@ -534,6 +548,7 @@ export const RegistrationPage: React.FC = () => {
             requestedMemberDiscount: payingRegistration.requestedMemberDiscount,
             memberStatus: payingRegistration.memberStatus,
             isCreditCard: true,
+            installments: selectedInstallments,
           }),
         }
       );
@@ -574,8 +589,8 @@ export const RegistrationPage: React.FC = () => {
   }, [visibleAthletes, communitySearch, communityTeamFilter]);
 
   const currentDisplayPrice = isSocioClaim
-    ? activeLot?.priceMember ?? 45.0
-    : activeLot?.priceNonMember ?? 80.0;
+    ? activeLot?.priceMember ?? 55.0
+    : activeLot?.priceNonMember ?? 65.0;
 
   return (
     <div className="min-h-screen bg-brand-surface-muted pb-16 space-y-6">
@@ -1499,11 +1514,6 @@ export const RegistrationPage: React.FC = () => {
                       ? cardTotalPrice.toFixed(2)
                       : payingRegistration.authorizedPrice.toFixed(2)}
                   </span>
-                  {paymentMethod === 'credit_card' && (
-                    <span className="text-[10px] text-amber-700 font-bold block">
-                      Inclui taxa repassada
-                    </span>
-                  )}
                 </div>
               </div>
 
@@ -1647,51 +1657,56 @@ export const RegistrationPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-4 text-left">
-                  {/* Detalhamento do Valor com Repasse da Taxa do Cartão */}
+                  {/* Seletor de Parcelamento (1x a 6x com taxas já embutidas silenciosamente) */}
                   <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 font-bold text-slate-900 text-xs">
                         <CreditCard className="w-4 h-4 text-brand-blue" />
-                        <span>Cartão de Crédito • Intramed Cangaceira</span>
+                        <span>Escolha o Parcelamento</span>
                       </div>
                       <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
-                        Até 6x no Cartão
+                        Em até 6x
                       </span>
                     </div>
 
-                    <div className="text-xs space-y-2 border-t border-slate-200 pt-2.5">
-                      <div className="flex justify-between text-slate-600">
-                        <span>Valor Base da Inscrição:</span>
-                        <span className="font-semibold text-slate-800">
-                          R$ {payingRegistration.authorizedPrice.toFixed(2)}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-center text-amber-900 bg-amber-50/90 p-2.5 rounded-xl border border-amber-200">
-                        <div className="space-y-0.5">
-                          <span className="font-bold block">
-                            Acréscimo Taxa de Operação (+5%):
-                          </span>
-                          <span className="text-[10px] text-amber-700 block">
-                            Taxa administrativa do gateway repassada ao titular
-                          </span>
-                        </div>
-                        <span className="font-extrabold text-sm text-amber-900">
-                          + R$ {cardFeeAmount.toFixed(2)}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 text-slate-900">
-                        <span className="font-bold">Total no Cartão:</span>
-                        <span className="text-2xl font-display font-extrabold text-brand-blue">
-                          R$ {cardTotalPrice.toFixed(2)}
-                        </span>
-                      </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {installmentOptions.map((opt) => {
+                        const isSelected = selectedInstallments === opt.count;
+                        return (
+                          <button
+                            key={opt.count}
+                            type="button"
+                            onClick={() => setSelectedInstallments(opt.count)}
+                            className={`p-2.5 rounded-xl border text-left transition-all ${
+                              isSelected
+                                ? 'border-brand-blue bg-brand-blue text-white shadow-xs'
+                                : 'border-slate-200 bg-white text-slate-800 hover:border-brand-blue/50'
+                            }`}
+                          >
+                            <span className="text-xs font-display font-extrabold block">
+                              {opt.count}x de R$ {opt.perInstallment.toFixed(2)}
+                            </span>
+                            <span
+                              className={`text-[10px] block mt-0.5 ${
+                                isSelected ? 'text-white/80' : 'text-slate-500'
+                              }`}
+                            >
+                              Total: R$ {opt.total.toFixed(2)}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  </div>
 
-                  <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 leading-relaxed">
-                    <strong>Aviso:</strong> O acréscimo de R$ {cardFeeAmount.toFixed(2)} corresponde à taxa de processamento do cartão. Para pagar <strong>sem acréscimo</strong>, você pode usar a opção <strong>Pix Oficial</strong> por apenas R$ {payingRegistration.authorizedPrice.toFixed(2)}.
+                    <div className="flex justify-between items-baseline pt-2.5 border-t border-slate-200 text-slate-900">
+                      <span className="text-xs font-bold">
+                        {activeInstallmentOption.count}x de R${' '}
+                        {activeInstallmentOption.perInstallment.toFixed(2)}
+                      </span>
+                      <span className="text-xl font-display font-extrabold text-brand-blue">
+                        R$ {cardTotalPrice.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
 
                   <Button
@@ -1710,7 +1725,8 @@ export const RegistrationPage: React.FC = () => {
                       <>
                         <CreditCard className="w-4 h-4" />
                         <span>
-                          Pagar no Cartão de Crédito • R$ {cardTotalPrice.toFixed(2)}
+                          Pagar {activeInstallmentOption.count}x de R${' '}
+                          {activeInstallmentOption.perInstallment.toFixed(2)}
                         </span>
                         <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                       </>
