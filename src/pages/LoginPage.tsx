@@ -17,7 +17,10 @@ import { BrandMark } from '../components/layout/BrandMark';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
-import { useCompetitionStore } from '../context/CompetitionStoreContext';
+import {
+  useCompetitionStore,
+  setStoredOperatorToken,
+} from '../context/CompetitionStoreContext';
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 
@@ -64,13 +67,40 @@ export const LoginPage: React.FC = () => {
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryFeedback, setRecoveryFeedback] = useState<string | null>(null);
 
-  const handleAdminSubmit = (e: React.FormEvent) => {
+  const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
     const cleanPass = password.trim();
 
-    if (cleanPass !== 'bicoduro') {
+    if (!cleanPass) {
+      setErrorMessage('Informe a senha da comissão organizadora.');
+      return;
+    }
+
+    let isAuthorized = cleanPass === 'bicoduro';
+
+    try {
+      const res = await fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify_operator_pin',
+          password: cleanPass,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success && data?.role === 'admin' && data?.token) {
+        setStoredOperatorToken(data.token);
+        isAuthorized = true;
+      } else if (res.status === 401) {
+        isAuthorized = false;
+      }
+    } catch {
+      // Fallback offline local caso o servidor esteja inacessível
+    }
+
+    if (!isAuthorized) {
       setErrorMessage('Senha incorreta. Acesso não autorizado.');
       return;
     }

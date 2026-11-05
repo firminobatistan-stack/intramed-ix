@@ -348,6 +348,7 @@ export interface MatchSheet {
   closedAtIso?: string | null;
   syncStatus: 'synced' | 'pending_sync' | 'offline_ready';
   lastUpdatedIso: string;
+  revision?: number;
 }
 
 export interface Match {
@@ -366,7 +367,9 @@ export interface Match {
   awayTeam: MatchTeamSlot;
   matchSheetId?: string | null;
   tableOfficialPassword?: string | null; // Senha exclusiva do mesário daquela partida
+  hasTableOfficialPassword?: boolean;
   isTestData?: boolean;
+  revision?: number;
 }
 
 export interface BracketMatchSlot {
@@ -631,6 +634,7 @@ export interface Registration {
 
   createdAtIso: string;
   updatedAtIso: string;
+  revision?: number;
 }
 
 export interface PaymentTransactionRecord {
@@ -650,6 +654,7 @@ export interface PaymentTransactionRecord {
   installments?: number;
   createdAtIso: string;
   updatedAtIso: string;
+  revision?: number;
 }
 
 export interface FinancialAuditLog {

@@ -40,16 +40,10 @@ import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { TestModeBanner } from '../components/layout/TestModeBanner';
-
-interface QuickActionDef {
-  type: MatchEventType;
-  label: string;
-  shortBadge: string;
-  pointsDelta?: number;
-  requiresAthlete: boolean;
-  requiresSecondaryAthlete?: boolean;
-  accentColor: 'blue' | 'yellow' | 'red' | 'neutral';
-}
+import {
+  QuickActionDef,
+  getQuickActionsForModality,
+} from '../data/quickActionsConfig';
 
 export const LiveMatchSheetOperatorPage: React.FC = () => {
   const { matchId } = useParams<{ matchId: string }>();
@@ -236,299 +230,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     Object.values(engine.defaultCategoryRules)[0];
 
   // Define os botões de ação rápida de acordo com a modalidade (Item 7 e 15-22)
-  const getQuickActionsForModality = (): QuickActionDef[] => {
-    switch (match.modalityId) {
-      case 'futsal':
-        return [
-          {
-            type: 'goal',
-            label: 'GOL',
-            shortBadge: '⚽',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            requiresSecondaryAthlete: true, // Assistência opcional
-            accentColor: 'blue',
-          },
-          {
-            type: 'penalty_goal',
-            label: 'GOL DE PÊNALTI',
-            shortBadge: '🥅',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'direct_free_throw',
-            label: 'TIRO LIVRE (10m)',
-            shortBadge: '🎯',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'foul',
-            label: 'FALTA ACUMULADA',
-            shortBadge: '⚠️',
-            requiresAthlete: true,
-            accentColor: 'neutral',
-          },
-          {
-            type: 'yellow_card',
-            label: 'CARTÃO',
-            shortBadge: '🟨',
-            requiresAthlete: true,
-            accentColor: 'yellow',
-          },
-          {
-            type: 'expulsion',
-            label: 'EXPULSÃO',
-            shortBadge: '🟥',
-            requiresAthlete: true,
-            accentColor: 'red',
-          },
-          {
-            type: 'substitution',
-            label: 'SUBSTITUIÇÃO',
-            shortBadge: '🔄',
-            requiresAthlete: true,
-            requiresSecondaryAthlete: true,
-            accentColor: 'neutral',
-          },
-          {
-            type: 'timeout',
-            label: 'PEDIDO DE TEMPO',
-            shortBadge: '⏱️',
-            requiresAthlete: false,
-            accentColor: 'neutral',
-          },
-        ];
-
-      case 'handebol':
-        return [
-          {
-            type: 'goal',
-            label: 'GOL',
-            shortBadge: '🤾',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'seven_meters',
-            label: 'GOL 7 METROS',
-            shortBadge: '7m',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'suspension_2min',
-            label: '2 MINUTOS',
-            shortBadge: '⏱️ 2m',
-            requiresAthlete: true,
-            accentColor: 'yellow',
-          },
-          {
-            type: 'yellow_card',
-            label: 'ADVERTÊNCIA (AMARELO)',
-            shortBadge: '🟨',
-            requiresAthlete: true,
-            accentColor: 'yellow',
-          },
-          {
-            type: 'expulsion',
-            label: 'DESQUALIFICAÇÃO (VERMELHO)',
-            shortBadge: '🟥',
-            requiresAthlete: true,
-            accentColor: 'red',
-          },
-          {
-            type: 'disqualification',
-            label: 'RELATÓRIO (AZUL)',
-            shortBadge: '🟦',
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'substitution',
-            label: 'SUBSTITUIÇÃO',
-            shortBadge: '🔄',
-            requiresAthlete: true,
-            requiresSecondaryAthlete: true,
-            accentColor: 'neutral',
-          },
-          {
-            type: 'timeout',
-            label: 'TEMPO TÉCNICO (TTO)',
-            shortBadge: '⏸️',
-            requiresAthlete: false,
-            accentColor: 'neutral',
-          },
-        ];
-
-      case 'basquete':
-        return [
-          {
-            type: 'point_1',
-            label: '+1 LANCE LIVRE',
-            shortBadge: '+1',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'point_2',
-            label: '+2 PONTOS',
-            shortBadge: '+2',
-            pointsDelta: 2,
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'point_3',
-            label: '+3 PONTOS',
-            shortBadge: '+3',
-            pointsDelta: 3,
-            requiresAthlete: true,
-            accentColor: 'yellow',
-          },
-          {
-            type: 'foul',
-            label: 'FALTA PESSOAL',
-            shortBadge: '⚠️',
-            requiresAthlete: true,
-            accentColor: 'neutral',
-          },
-          {
-            type: 'technical_foul',
-            label: 'FALTA TÉCNICA (T)',
-            shortBadge: '🇹',
-            requiresAthlete: true,
-            accentColor: 'yellow',
-          },
-          {
-            type: 'unsportsmanlike_foul',
-            label: 'ANTIDESPORTIVA (U)',
-            shortBadge: '🇺',
-            requiresAthlete: true,
-            accentColor: 'yellow',
-          },
-          {
-            type: 'team_foul',
-            label: 'FALTA EQUIPE',
-            shortBadge: '🛡️',
-            requiresAthlete: false,
-            accentColor: 'neutral',
-          },
-          {
-            type: 'substitution',
-            label: 'SUBSTITUIÇÃO',
-            shortBadge: '🔄',
-            requiresAthlete: true,
-            requiresSecondaryAthlete: true,
-            accentColor: 'neutral',
-          },
-          {
-            type: 'timeout',
-            label: 'TIMEOUT',
-            shortBadge: '⏱️',
-            requiresAthlete: false,
-            accentColor: 'neutral',
-          },
-          {
-            type: 'disqualification',
-            label: 'DESQUALIFICADO',
-            shortBadge: '🟥',
-            requiresAthlete: true,
-            accentColor: 'red',
-          },
-        ];
-
-      case 'volei':
-      case 'volei-de-praia':
-        return [
-          {
-            type: 'set_point',
-            label: '+1 PONTO (DIRETO)',
-            shortBadge: '🏐 +1',
-            pointsDelta: 1,
-            requiresAthlete: false,
-            accentColor: 'blue',
-          },
-          {
-            type: 'volleyball_attack',
-            label: 'ATAQUE (PONTO)',
-            shortBadge: '💥',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'volleyball_block',
-            label: 'BLOQUEIO (PONTO)',
-            shortBadge: '🧱',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'volleyball_ace',
-            label: 'ACE / SAQUE',
-            shortBadge: '🎯',
-            pointsDelta: 1,
-            requiresAthlete: true,
-            accentColor: 'blue',
-          },
-          {
-            type: 'volleyball_opponent_error',
-            label: 'ERRO ADVERSÁRIO',
-            shortBadge: '❌',
-            pointsDelta: 1,
-            requiresAthlete: false,
-            accentColor: 'neutral',
-          },
-          {
-            type: 'timeout',
-            label: 'TIMEOUT (30s)',
-            shortBadge: '⏱️',
-            requiresAthlete: false,
-            accentColor: 'neutral',
-          },
-          {
-            type: 'yellow_card',
-            label: 'SANÇÃO / CARTÃO',
-            shortBadge: '🟨',
-            requiresAthlete: true,
-            accentColor: 'yellow',
-          },
-          ...(match.modalityId === 'volei'
-            ? [
-                {
-                  type: 'substitution' as const,
-                  label: 'SUBSTITUIÇÃO',
-                  shortBadge: '🔄',
-                  requiresAthlete: true,
-                  requiresSecondaryAthlete: true,
-                  accentColor: 'neutral' as const,
-                },
-              ]
-            : []),
-        ];
-
-      default:
-        return [
-          {
-            type: 'table_note',
-            label: 'REGISTRAR OCORRÊNCIA',
-            shortBadge: '📝',
-            requiresAthlete: false,
-            accentColor: 'neutral',
-          },
-        ];
-    }
-  };
-
-  const quickActions = getQuickActionsForModality();
+  const quickActions = getQuickActionsForModality(match.modalityId);
 
   // Abre o fluxo rápido (Passo 1: Equipe -> Passo 2: Atleta -> Passo 3: Confirmar)
   const openActionWizard = (action: QuickActionDef) => {
@@ -644,7 +346,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] text-brand-text-primary flex flex-col select-none">
+    <div className="min-h-screen bg-[#F1F5F9] text-brand-text-primary flex flex-col">
       {/* Banner de Modo de Teste se aplicável */}
       <TestModeBanner />
 
@@ -680,14 +382,14 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
               {categoryOptions.length > 1 &&
                 sheet.timer.lifecycle === 'not_started' &&
                 !sheet.isClosed && (
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1.5">
                     <span className="text-[11px] text-white/60">Regra de tempo:</span>
                     {categoryOptions.map((catKey) => (
                       <button
                         key={catKey}
                         type="button"
                         onClick={() => configureMatchCategoryRule(match.id, catKey)}
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors min-h-[32px] ${
                           match.categoryName === catKey
                             ? 'bg-brand-yellow text-brand-blue-dark'
                             : 'bg-white/10 text-white/80 hover:bg-white/20'
@@ -724,6 +426,11 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                 matchSound.enabled = next;
                 if (next) matchSound.playConfirmBeep();
               }}
+              aria-label={
+                soundEnabled
+                  ? 'Silenciar efeitos sonoros da mesa'
+                  : 'Ativar efeitos sonoros da mesa'
+              }
               title={soundEnabled ? 'Som de mesa ativado (clique para silenciar)' : 'Som de mesa silenciado'}
               className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors min-h-[38px]"
             >
@@ -737,9 +444,9 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                matchSound.enabled = true;
-                matchSound.playBuzzer();
+                matchSound.playBuzzer(true);
               }}
+              aria-label="Acionar Buzina de Mesa"
               title="Acionar Buzina / Sirene de Mesa"
               className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-brand-yellow transition-colors min-h-[38px]"
             >
@@ -796,8 +503,16 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             ) : (
               <button
                 type="button"
-                onClick={() => reopenMatchForCorrection(match.id)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-bold text-white transition-colors"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Deseja reabrir esta súmula finalizada para correção de eventos ou placar?'
+                    )
+                  ) {
+                    reopenMatchForCorrection(match.id);
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-bold text-white transition-colors min-h-[38px]"
               >
                 <span>Reabrir Súmula</span>
               </button>
@@ -2490,6 +2205,14 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             }
           />
 
+          {match.phase !== 'group_stage' &&
+            engine.scoringModel !== 'swimming_heats' &&
+            (match.homeTeam.score ?? 0) === (match.awayTeam.score ?? 0) && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-medium leading-relaxed">
+                <strong>Atenção (Fase Eliminatória / Mata-Mata):</strong> O placar está empatado ({match.homeTeam.score ?? 0}×{match.awayTeam.score ?? 0}). Em jogos eliminatórios, registre a Prorrogação ou Disputa de Pênaltis/Tie-break antes de encerrar para definir o classificado no chaveamento.
+              </div>
+            )}
+
           <div className="grid grid-cols-2 gap-3 pt-2">
             <Button
               variant="secondary"
@@ -2502,6 +2225,19 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
               variant="primary"
               size="md"
               onClick={() => {
+                const isTiedKnockout =
+                  match.phase !== 'group_stage' &&
+                  engine.scoringModel !== 'swimming_heats' &&
+                  (match.homeTeam.score ?? 0) === (match.awayTeam.score ?? 0);
+
+                if (
+                  isTiedKnockout &&
+                  !window.confirm(
+                    'A partida é de mata-mata e está empatada. Deseja realmente encerrar sem vencedor definido?'
+                  )
+                ) {
+                  return;
+                }
                 finalizeMatch(match.id);
                 setIsFinalizeModalOpen(false);
                 navigate(`/sumula/${match.id}/documento`);

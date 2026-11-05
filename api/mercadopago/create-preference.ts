@@ -1,4 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import {
+  computeAuthorizedServerPrice,
+  computeCardFee,
+  getCloudStore,
+} from '../_lib/serverStore';
 
 function isValidEmail(email: string): boolean {
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
@@ -23,19 +28,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     athleteName,
     athleteEmail,
     turmaLabel,
-    authorizedPrice,
-    memberStatus,
-    isCreditCard,
-    cardFeeAmount,
+    lotId,
+    requestedMemberDiscount,
+    memberStatus: clientMemberStatus,
   } = req.body || {};
 
-  if (!registrationId || !authorizedPrice) {
+  if (!registrationId) {
     return res.status(400).json({
       error: 'Parâmetros incompletos para criação da ordem de pagamento.',
     });
   }
 
-  if (memberStatus === 'pendente') {
+  const store = getCloudStore();
+  const storedReg = store.registrations[String(registrationId)];
+
+  const effectiveMemberStatus = String(
+    storedReg?.memberStatus || clientMemberStatus || 'nao_solicitado'
+  );
+  const effectivePaymentStatus = String(storedReg?.paymentStatus || 'pendente');
+
+  if (effectivePaymentStatus === 'pago') {
+    return res.status(409).json({
+      error: 'Esta inscrição já consta como paga no sistema.',
+    });
+  }
+
+  if (effectiveMemberStatus === 'pendente') {
     return res.status(403).json({
       error:
         'Inscrição com solicitação de sócio ainda pendente de validação pela diretoria da Atlética.',
@@ -49,72 +67,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     (host ? `https://${host}` : 'https://intramedix.vercel.app');
 
   if (!mpAccessToken) {
-    if (!host.includes('intramedix.vercel.app')) {
-      try {
-        const proxyRes = await fetch('https://intramedix.vercel.app/api/mercadopago/create-preference', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(req.body || {}),
-        });
-        const proxyData = await proxyRes.json();
-        return res.status(proxyRes.status).json(proxyData);
-      } catch (proxyErr) {
-        console.error('[MercadoPago Preference Proxy Fallback Error]', proxyErr);
-      }
-    }
-
     return res.status(500).json({
       error: 'Credencial MERCADOPAGO_ACCESS_TOKEN não configurada no servidor.',
     });
   }
 
   try {
-    const basePrice = Math.round(Number(authorizedPrice) * 100) / 100;
-    const fee = isCreditCard
-      ? cardFeeAmount
-        ? Math.round(Number(cardFeeAmount) * 100) / 100
-        : Math.round(basePrice * 0.05 * 100) / 100
-      : 0;
+    // Cálculo 100% no servidor: base do lote + acréscimo obrigatório de 5% da operadora de cartão (Item 5 da Auditoria)
+    const basePrice = computeAuthorizedServerPrice(
+      String(storedReg?.lotId || lotId || 'lote-1-cangaceira'),
+      effectiveMemberStatus,
+      Boolean(storedReg?.requestedMemberDiscount ?? requestedMemberDiscount)
+    );
+    const fee = computeCardFee(basePrice);
+
+    const resolvedName = String(
+      storedReg?.athleteName || athleteName || 'Atleta IntraMed'
+    ).trim();
+    const resolvedTurma = String(storedReg?.turmaLabel || turmaLabel || '');
 
     const items = [
       {
         id: String(registrationId),
-        title: `Intramed Cangaceira — Inscrição ${turmaLabel ? turmaLabel + ' • ' : ''}Passaporte (${athleteName || 'Atleta'})`,
-        description: 'Inscrição Oficial INTRAMED IX — Atlética Cangaceira Medicina UEMA',
+        title: `Intramed Cangaceira — Inscrição ${
+          resolvedTurma ? resolvedTurma + ' • ' : ''
+        }Passaporte (${resolvedName})`,
+        description:
+          'Inscrição Oficial INTRAMED IX — Atlética Cangaceira Medicina UEMA',
         quantity: 1,
         unit_price: basePrice,
         currency_id: 'BRL',
       },
-    ];
-
-    if (fee > 0) {
-      items.push({
+      {
         id: `${registrationId}-taxa-cartao`,
-        title: 'Intramed Cangaceira — Acréscimo Operadora de Cartão',
+        title: 'Intramed Cangaceira — Acréscimo Operadora de Cartão (5%)',
         description: 'Repasse de taxa administrativa do gateway de cartão',
         quantity: 1,
         unit_price: fee,
         currency_id: 'BRL',
-      });
-    }
+      },
+    ];
 
-    const cleanEmail = (athleteEmail || '').trim().toLowerCase();
+    const cleanEmail = String(
+      storedReg?.athleteEmail || athleteEmail || ''
+    )
+      .trim()
+      .toLowerCase();
     const safeEmail = isValidEmail(cleanEmail)
       ? cleanEmail
-      : `atleta.${Date.now()}@intramed.com.br`;
+      : `atleta.${String(registrationId).replace(/[^a-zA-Z0-9]/g, '')}@intramed.com.br`;
 
     const buildPreferencePayload = (payerEmail: string) => {
       const p: Record<string, unknown> = {
         items,
         statement_descriptor: 'INTRAMED CANG',
         payer: {
-          name: (athleteName || 'Atleta IntraMed').trim(),
+          name: resolvedName,
           email: payerEmail,
         },
         back_urls: {
-          success: `${appBaseUrl}/inscricao?status=sucesso&reg=${registrationId}`,
-          pending: `${appBaseUrl}/inscricao?status=pendente&reg=${registrationId}`,
-          failure: `${appBaseUrl}/inscricao?status=falha&reg=${registrationId}`,
+          success: `${appBaseUrl}/inscricao?status=sucesso&reg=${encodeURIComponent(
+            String(registrationId)
+          )}`,
+          pending: `${appBaseUrl}/inscricao?status=pendente&reg=${encodeURIComponent(
+            String(registrationId)
+          )}`,
+          failure: `${appBaseUrl}/inscricao?status=falha&reg=${encodeURIComponent(
+            String(registrationId)
+          )}`,
         },
         auto_return: 'approved',
         external_reference: String(registrationId),
@@ -123,40 +143,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       };
 
-      if (appBaseUrl && !appBaseUrl.includes('localhost') && appBaseUrl.startsWith('https://')) {
+      if (
+        appBaseUrl &&
+        !appBaseUrl.includes('localhost') &&
+        appBaseUrl.startsWith('https://')
+      ) {
         p.notification_url = `${appBaseUrl}/api/mercadopago/webhook`;
       }
       return p;
     };
 
-    let mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${mpAccessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(buildPreferencePayload(safeEmail)),
-    });
-
-    let data = await mpResponse.json();
-
-    if (!mpResponse.ok) {
-      const fallbackEmail = `inscricao.${Date.now()}@atleticacangaceira.com.br`;
-      mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
+    let mpResponse = await fetch(
+      'https://api.mercadopago.com/checkout/preferences',
+      {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${mpAccessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(buildPreferencePayload(fallbackEmail)),
-      });
+        body: JSON.stringify(buildPreferencePayload(safeEmail)),
+      }
+    );
+
+    let data = await mpResponse.json();
+
+    if (!mpResponse.ok && mpResponse.status >= 400 && mpResponse.status < 500) {
+      const fallbackEmail = `inscricao.${String(registrationId).replace(
+        /[^a-zA-Z0-9]/g,
+        ''
+      )}@atleticacangaceira.com.br`;
+      mpResponse = await fetch(
+        'https://api.mercadopago.com/checkout/preferences',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${mpAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(buildPreferencePayload(fallbackEmail)),
+        }
+      );
       data = await mpResponse.json();
     }
 
     if (!mpResponse.ok) {
       return res.status(mpResponse.status).json({
-        error: data.message || 'Falha ao criar preferência junto à API do Mercado Pago.',
-        details: data,
+        error: 'Falha ao criar checkout de cartão junto ao Mercado Pago.',
       });
     }
 
@@ -167,12 +199,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       externalReference: registrationId,
       baseAmount: basePrice,
       feeAmount: fee,
-      totalAmount: basePrice + fee,
+      totalAmount: Math.round((basePrice + fee) * 100) / 100,
     });
   } catch (err) {
+    console.error('[MercadoPago Create Preference Error]', err);
     return res.status(500).json({
       error: 'Erro interno ao processar preferência de pagamento.',
-      details: err instanceof Error ? err.message : String(err),
     });
   }
 }

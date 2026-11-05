@@ -6,13 +6,28 @@ import {
   LeaderboardEntry,
   Match,
   MatchEvent,
+  MatchEventType,
+  MatchLineupEntry,
   MatchSheet,
   ModalitySlug,
+  PeriodScoreEntry,
   StandingEntry,
   Team,
   TeamRecentMatchCapsule,
 } from '../types/domain';
 import { formatMsToSwimmingTime } from '../data/sportRulesConfig';
+
+/**
+ * Gera um ID único criptograficamente seguro (com fallback para ambientes legados).
+ */
+export function generateUniqueId(prefix = 'id'): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 9)}`;
+}
 
 /**
  * Deduplica eventos pelo ID único e filtra eventos removidos (isDeleted === true).
@@ -31,19 +46,214 @@ export function getValidUniqueEvents(events: MatchEvent[]): MatchEvent[] {
 }
 
 /**
- * Verifica se um evento pertence a um atleta (por ID estável ou fallback seguro de nome+camisa na escalação).
+ * Função única centralizada para calcular a pontuação de um evento de súmula (Item 8 da Auditoria).
+ */
+export function getEventPointsDelta(ev: {
+  type: MatchEventType;
+  pointsDelta?: number;
+}): number {
+  if (typeof ev.pointsDelta === 'number' && !Number.isNaN(ev.pointsDelta)) {
+    return ev.pointsDelta;
+  }
+  switch (ev.type) {
+    case 'goal':
+    case 'point_1':
+    case 'set_point':
+    case 'seven_meters':
+    case 'penalty_goal':
+    case 'direct_free_throw':
+    case 'volleyball_ace':
+    case 'volleyball_block':
+    case 'volleyball_attack':
+    case 'volleyball_opponent_error':
+      return 1;
+    case 'point_2':
+      return 2;
+    case 'point_3':
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+export function isFoulEventType(type: MatchEventType): boolean {
+  return (
+    type === 'foul' ||
+    type === 'team_foul' ||
+    type === 'technical_foul' ||
+    type === 'unsportsmanlike_foul'
+  );
+}
+
+/**
+ * Recalcula de forma pura e determinística o placar, parciais por período/set, sets vencidos,
+ * faltas do período atual e pedidos de tempo a partir da lista de eventos válidos (Item 15 da Auditoria).
+ */
+export function recomputeMatchAndSheetFromEvents(
+  match: Match,
+  sheet: MatchSheet,
+  initialHomeLineup?: MatchLineupEntry[],
+  initialAwayLineup?: MatchLineupEntry[]
+): { match: Match; sheet: MatchSheet } {
+  const validEvents = getValidUniqueEvents(sheet.events);
+
+  // Ordena cronologicamente do mais antigo para o mais recente para reproduzir substituições
+  const chronological = [...validEvents].reverse();
+
+  // Inicializa parciais zeradas preservando isFinished de períodos já encerrados
+  const periodMap = new Map<number, PeriodScoreEntry>();
+  for (const ps of sheet.periodScores) {
+    periodMap.set(ps.periodNumber, {
+      ...ps,
+      homeScore: 0,
+      awayScore: 0,
+    });
+  }
+
+  let homeTotalPoints = 0;
+  let awayTotalPoints = 0;
+  let homeFoulsCurrentPeriod = 0;
+  let awayFoulsCurrentPeriod = 0;
+  let homeTimeoutsUsed = 0;
+  let awayTimeoutsUsed = 0;
+
+  let homeLineup = (initialHomeLineup || sheet.homeLineup).map((l) => ({ ...l }));
+  let awayLineup = (initialAwayLineup || sheet.awayLineup).map((l) => ({ ...l }));
+
+  for (const ev of chronological) {
+    const delta = getEventPointsDelta(ev);
+    if (delta > 0 && (ev.teamSide === 'home' || ev.teamSide === 'away')) {
+      const pNum = ev.periodNumber || 1;
+      const existingPeriod = periodMap.get(pNum) || {
+        periodNumber: pNum,
+        label: ev.periodLabel || `P${pNum}`,
+        homeScore: 0,
+        awayScore: 0,
+        isFinished: false,
+      };
+      if (ev.teamSide === 'home') {
+        existingPeriod.homeScore += delta;
+        homeTotalPoints += delta;
+      } else {
+        existingPeriod.awayScore += delta;
+        awayTotalPoints += delta;
+      }
+      periodMap.set(pNum, existingPeriod);
+    }
+
+    if (isFoulEventType(ev.type) && ev.periodNumber === sheet.timer.currentPeriod) {
+      if (ev.teamSide === 'home') homeFoulsCurrentPeriod += 1;
+      if (ev.teamSide === 'away') awayFoulsCurrentPeriod += 1;
+    }
+
+    if (ev.type === 'timeout' && ev.periodNumber === sheet.timer.currentPeriod) {
+      if (ev.teamSide === 'home') homeTimeoutsUsed += 1;
+      if (ev.teamSide === 'away') awayTimeoutsUsed += 1;
+    }
+
+    if (
+      ev.type === 'substitution' &&
+      ev.teamSide &&
+      ev.athleteId &&
+      ev.secondaryAthleteId
+    ) {
+      const applySub = (list: MatchLineupEntry[]) =>
+        list.map((entry) => {
+          if (entry.athleteId === ev.athleteId) return { ...entry, isStarter: false };
+          if (entry.athleteId === ev.secondaryAthleteId)
+            return { ...entry, isStarter: true };
+          return entry;
+        });
+      if (ev.teamSide === 'home') {
+        homeLineup = applySub(homeLineup);
+      } else {
+        awayLineup = applySub(awayLineup);
+      }
+    }
+  }
+
+  const nextPeriodScores = Array.from(periodMap.values()).sort(
+    (a, b) => a.periodNumber - b.periodNumber
+  );
+
+  // Calcula placar principal conforme o modelo da modalidade
+  let finalHomeScore = homeTotalPoints;
+  let finalAwayScore = awayTotalPoints;
+  let homeSetsWon = match.homeTeam.setsWon ?? 0;
+  let awaySetsWon = match.awayTeam.setsWon ?? 0;
+
+  if (sheet.scoringModel === 'sets_points') {
+    homeSetsWon = 0;
+    awaySetsWon = 0;
+    for (const ps of nextPeriodScores) {
+      if (ps.isFinished) {
+        if (ps.homeScore > ps.awayScore) homeSetsWon += 1;
+        else if (ps.awayScore > ps.homeScore) awaySetsWon += 1;
+      }
+    }
+    finalHomeScore = homeSetsWon;
+    finalAwayScore = awaySetsWon;
+  } else if (sheet.scoringModel === 'team_submatches' && sheet.subMatches) {
+    finalHomeScore = sheet.subMatches.filter((sm) => sm.winnerSide === 'home').length;
+    finalAwayScore = sheet.subMatches.filter((sm) => sm.winnerSide === 'away').length;
+  }
+
+  const activeSuspensions = sheet.activeSuspensions.filter((s) =>
+    validEvents.some((e) => e.id === s.eventId)
+  );
+
+  const hasValidTimeoutInPeriod = validEvents.some(
+    (e) => e.type === 'timeout' && e.periodNumber === sheet.timer.currentPeriod
+  );
+  const nextActiveTimeout = hasValidTimeoutInPeriod ? sheet.activeTimeout : null;
+
+  return {
+    match: {
+      ...match,
+      homeTeam: {
+        ...match.homeTeam,
+        score: finalHomeScore,
+        setsWon: sheet.scoringModel === 'sets_points' ? homeSetsWon : match.homeTeam.setsWon,
+      },
+      awayTeam: {
+        ...match.awayTeam,
+        score: finalAwayScore,
+        setsWon: sheet.scoringModel === 'sets_points' ? awaySetsWon : match.awayTeam.setsWon,
+      },
+    },
+    sheet: {
+      ...sheet,
+      periodScores: nextPeriodScores,
+      homeFoulsCurrentPeriod,
+      awayFoulsCurrentPeriod,
+      homeTimeoutsUsed,
+      awayTimeoutsUsed,
+      homeLineup,
+      awayLineup,
+      activeSuspensions,
+      activeTimeout: nextActiveTimeout,
+    },
+  };
+}
+
+/**
+ * Verifica se um evento pertence a um atleta exclusivamente por ID estável,
+ * usando igualdade exata de nome+equipe apenas quando o evento antigo não possuir athleteId (Item 20 da Auditoria).
  */
 function eventMatchesAthlete(
   ev: MatchEvent,
-  athleteId: string,
-  athleteName?: string
+  athlete: Athlete,
+  expectedSide?: 'home' | 'away'
 ): boolean {
-  if (ev.athleteId && ev.athleteId === athleteId) return true;
+  if (ev.athleteId) {
+    return ev.athleteId === athlete.id;
+  }
+  if (expectedSide && ev.teamSide && ev.teamSide !== expectedSide) {
+    return false;
+  }
   if (
-    !ev.athleteId &&
-    athleteName &&
     ev.athleteName &&
-    ev.athleteName.trim().toLowerCase() === athleteName.trim().toLowerCase()
+    ev.athleteName.trim().toLowerCase() === athlete.name.trim().toLowerCase()
   ) {
     return true;
   }
@@ -94,36 +304,58 @@ export function computeAthleteModalityStats(
     const sheet = sheetsByMatchId[match.id];
     if (!sheet) continue;
 
+    const isHomeTeamMatch = match.homeTeam.teamId === athlete.teamId;
+    const isAwayTeamMatch = match.awayTeam.teamId === athlete.teamId;
+
     const inHomeLineup = sheet.homeLineup.find(
       (entry) =>
         entry.athleteId === athlete.id ||
-        entry.athleteName.trim().toLowerCase() === athlete.name.trim().toLowerCase()
+        (!entry.athleteId &&
+          isHomeTeamMatch &&
+          entry.athleteName.trim().toLowerCase() === athlete.name.trim().toLowerCase())
     );
     const inAwayLineup = sheet.awayLineup.find(
       (entry) =>
         entry.athleteId === athlete.id ||
-        entry.athleteName.trim().toLowerCase() === athlete.name.trim().toLowerCase()
+        (!entry.athleteId &&
+          isAwayTeamMatch &&
+          entry.athleteName.trim().toLowerCase() === athlete.name.trim().toLowerCase())
     );
+
+    const expectedSide: 'home' | 'away' | undefined = inHomeLineup
+      ? 'home'
+      : inAwayLineup
+      ? 'away'
+      : isHomeTeamMatch
+      ? 'home'
+      : isAwayTeamMatch
+      ? 'away'
+      : undefined;
 
     const validEvents = getValidUniqueEvents(sheet.events);
     const athleteEvents = validEvents.filter((ev) =>
-      eventMatchesAthlete(ev, athlete.id, athlete.name)
+      eventMatchesAthlete(ev, athlete, expectedSide)
     );
 
-    // Natação: verifica raias
+    // Natação: verifica raias por athleteId exato (ou nome exato se não houver ID)
     const swimLane = (sheet.swimmingLanes || []).find(
       (l) =>
         l.athleteId === athlete.id ||
-        l.athleteName.trim().toLowerCase() === athlete.name.trim().toLowerCase()
+        (!l.athleteId &&
+          l.athleteName.trim().toLowerCase() === athlete.name.trim().toLowerCase())
     );
 
-    // Tênis de Mesa: verifica sub-partidas
+    // Tênis de Mesa: verifica sub-partidas por athleteId exato (sem `.includes()` que causava colisão "Ana"/"Mariana")
     const ttSubs = (sheet.subMatches || []).filter(
       (sm) =>
         sm.homeAthleteId === athlete.id ||
         sm.awayAthleteId === athlete.id ||
-        sm.homeAthleteName.toLowerCase().includes(athlete.name.toLowerCase()) ||
-        sm.awayAthleteName.toLowerCase().includes(athlete.name.toLowerCase())
+        (!sm.homeAthleteId &&
+          sm.homeAthleteName.trim().toLowerCase() ===
+            athlete.name.trim().toLowerCase()) ||
+        (!sm.awayAthleteId &&
+          sm.awayAthleteName.trim().toLowerCase() ===
+            athlete.name.trim().toLowerCase())
     );
 
     const participated =
@@ -134,7 +366,8 @@ export function computeAthleteModalityStats(
 
     if (!participated) continue;
 
-    const teamSide: 'home' | 'away' = inAwayLineup ? 'away' : 'home';
+    const teamSide: 'home' | 'away' =
+      inAwayLineup || (!inHomeLineup && isAwayTeamMatch) ? 'away' : 'home';
     const isStarter = Boolean(inHomeLineup?.isStarter || inAwayLineup?.isStarter);
     const hasMatchStarted =
       match.status === 'live' ||
@@ -155,7 +388,6 @@ export function computeAthleteModalityStats(
       }
     }
 
-    // Contabiliza eventos básicos daquela partida
     let matchGoals = 0;
     let matchPoints = 0;
     let match3Pt = 0;
@@ -171,6 +403,7 @@ export function computeAthleteModalityStats(
         case 'goal':
         case 'penalty_goal':
         case 'seven_meters':
+        case 'direct_free_throw':
           matchGoals += 1;
           break;
         case 'point_3':
@@ -197,6 +430,8 @@ export function computeAthleteModalityStats(
           matchSusp += 1;
           break;
         case 'foul':
+        case 'technical_foul':
+        case 'unsportsmanlike_foul':
           matchFouls += 1;
           break;
         default:
@@ -214,7 +449,6 @@ export function computeAthleteModalityStats(
     suspensions2Min += matchSusp;
     fouls += matchFouls;
 
-    // Vôlei e Vôlei de Praia: apenas participação coletiva em sets (sem pontos individuais)
     let matchSets = 0;
     if (modalityId === 'volei' || modalityId === 'volei-de-praia') {
       matchSets = sheet.periodScores.filter(
@@ -233,13 +467,14 @@ export function computeAthleteModalityStats(
       }
     }
 
-    // Tênis de Mesa: sub-partidas individuais
     let matchSubWins = 0;
     if (ttSubs.length > 0) {
       for (const sm of ttSubs) {
         const isHomeSub =
           sm.homeAthleteId === athlete.id ||
-          sm.homeAthleteName.toLowerCase().includes(athlete.name.toLowerCase());
+          (!sm.homeAthleteId &&
+            sm.homeAthleteName.trim().toLowerCase() ===
+              athlete.name.trim().toLowerCase());
         if (sm.status === 'finished' || sm.homeSetsWon > 0 || sm.awaySetsWon > 0) {
           subMatchesPlayed += 1;
           if (
@@ -253,7 +488,6 @@ export function computeAthleteModalityStats(
       }
     }
 
-    // Natação: tempo de raia e colocação
     let matchSwimFormatted: string | null = null;
     let matchSwimPlacement: number | null = null;
     if (swimLane && swimLane.registeredTimeMs !== null && swimLane.status === 'finished') {
@@ -378,11 +612,7 @@ export function computeTeamStats(
 
     let outcome: TeamRecentMatchCapsule['outcome'] = 'PENDING';
 
-    if (
-      match.status === 'finished' ||
-      match.status === 'live' ||
-      match.status === 'halftime'
-    ) {
+    if (match.status === 'finished') {
       matchesPlayed += 1;
       goalsOrPointsFor += myScore;
       goalsOrPointsAgainst += oppScore;
@@ -428,6 +658,9 @@ export function computeTeamStats(
     });
   }
 
+  // Pega as 5 partidas mais recentes (priorizando jogos ao vivo ou encerrados mais recentes — Item 30 da Auditoria)
+  const orderedCapsules = [...recentCapsules].reverse().slice(0, 5);
+
   return {
     teamId: team.id,
     teamName: team.name,
@@ -440,12 +673,16 @@ export function computeTeamStats(
     goalsOrPointsAgainst,
     yellowCards,
     redCards,
-    recentCapsules: recentCapsules.slice(0, 5),
+    recentCapsules: orderedCapsules,
   };
 }
 
 /**
- * Gera a Tabela de Classificação (Standings) automaticamente a partir das partidas da modalidade.
+ * Gera a Tabela de Classificação (Standings) automaticamente a partir das partidas da fase classificatória.
+ * Corrige o Item 19 da Auditoria:
+ * - Contabiliza apenas partidas finalizadas (`status === 'finished'`) da fase de grupos (`phase === 'group_stage'`);
+ * - Aplica pontuação específica por modalidade (Vôlei: 2x0=3pts, 2x1=2pts/1pt; Basquete: V=2pts, D=1pt; Futsal/Handebol: 3/1/0);
+ * - Inclui critério de desempate por Confronto Direto entre duas equipes empatadas em pontos.
  */
 export function computeModalityStandings(
   modalityId: ModalitySlug | 'all',
@@ -459,7 +696,6 @@ export function computeModalityStandings(
 
   const map = new Map<string, StandingEntry>();
 
-  // Inicializa equipes inscritas na modalidade
   for (const team of teams) {
     if (modalityId !== 'all' && !team.modalityIds.includes(modalityId)) continue;
     map.set(team.id, {
@@ -478,14 +714,17 @@ export function computeModalityStandings(
     });
   }
 
+  // Registra confronto direto: headToHead.get(`${teamA}__${teamB}`) = pontos de A contra B
+  const headToHeadPoints = new Map<string, number>();
+  const addH2H = (teamA: string, teamB: string, ptsA: number) => {
+    const key = `${teamA}__${teamB}`;
+    headToHeadPoints.set(key, (headToHeadPoints.get(key) || 0) + ptsA);
+  };
+
   for (const match of filteredMatches) {
-    if (
-      match.status !== 'finished' &&
-      match.status !== 'live' &&
-      match.status !== 'halftime'
-    ) {
-      continue;
-    }
+    // Apenas jogos encerrados da fase classificatória entram na tabela de grupos
+    if (match.status !== 'finished') continue;
+    if (match.phase && match.phase !== 'group_stage') continue;
 
     const homeKey = match.homeTeam.teamId || match.homeTeam.teamName || '';
     const awayKey = match.awayTeam.teamId || match.awayTeam.teamName || '';
@@ -539,28 +778,75 @@ export function computeModalityStandings(
     homeRow.scoreDifference = homeRow.scoreFor - homeRow.scoreAgainst;
     awayRow.scoreDifference = awayRow.scoreFor - awayRow.scoreAgainst;
 
+    const isVolley =
+      match.modalityId === 'volei' || match.modalityId === 'volei-de-praia';
+    const isBasketball = match.modalityId === 'basquete';
+
     if (hScore > aScore) {
       homeRow.won += 1;
-      homeRow.points += 3;
       awayRow.lost += 1;
+      if (isVolley) {
+        // Vôlei (melhor de 3 ou 5): vitória por 2x1 ou 3x2 dá 2 pts ao vencedor e 1 pt ao perdedor; 2x0 ou 3x0/3x1 dá 3 pts e 0 pt
+        const isTiebreakSetWin = hScore - aScore === 1 && aScore >= 1;
+        const winPts = isTiebreakSetWin ? 2 : 3;
+        const losePts = isTiebreakSetWin ? 1 : 0;
+        homeRow.points += winPts;
+        awayRow.points += losePts;
+        addH2H(homeKey, awayKey, winPts);
+        addH2H(awayKey, homeKey, losePts);
+      } else if (isBasketball) {
+        // FIBA: 2 pontos por vitória, 1 ponto por derrota jogada
+        homeRow.points += 2;
+        awayRow.points += 1;
+        addH2H(homeKey, awayKey, 2);
+        addH2H(awayKey, homeKey, 1);
+      } else {
+        homeRow.points += 3;
+        addH2H(homeKey, awayKey, 3);
+      }
     } else if (aScore > hScore) {
       awayRow.won += 1;
-      awayRow.points += 3;
       homeRow.lost += 1;
+      if (isVolley) {
+        const isTiebreakSetWin = aScore - hScore === 1 && hScore >= 1;
+        const winPts = isTiebreakSetWin ? 2 : 3;
+        const losePts = isTiebreakSetWin ? 1 : 0;
+        awayRow.points += winPts;
+        homeRow.points += losePts;
+        addH2H(awayKey, homeKey, winPts);
+        addH2H(homeKey, awayKey, losePts);
+      } else if (isBasketball) {
+        awayRow.points += 2;
+        homeRow.points += 1;
+        addH2H(awayKey, homeKey, 2);
+        addH2H(homeKey, awayKey, 1);
+      } else {
+        awayRow.points += 3;
+        addH2H(awayKey, homeKey, 3);
+      }
     } else {
       homeRow.drawn += 1;
       awayRow.drawn += 1;
       homeRow.points += 1;
       awayRow.points += 1;
+      addH2H(homeKey, awayKey, 1);
+      addH2H(awayKey, homeKey, 1);
     }
   }
 
   const rows = Array.from(map.values()).sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
+    // 1º Desempate: Confronto direto
+    const aVsB = headToHeadPoints.get(`${a.teamId}__${b.teamId}`) || 0;
+    const bVsA = headToHeadPoints.get(`${b.teamId}__${a.teamId}`) || 0;
+    if (aVsB !== bVsA) return bVsA - aVsB;
+    // 2º Desempate: Número de vitórias
     if (b.won !== a.won) return b.won - a.won;
+    // 3º Desempate: Saldo de gols/pontos/sets
     if (b.scoreDifference !== a.scoreDifference) {
       return b.scoreDifference - a.scoreDifference;
     }
+    // 4º Desempate: Gols/Pontos pró
     if (b.scoreFor !== a.scoreFor) return b.scoreFor - a.scoreFor;
     return a.teamName.localeCompare(b.teamName);
   });
@@ -571,14 +857,6 @@ export function computeModalityStandings(
   }));
 }
 
-/**
- * Calcula o Ranking de Atletas (Leaderboard) básico e objetivo para a modalidade selecionada:
- * - Futsal / Handebol: Artilharia (Gols marcados);
- * - Basquete: Cestinhas (Pontos Totais e Cestas de 3 Pts);
- * - Natação: Melhores Tempos Oficiais (menor tempo em ms);
- * - Tênis de Mesa: Mais Vitórias Individuais;
- * - Vôlei / Vôlei de Praia: Participação em Sets/Vitórias coletivas (sem pontos individuais fictícios).
- */
 export function computeModalityLeaderboard(
   modalityId: ModalitySlug,
   athletes: Athlete[],
@@ -702,7 +980,6 @@ export function computeModalityLeaderboard(
     }
   }
 
-  // Ordenação específica: Natação ordena pelo menor tempo; demais pelo maior valor
   rawEntries.sort((a, b) => {
     if (modalityId === 'natacao') {
       if (a.primaryValue !== b.primaryValue) {

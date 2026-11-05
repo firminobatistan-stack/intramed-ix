@@ -244,18 +244,47 @@ export const RegistrationPage: React.FC = () => {
     setTimeout(() => setCopiedPix(false), 3000);
   };
 
-  // Helper de requisição resiliente: tenta o domínio atual e, caso esteja em domínio secundário sem token,
-  // redireciona de forma transparente para o servidor principal (intramedix.vercel.app)
+  // Helper de requisição de API (usa o servidor do próprio domínio sem proxy inseguro entre domínios)
   const fetchGatewayApi = async (
     path: string,
     options?: RequestInit
   ): Promise<Response> => {
-    const localRes = await fetch(path, options).catch(() => null);
-    if (localRes && localRes.status !== 500 && localRes.status !== 404) {
-      return localRes;
-    }
-    return fetch(`https://intramedix.vercel.app${path}`, options);
+    return fetch(path, options);
   };
+
+  // Retorno automático do Checkout Pro (Cartão de Crédito): verifica payment_id / collection_id com o servidor
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    const regParam =
+      searchParams.get('reg') || searchParams.get('external_reference');
+    const mpPaymentId =
+      searchParams.get('payment_id') || searchParams.get('collection_id');
+
+    if (statusParam === 'sucesso' && regParam && mpPaymentId && /^\d+$/.test(mpPaymentId)) {
+      let isMounted = true;
+      fetchGatewayApi(
+        `/api/mercadopago/check-payment?paymentId=${encodeURIComponent(
+          mpPaymentId
+        )}&registrationId=${encodeURIComponent(regParam)}`
+      )
+        .then((res) => (res.ok ? res.json() : null))
+        .then(async (data) => {
+          if (!isMounted || !data) return;
+          if (data.isApproved) {
+            await simulatePaymentConfirmation(
+              regParam,
+              'credit_card',
+              String(mpPaymentId)
+            );
+          }
+        })
+        .catch(() => {});
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [searchParams, simulatePaymentConfirmation]);
 
   // Efeito para gerar o Pix Oficial via API do Mercado Pago
   useEffect(() => {
@@ -276,11 +305,12 @@ export const RegistrationPage: React.FC = () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         registrationId: payingRegistration.id,
+        lotId: payingRegistration.lotId,
         athleteName: payingRegistration.athleteName,
         athleteEmail: payingRegistration.athleteEmail,
         athleteDocument: payingRegistration.athleteDocument,
         turmaLabel: payingRegistration.turmaLabel,
-        authorizedPrice: payingRegistration.authorizedPrice,
+        requestedMemberDiscount: payingRegistration.requestedMemberDiscount,
         memberStatus: payingRegistration.memberStatus,
       }),
     })
@@ -323,7 +353,9 @@ export const RegistrationPage: React.FC = () => {
     const interval = setInterval(async () => {
       try {
         const res = await fetchGatewayApi(
-          `/api/mercadopago/check-payment?paymentId=${pixData.paymentId}`
+          `/api/mercadopago/check-payment?paymentId=${encodeURIComponent(
+            String(pixData.paymentId)
+          )}&registrationId=${encodeURIComponent(payingRegistration.id)}`
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -353,7 +385,9 @@ export const RegistrationPage: React.FC = () => {
     setIsCheckingPayment(true);
     try {
       const res = await fetchGatewayApi(
-        `/api/mercadopago/check-payment?paymentId=${pixData.paymentId}`
+        `/api/mercadopago/check-payment?paymentId=${encodeURIComponent(
+          String(pixData.paymentId)
+        )}&registrationId=${encodeURIComponent(payingRegistration.id)}`
       );
       const data = await res.json();
       if (data.isApproved) {
@@ -395,14 +429,14 @@ export const RegistrationPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           registrationId: payingRegistration.id,
+          lotId: payingRegistration.lotId,
           athleteName: payingRegistration.athleteName,
           athleteEmail: payingRegistration.athleteEmail,
           athleteDocument: payingRegistration.athleteDocument,
           turmaLabel: payingRegistration.turmaLabel,
-          authorizedPrice: payingRegistration.authorizedPrice,
+          requestedMemberDiscount: payingRegistration.requestedMemberDiscount,
           memberStatus: payingRegistration.memberStatus,
           isCreditCard: true,
-          cardFeeAmount: cardFeeAmount,
         }),
       });
 

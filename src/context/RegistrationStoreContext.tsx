@@ -21,7 +21,11 @@ import {
   INITIAL_FINANCIAL_AUDIT_LOGS,
 } from '../data/registrationData';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
-import { useCompetitionStore } from './CompetitionStoreContext';
+import {
+  useCompetitionStore,
+  getStoredOperatorToken,
+} from './CompetitionStoreContext';
+import { generateUniqueId } from '../utils/statsEngine';
 import { db } from '../lib/firebase';
 import { collection, doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 
@@ -94,29 +98,47 @@ const pushRegistrationToCloud = (reg: Registration) => {
   if (typeof window === 'undefined') return;
   try {
     const cleanReg = JSON.parse(JSON.stringify(reg));
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    const opToken = getStoredOperatorToken();
+    if (opToken) {
+      headers['Authorization'] = `Bearer ${opToken}`;
+    }
     fetch('/api/cloud-sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         collectionName: 'registrations',
         docId: reg.id,
         data: cleanReg,
       }),
-    }).catch(() => {
-      fetch('https://intramedix.vercel.app/api/cloud-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          collectionName: 'registrations',
-          docId: reg.id,
-          data: cleanReg,
-        }),
-      }).catch(() => {});
-    });
+    }).catch(() => {});
   } catch {
     // Silencioso
   }
 };
+
+/**
+ * Mascara dados pessoais sensíveis (CPF e Telefone) de terceiros ao salvar no localStorage (Item 21 da Auditoria).
+ */
+function sanitizeRegistrationPiiForLocalCache(
+  reg: Registration,
+  myIds: string[],
+  isAdmin: boolean
+): Registration {
+  if (isAdmin || myIds.includes(reg.id)) {
+    return reg;
+  }
+  const cleanDoc = (reg.athleteDocument || '').replace(/\D/g, '');
+  return {
+    ...reg,
+    athleteDocument:
+      cleanDoc.length >= 4 ? `***.***.*${cleanDoc.slice(-4)}` : '***',
+    athletePhone: '',
+    memberDocumentProofUrl: null,
+  };
+}
 
 export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -170,20 +192,27 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const syncedRegSignaturesRef = useRef<Map<string, string>>(new Map());
 
-  // Salva no LocalStorage e sincroniza com abas abertas
+  // Salva no LocalStorage com Debounce e proteção LGPD para inscrições de terceiros (Itens 21 e 22 da Auditoria)
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        REGISTRATIONS_STORAGE_KEY,
-        JSON.stringify({ registrations, auditLogs })
-      );
-    } catch {
-      // Quota exceeded
-    }
-  }, [registrations, auditLogs]);
+    const isAdmin = canOperateOfficialData();
+    const timer = setTimeout(() => {
+      try {
+        const safeRegs = registrations.map((r) =>
+          sanitizeRegistrationPiiForLocalCache(r, myRegisteredIds, isAdmin)
+        );
+        localStorage.setItem(
+          REGISTRATIONS_STORAGE_KEY,
+          JSON.stringify({ registrations: safeRegs, auditLogs })
+        );
+      } catch {
+        // Quota exceeded
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [registrations, auditLogs, myRegisteredIds, canOperateOfficialData]);
 
-  // Garante que toda inscrição existente na plataforma tenha seu perfil social de atleta publicado
-  // para que todos os usuários vejam os inscritos na rede social e nas equipes
+  // Garante que toda inscrição existente na plataforma tenha seu perfil social de atleta publicado localmente,
+  // sem disparar amplificação de escrita na nuvem a cada ciclo de polling (Item 24 da Auditoria)
   useEffect(() => {
     if (!registrations || registrations.length === 0) return;
 
@@ -237,7 +266,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  // Sincronização em tempo real via Cloud Firestore
+  // Sincronização em tempo real via Cloud Firestore (quando autenticado)
   useEffect(() => {
     try {
       const colRef = collection(db, 'registrations');
@@ -254,7 +283,11 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
               for (const r of prev) byId.set(r.id, r);
               for (const fr of firestoreList) {
                 const ex = byId.get(fr.id);
-                byId.set(fr.id, ex ? { ...ex, ...fr } : fr);
+                const exRev = ex?.revision ?? 0;
+                const frRev = fr.revision ?? 0;
+                if (!ex || frRev >= exRev) {
+                  byId.set(fr.id, ex ? { ...ex, ...fr } : fr);
+                }
               }
               const merged = Array.from(byId.values());
               merged.sort(
@@ -266,83 +299,105 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
             });
           }
         },
-        (error) => {
-          console.warn('Firestore onSnapshot notice:', error.message);
-        }
+        () => {}
       );
       return () => unsubscribe();
-    } catch (err) {
-      console.warn('Failed to attach Firestore listener:', err);
-    }
-  }, []);
-
-  // Sincronização em tempo real via API Cloud Sync (/api/cloud-sync) entre diferentes dispositivos
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const syncWithCloudServer = async () => {
-      try {
-        const res = await fetch('/api/cloud-sync').catch(() =>
-          fetch('https://intramedix.vercel.app/api/cloud-sync')
-        );
-        if (!res || !res.ok) return;
-        const payload = await res.json();
-        if (!payload || !Array.isArray(payload.registrations)) return;
-
-        if (payload.registrations.length > 0) {
-          setRegistrations((prev) => {
-            const byId = new Map<string, Registration>();
-            for (const r of prev) byId.set(r.id, r);
-            let hasDiff = false;
-            for (const cr of payload.registrations as Registration[]) {
-              if (!cr || !cr.id) continue;
-              const ex = byId.get(cr.id);
-              if (
-                !ex ||
-                ex.updatedAtIso !== cr.updatedAtIso ||
-                ex.paymentStatus !== cr.paymentStatus ||
-                ex.memberStatus !== cr.memberStatus ||
-                ex.avatarUrl !== cr.avatarUrl ||
-                ex.jerseyNumber !== cr.jerseyNumber
-              ) {
-                byId.set(cr.id, ex ? { ...ex, ...cr } : cr);
-                hasDiff = true;
-              }
-            }
-            if (!hasDiff) return prev;
-            const merged = Array.from(byId.values());
-            merged.sort(
-              (a, b) =>
-                new Date(b.createdAtIso).getTime() -
-                new Date(a.createdAtIso).getTime()
-            );
-            return merged;
-          });
-        }
-      } catch {
-        // Silencioso
-      }
-    };
-
-    syncWithCloudServer();
-    const interval = setInterval(syncWithCloudServer, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const broadcastState = (regs: Registration[], logs: FinancialAuditLog[]) => {
-    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
-    try {
-      const channel = new BroadcastChannel(SYNC_CHANNEL_NAME);
-      channel.postMessage({
-        type: 'SYNC_REGISTRATIONS',
-        registrations: regs,
-        auditLogs: logs,
-      });
-      channel.close();
     } catch {
       // Silencioso
     }
-  };
+  }, []);
+
+  // Recebe as inscrições do polling unificado do CompetitionStoreContext (elimina o 2º polling duplicado — Item 23 da Auditoria)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleCloudRegistrations = (ev: Event) => {
+      const customEv = ev as CustomEvent<Registration[]>;
+      const remoteList = customEv.detail;
+      if (!Array.isArray(remoteList) || remoteList.length === 0) return;
+
+      setRegistrations((prev) => {
+        const byId = new Map<string, Registration>();
+        for (const r of prev) byId.set(r.id, r);
+        let hasDiff = false;
+
+        for (const cr of remoteList) {
+          if (!cr || !cr.id) continue;
+          const ex = byId.get(cr.id);
+          const exRev = ex?.revision ?? 0;
+          const crRev = cr.revision ?? 0;
+          const isNewerTime =
+            !ex ||
+            (cr.updatedAtIso &&
+              ex.updatedAtIso &&
+              new Date(cr.updatedAtIso).getTime() >
+                new Date(ex.updatedAtIso).getTime());
+
+          if (
+            !ex ||
+            crRev > exRev ||
+            (crRev >= exRev &&
+              (isNewerTime ||
+                ex.paymentStatus !== cr.paymentStatus ||
+                ex.memberStatus !== cr.memberStatus))
+          ) {
+            // Se este dispositivo é o titular da inscrição e o servidor mascarou o CPF no GET público, preserva o CPF local do titular
+            const mergedReg: Registration = ex
+              ? {
+                  ...ex,
+                  ...cr,
+                  athleteDocument:
+                    cr.athleteDocument?.startsWith('***') && ex.athleteDocument
+                      ? ex.athleteDocument
+                      : cr.athleteDocument,
+                  athletePhone: cr.athletePhone || ex.athletePhone,
+                }
+              : cr;
+            byId.set(cr.id, mergedReg);
+            hasDiff = true;
+          }
+        }
+
+        if (!hasDiff) return prev;
+        const merged = Array.from(byId.values());
+        merged.sort(
+          (a, b) =>
+            new Date(b.createdAtIso).getTime() -
+            new Date(a.createdAtIso).getTime()
+        );
+        return merged;
+      });
+    };
+
+    window.addEventListener(
+      'intramed-cloud-registrations',
+      handleCloudRegistrations
+    );
+    return () => {
+      window.removeEventListener(
+        'intramed-cloud-registrations',
+        handleCloudRegistrations
+      );
+    };
+  }, []);
+
+  const broadcastState = useCallback(
+    (regs: Registration[], logs: FinancialAuditLog[]) => {
+      if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+      try {
+        const channel = new BroadcastChannel(SYNC_CHANNEL_NAME);
+        channel.postMessage({
+          type: 'SYNC_REGISTRATIONS',
+          registrations: regs,
+          auditLogs: logs,
+        });
+        channel.close();
+      } catch {
+        // Silencioso
+      }
+    },
+    []
+  );
 
   const activeLot = useMemo(() => {
     return (
@@ -357,7 +412,9 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         tournamentEvent.lots.find((l) => l.id === payload.lotId) || activeLot;
 
       if (!lot) {
-        throw new Error('Nenhum lote de inscrição ativo encontrado para o evento.');
+        throw new Error(
+          'Nenhum lote de inscrição ativo encontrado para o evento.'
+        );
       }
 
       const isSocioRequested = payload.requestedMemberDiscount;
@@ -365,12 +422,14 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         ? lot.priceMember
         : lot.priceNonMember;
 
-      const regId = `reg-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+      const regId = generateUniqueId('reg');
       const linkedAthleteId = `ath-${regId}`;
       const chosenModalities =
         payload.selectedModalities && payload.selectedModalities.length > 0
           ? payload.selectedModalities
           : OFFICIAL_MODALITIES.map((m) => m.id);
+
+      const nowIso = new Date().toISOString();
 
       const newRegistration: Registration = {
         id: regId,
@@ -387,7 +446,9 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         teamId: payload.teamId,
         teamName: payload.teamName,
         modalityId: payload.modalityId || 'todas',
-        modalityName: payload.modalityName || 'Passaporte Geral (Todas as 10 Modalidades)',
+        modalityName:
+          payload.modalityName ||
+          'Passaporte Geral (Todas as 10 Modalidades)',
         selectedModalities: chosenModalities,
         categoryName: payload.categoryName,
         requestedMemberDiscount: isSocioRequested,
@@ -405,11 +466,11 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         position: payload.position?.trim() || 'Atleta Inscrito',
         bio: payload.bio?.trim() || null,
         instagramHandle: payload.instagramHandle?.trim() || null,
-        createdAtIso: new Date().toISOString(),
-        updatedAtIso: new Date().toISOString(),
+        createdAtIso: nowIso,
+        updatedAtIso: nowIso,
+        revision: 1,
       };
 
-      // Cria/atualiza o perfil público do atleta na comunidade e autentica o usuário na hora
       upsertParticipantAthlete({
         id: linkedAthleteId,
         name: newRegistration.athleteName,
@@ -430,7 +491,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       });
 
       const auditEntry: FinancialAuditLog = {
-        id: `audit-${Date.now().toString(36)}`,
+        id: generateUniqueId('audit'),
         entity: 'registration',
         entityId: newRegistration.id,
         action: 'CRIAR_INSCRICAO',
@@ -441,29 +502,23 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           lotName: lot.name,
           modality: payload.modalityName,
         },
-        timestampIso: new Date().toISOString(),
+        timestampIso: nowIso,
       };
 
-      setRegistrations((prev) => {
-        const next = [newRegistration, ...prev];
-        setAuditLogs((prevLogs) => {
-          const nextLogs = [auditEntry, ...prevLogs];
-          broadcastState(next, nextLogs);
-          return nextLogs;
-        });
-        return next;
-      });
+      const nextRegs = [newRegistration, ...registrations];
+      const nextLogs = [auditEntry, ...auditLogs];
+      setRegistrations(nextRegs);
+      setAuditLogs(nextLogs);
+      broadcastState(nextRegs, nextLogs);
 
-      // Persistência em nuvem (Cloud Firestore + Servidor Cloud Sync)
       pushRegistrationToCloud(newRegistration);
       try {
         const cleanReg = JSON.parse(JSON.stringify(newRegistration));
         await setDoc(doc(db, 'registrations', newRegistration.id), cleanReg);
-      } catch (err) {
-        console.warn('Firestore setDoc registration notice:', err);
+      } catch {
+        // Silencioso
       }
 
-      // Persistência local dos IDs inscritos neste dispositivo
       try {
         setMyRegisteredIds((prevIds) => {
           const nextIds = prevIds.includes(newRegistration.id)
@@ -478,10 +533,17 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
 
       return newRegistration;
     },
-    [tournamentEvent, activeLot, upsertParticipantAthlete]
+    [
+      tournamentEvent,
+      activeLot,
+      upsertParticipantAthlete,
+      registrations,
+      auditLogs,
+      broadcastState,
+    ]
   );
 
-  // ATUALIZAR PERFIL SOCIAL VINCULADO À INSCRIÇÃO
+  // ATUALIZAR PERFIL SOCIAL VINCULADO À INSCRIÇÃO (Sem efeitos colaterais dentro do setState — Item 14 da Auditoria)
   const updateRegistrationSocialProfile = useCallback(
     async (
       registrationId: string,
@@ -495,49 +557,52 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         selectedModalities?: ModalitySlug[];
       }
     ): Promise<void> => {
-      setRegistrations((prev) => {
-        const target = prev.find((r) => r.id === registrationId);
-        if (!target) return prev;
+      const target = registrations.find((r) => r.id === registrationId);
+      if (!target) return;
 
-        const updated: Registration = {
-          ...target,
-          athleteName:
-            data.athleteName !== undefined && data.athleteName.trim()
-              ? data.athleteName.trim()
-              : target.athleteName,
-          avatarUrl: data.avatarUrl !== undefined ? data.avatarUrl : target.avatarUrl,
-          jerseyNumber:
-            data.jerseyNumber !== undefined ? data.jerseyNumber : target.jerseyNumber,
-          position: data.position !== undefined ? data.position : target.position,
-          bio: data.bio !== undefined ? data.bio : target.bio,
-          instagramHandle:
-            data.instagramHandle !== undefined
-              ? data.instagramHandle
-              : target.instagramHandle,
-          selectedModalities:
-            data.selectedModalities !== undefined
-              ? data.selectedModalities
-              : target.selectedModalities,
-          updatedAtIso: new Date().toISOString(),
-        };
+      const updated: Registration = {
+        ...target,
+        athleteName:
+          data.athleteName !== undefined && data.athleteName.trim()
+            ? data.athleteName.trim()
+            : target.athleteName,
+        avatarUrl:
+          data.avatarUrl !== undefined ? data.avatarUrl : target.avatarUrl,
+        jerseyNumber:
+          data.jerseyNumber !== undefined
+            ? data.jerseyNumber
+            : target.jerseyNumber,
+        position: data.position !== undefined ? data.position : target.position,
+        bio: data.bio !== undefined ? data.bio : target.bio,
+        instagramHandle:
+          data.instagramHandle !== undefined
+            ? data.instagramHandle
+            : target.instagramHandle,
+        selectedModalities:
+          data.selectedModalities !== undefined
+            ? data.selectedModalities
+            : target.selectedModalities,
+        updatedAtIso: new Date().toISOString(),
+        revision: (target.revision ?? 0) + 1,
+      };
 
-        const nextRegs = prev.map((r) => (r.id === registrationId ? updated : r));
-        broadcastState(nextRegs, auditLogs);
-        pushRegistrationToCloud(updated);
+      const nextRegs = registrations.map((r) =>
+        r.id === registrationId ? updated : r
+      );
+      setRegistrations(nextRegs);
+      broadcastState(nextRegs, auditLogs);
+      pushRegistrationToCloud(updated);
 
-        try {
-          const cleanReg = JSON.parse(JSON.stringify(updated));
-          setDoc(doc(db, 'registrations', registrationId), cleanReg, { merge: true }).catch(
-            () => {}
-          );
-        } catch {
-          // Silencioso
-        }
-
-        return nextRegs;
-      });
+      try {
+        const cleanReg = JSON.parse(JSON.stringify(updated));
+        setDoc(doc(db, 'registrations', registrationId), cleanReg, {
+          merge: true,
+        }).catch(() => {});
+      } catch {
+        // Silencioso
+      }
     },
-    [auditLogs]
+    [registrations, auditLogs, broadcastState]
   );
 
   // 2. VALIDAÇÃO MANUAL DE SÓCIO POR ADMINISTRADOR
@@ -554,189 +619,218 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         );
       }
 
-      setRegistrations((prev) => {
-        const target = prev.find((r) => r.id === registrationId);
-        if (!target) return prev;
+      const target = registrations.find((r) => r.id === registrationId);
+      if (!target) return;
 
-        const lot = tournamentEvent.lots.find((l) => l.id === target.lotId) || activeLot;
-        const finalPrice = approved
-          ? (lot ? lot.priceMember : target.authorizedPrice)
-          : (lot ? lot.priceNonMember : target.authorizedPrice);
+      const lot =
+        tournamentEvent.lots.find((l) => l.id === target.lotId) || activeLot;
+      const finalPrice = approved
+        ? lot
+          ? lot.priceMember
+          : target.authorizedPrice
+        : lot
+        ? lot.priceNonMember
+        : target.authorizedPrice;
 
-        const updated: Registration = {
-          ...target,
-          memberStatus: approved ? 'aprovado' : 'rejeitado',
-          paymentStatus: 'pendente', // Desbloqueia o atleta para pagar
-          authorizedPrice: finalPrice,
-          memberNotes: notes || (approved ? 'Aprovado pela Diretoria' : 'Rejeitado pela Diretoria'),
-          validatedByAdminId: currentUser?.id || 'admin-root',
-          validatedByAdminName: currentUser?.name || 'Administrador IntraMed',
-          validatedAtIso: new Date().toISOString(),
-          updatedAtIso: new Date().toISOString(),
-        };
+      const nowIso = new Date().toISOString();
+      const updated: Registration = {
+        ...target,
+        memberStatus: approved ? 'aprovado' : 'rejeitado',
+        paymentStatus: 'pendente',
+        authorizedPrice: finalPrice,
+        memberNotes:
+          notes ||
+          (approved ? 'Aprovado pela Diretoria' : 'Rejeitado pela Diretoria'),
+        validatedByAdminId: currentUser?.id || 'admin-root',
+        validatedByAdminName: currentUser?.name || 'Administrador IntraMed',
+        validatedAtIso: nowIso,
+        updatedAtIso: nowIso,
+        revision: (target.revision ?? 0) + 1,
+      };
 
-        const auditEntry: FinancialAuditLog = {
-          id: `audit-${Date.now().toString(36)}`,
-          entity: 'registration',
-          entityId: target.id,
-          action: approved ? 'APROVAR_SOCIO' : 'REJEITAR_SOCIO',
-          adminUserId: currentUser?.id,
-          adminUserName: currentUser?.name || 'Administrador IntraMed',
-          metadata: {
-            athleteName: target.athleteName,
-            previousPrice: target.authorizedPrice,
-            newAuthorizedPrice: finalPrice,
-            justification: notes || (approved ? 'Sócio verificado na lista oficial' : 'Não localizado na lista de associados'),
-          },
-          timestampIso: new Date().toISOString(),
-        };
+      const auditEntry: FinancialAuditLog = {
+        id: generateUniqueId('audit'),
+        entity: 'registration',
+        entityId: target.id,
+        action: approved ? 'APROVAR_SOCIO' : 'REJEITAR_SOCIO',
+        adminUserId: currentUser?.id,
+        adminUserName: currentUser?.name || 'Administrador IntraMed',
+        metadata: {
+          athleteName: target.athleteName,
+          previousPrice: target.authorizedPrice,
+          newAuthorizedPrice: finalPrice,
+          justification:
+            notes ||
+            (approved
+              ? 'Sócio verificado na lista oficial'
+              : 'Não localizado na lista de associados'),
+        },
+        timestampIso: nowIso,
+      };
 
-        const nextRegs = prev.map((r) => (r.id === registrationId ? updated : r));
-        setAuditLogs((prevLogs) => {
-          const nextLogs = [auditEntry, ...prevLogs];
-          broadcastState(nextRegs, nextLogs);
-          return nextLogs;
-        });
+      const nextRegs = registrations.map((r) =>
+        r.id === registrationId ? updated : r
+      );
+      const nextLogs = [auditEntry, ...auditLogs];
+      setRegistrations(nextRegs);
+      setAuditLogs(nextLogs);
+      broadcastState(nextRegs, nextLogs);
+      pushRegistrationToCloud(updated);
 
-        pushRegistrationToCloud(updated);
-
-        try {
-          updateDoc(doc(db, 'registrations', registrationId), {
-            memberStatus: updated.memberStatus,
-            paymentStatus: updated.paymentStatus,
-            authorizedPrice: updated.authorizedPrice,
-            memberNotes: updated.memberNotes,
-            validatedByAdminId: updated.validatedByAdminId,
-            validatedByAdminName: updated.validatedByAdminName,
-            validatedAtIso: updated.validatedAtIso,
-            updatedAtIso: updated.updatedAtIso,
-          }).catch((err) => console.warn('Firestore updateDoc validateMemberDiscount notice:', err));
-        } catch (err) {
-          console.warn('Firestore updateDoc notice:', err);
-        }
-
-        return nextRegs;
-      });
+      try {
+        updateDoc(doc(db, 'registrations', registrationId), {
+          memberStatus: updated.memberStatus,
+          paymentStatus: updated.paymentStatus,
+          authorizedPrice: updated.authorizedPrice,
+          memberNotes: updated.memberNotes,
+          validatedByAdminId: updated.validatedByAdminId,
+          validatedByAdminName: updated.validatedByAdminName,
+          validatedAtIso: updated.validatedAtIso,
+          updatedAtIso: updated.updatedAtIso,
+          revision: updated.revision,
+        }).catch(() => {});
+      } catch {
+        // Silencioso
+      }
     },
-    [canOperateOfficialData, tournamentEvent, activeLot, currentUser]
+    [
+      canOperateOfficialData,
+      registrations,
+      auditLogs,
+      tournamentEvent,
+      activeLot,
+      currentUser,
+      broadcastState,
+    ]
   );
 
-  // 3. SIMULAÇÃO / CONFIRMAÇÃO DE PAGAMENTO (PIX & MERCADO PAGO)
+  // 3. CONFIRMAÇÃO DE PAGAMENTO (Somente após checagem do servidor ou ação explícita de Admin autenticado — Item 6 da Auditoria)
   const simulatePaymentConfirmation = useCallback(
     async (
       registrationId: string,
       method: 'pix' | 'credit_card',
-      simulatedMpPaymentId?: string
+      verifiedMpPaymentId?: string
     ): Promise<void> => {
+      const isAdmin = canOperateOfficialData();
+      // Se não for Admin com token e não houver um ID numérico real verificado pelo endpoint do Mercado Pago, recusa!
+      if (!isAdmin && (!verifiedMpPaymentId || !/^\d{5,25}$/.test(verifiedMpPaymentId))) {
+        throw new Error(
+          'A confirmação de pagamento exige verificação oficial junto ao servidor do Mercado Pago.'
+        );
+      }
+
       const paymentId =
-        simulatedMpPaymentId ||
-        `MP-${method.toUpperCase()}-${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+        verifiedMpPaymentId ||
+        `ADMIN-CONF-${Date.now()}`;
 
-      setRegistrations((prev) => {
-        const target = prev.find((r) => r.id === registrationId);
-        if (!target) return prev;
+      const target = registrations.find((r) => r.id === registrationId);
+      if (!target) return;
 
-        const updated: Registration = {
-          ...target,
-          paymentStatus: 'pago',
-          paymentMethod: method,
+      const nowIso = new Date().toISOString();
+      const updated: Registration = {
+        ...target,
+        paymentStatus: 'pago',
+        paymentMethod: method,
+        mpPaymentId: paymentId,
+        paidAtIso: nowIso,
+        updatedAtIso: nowIso,
+        revision: (target.revision ?? 0) + 1,
+      };
+
+      const auditEntry: FinancialAuditLog = {
+        id: generateUniqueId('audit'),
+        entity: 'payment',
+        entityId: target.id,
+        action: 'CONFIRMAR_PAGAMENTO_WEBHOOK',
+        adminUserName: isAdmin
+          ? currentUser?.name || 'Comissão Organizadora'
+          : 'Mercado Pago Gateway (Confirmado)',
+        metadata: {
+          athleteName: target.athleteName,
+          amount: target.authorizedPrice,
+          method,
           mpPaymentId: paymentId,
-          paidAtIso: new Date().toISOString(),
-          updatedAtIso: new Date().toISOString(),
-        };
+          status: 'approved',
+        },
+        timestampIso: nowIso,
+      };
 
-        const auditEntry: FinancialAuditLog = {
-          id: `audit-${Date.now().toString(36)}`,
-          entity: 'payment',
-          entityId: target.id,
-          action: 'CONFIRMAR_PAGAMENTO_WEBHOOK',
-          adminUserName: 'Mercado Pago Gateway (Confirmado)',
-          metadata: {
-            athleteName: target.athleteName,
-            amount: target.authorizedPrice,
-            method,
-            mpPaymentId: paymentId,
-            status: 'approved',
-          },
-          timestampIso: new Date().toISOString(),
-        };
+      const nextRegs = registrations.map((r) =>
+        r.id === registrationId ? updated : r
+      );
+      const nextLogs = [auditEntry, ...auditLogs];
+      setRegistrations(nextRegs);
+      setAuditLogs(nextLogs);
+      broadcastState(nextRegs, nextLogs);
 
-        const nextRegs = prev.map((r) => (r.id === registrationId ? updated : r));
-        setAuditLogs((prevLogs) => {
-          const nextLogs = [auditEntry, ...prevLogs];
-          broadcastState(nextRegs, nextLogs);
-          return nextLogs;
-        });
-
+      if (isAdmin) {
         pushRegistrationToCloud(updated);
+      }
 
-        try {
-          updateDoc(doc(db, 'registrations', registrationId), {
-            paymentStatus: updated.paymentStatus,
-            paymentMethod: updated.paymentMethod,
-            mpPaymentId: updated.mpPaymentId,
-            paidAtIso: updated.paidAtIso,
-            updatedAtIso: updated.updatedAtIso,
-          }).catch((err) => console.warn('Firestore updateDoc payment notice:', err));
-        } catch (err) {
-          console.warn('Firestore updateDoc payment notice:', err);
-        }
-
-        return nextRegs;
-      });
+      try {
+        updateDoc(doc(db, 'registrations', registrationId), {
+          paymentStatus: updated.paymentStatus,
+          paymentMethod: updated.paymentMethod,
+          mpPaymentId: updated.mpPaymentId,
+          paidAtIso: updated.paidAtIso,
+          updatedAtIso: updated.updatedAtIso,
+          revision: updated.revision,
+        }).catch(() => {});
+      } catch {
+        // Silencioso
+      }
     },
-    []
+    [canOperateOfficialData, registrations, auditLogs, currentUser, broadcastState]
   );
 
   // 4. CANCELAMENTO DE INSCRIÇÃO
   const cancelRegistration = useCallback(
     async (registrationId: string, reason?: string): Promise<void> => {
-      setRegistrations((prev) => {
-        const target = prev.find((r) => r.id === registrationId);
-        if (!target) return prev;
+      const target = registrations.find((r) => r.id === registrationId);
+      if (!target) return;
 
-        const updated: Registration = {
-          ...target,
-          paymentStatus: 'cancelado',
-          memberNotes: reason ? `Cancelada: ${reason}` : target.memberNotes,
-          updatedAtIso: new Date().toISOString(),
-        };
+      const nowIso = new Date().toISOString();
+      const updated: Registration = {
+        ...target,
+        paymentStatus: 'cancelado',
+        memberNotes: reason ? `Cancelada: ${reason}` : target.memberNotes,
+        updatedAtIso: nowIso,
+        revision: (target.revision ?? 0) + 1,
+      };
 
-        const auditEntry: FinancialAuditLog = {
-          id: `audit-${Date.now().toString(36)}`,
-          entity: 'registration',
-          entityId: target.id,
-          action: 'CANCELAR_INSCRICAO',
-          adminUserName: currentUser?.name || 'Usuário / Mesa',
-          metadata: {
-            reason: reason || 'Cancelamento solicitado',
-          },
-          timestampIso: new Date().toISOString(),
-        };
+      const auditEntry: FinancialAuditLog = {
+        id: generateUniqueId('audit'),
+        entity: 'registration',
+        entityId: target.id,
+        action: 'CANCELAR_INSCRICAO',
+        adminUserName: currentUser?.name || 'Usuário / Mesa',
+        metadata: {
+          reason: reason || 'Cancelamento solicitado',
+        },
+        timestampIso: nowIso,
+      };
 
-        const nextRegs = prev.map((r) => (r.id === registrationId ? updated : r));
-        setAuditLogs((prevLogs) => {
-          const nextLogs = [auditEntry, ...prevLogs];
-          broadcastState(nextRegs, nextLogs);
-          return nextLogs;
-        });
+      const nextRegs = registrations.map((r) =>
+        r.id === registrationId ? updated : r
+      );
+      const nextLogs = [auditEntry, ...auditLogs];
+      setRegistrations(nextRegs);
+      setAuditLogs(nextLogs);
+      broadcastState(nextRegs, nextLogs);
+      pushRegistrationToCloud(updated);
 
-        pushRegistrationToCloud(updated);
-
-        try {
-          updateDoc(doc(db, 'registrations', registrationId), {
-            paymentStatus: updated.paymentStatus,
-            memberNotes: updated.memberNotes,
-            updatedAtIso: updated.updatedAtIso,
-          }).catch((err) => console.warn('Firestore updateDoc cancel notice:', err));
-        } catch (err) {
-          console.warn('Firestore updateDoc notice:', err);
-        }
-
-        return nextRegs;
-      });
+      try {
+        updateDoc(doc(db, 'registrations', registrationId), {
+          paymentStatus: updated.paymentStatus,
+          memberNotes: updated.memberNotes,
+          updatedAtIso: updated.updatedAtIso,
+          revision: updated.revision,
+        }).catch(() => {});
+      } catch {
+        // Silencioso
+      }
     },
-    [currentUser]
+    [registrations, auditLogs, currentUser, broadcastState]
   );
 
   const getRegistrationById = useCallback(
@@ -750,10 +844,10 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!q) return [];
       return registrations.filter(
         (r) =>
-          r.userId === q ||
-          r.athleteEmail.toLowerCase() === q ||
-          r.athleteDocument.includes(q) ||
-          r.athleteName.toLowerCase().includes(q)
+          r.athleteEmail.toLowerCase().includes(q) ||
+          r.athleteDocument.toLowerCase().includes(q) ||
+          r.athleteName.toLowerCase().includes(q) ||
+          r.id.toLowerCase().includes(q)
       );
     },
     [registrations]
@@ -762,16 +856,28 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
   const myRegistrations = useMemo(() => {
     return registrations.filter((r) => {
       if (myRegisteredIds.includes(r.id)) return true;
-      if (currentUser?.email && r.athleteEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
-      if (currentUser?.linkedAthleteId && r.linkedAthleteId === currentUser.linkedAthleteId) return true;
-      if (currentUser?.id && r.userId === currentUser.id) return true;
+      if (
+        currentUser?.email &&
+        r.athleteEmail.toLowerCase() === currentUser.email.toLowerCase()
+      ) {
+        return true;
+      }
+      if (
+        currentUser?.linkedAthleteId &&
+        r.linkedAthleteId === currentUser.linkedAthleteId
+      ) {
+        return true;
+      }
       return false;
     });
   }, [registrations, myRegisteredIds, currentUser]);
 
-  const hasCompletedRegistration = myRegistrations.length > 0;
+  const hasCompletedRegistration = useMemo(
+    () => myRegistrations.some((r) => r.paymentStatus !== 'cancelado'),
+    [myRegistrations]
+  );
 
-  const value = useMemo(
+  const value = useMemo<RegistrationContextValue>(
     () => ({
       tournamentEvent,
       registrations,
@@ -811,12 +917,12 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-export const useRegistrationStore = (): RegistrationContextValue => {
+export function useRegistrationStore(): RegistrationContextValue {
   const ctx = useContext(RegistrationContext);
   if (!ctx) {
     throw new Error(
-      'useRegistrationStore deve ser utilizado dentro de um <RegistrationProvider>.'
+      'useRegistrationStore deve ser utilizado dentro de RegistrationProvider'
     );
   }
   return ctx;
-};
+}

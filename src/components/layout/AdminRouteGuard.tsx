@@ -10,7 +10,10 @@ import {
   UserCheck,
   ClipboardList,
 } from 'lucide-react';
-import { useCompetitionStore } from '../../context/CompetitionStoreContext';
+import {
+  useCompetitionStore,
+  setStoredOperatorToken,
+} from '../../context/CompetitionStoreContext';
 import { BrandMark } from './BrandMark';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -68,7 +71,7 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
     return <>{children}</>;
   }
 
-  const handleUnlock = (e: React.FormEvent) => {
+  const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -84,7 +87,30 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
       return;
     }
 
-    if (password.trim() !== 'bicoduro') {
+    const cleanPass = password.trim();
+    let isAuthorized = cleanPass === 'bicoduro';
+
+    try {
+      const res = await fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'verify_operator_pin',
+          password: cleanPass,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success && data?.role === 'admin' && data?.token) {
+        setStoredOperatorToken(data.token);
+        isAuthorized = true;
+      } else if (res.status === 401) {
+        isAuthorized = false;
+      }
+    } catch {
+      // Fallback local
+    }
+
+    if (!isAuthorized) {
       setError('Senha incorreta. Acesso não autorizado.');
       return;
     }

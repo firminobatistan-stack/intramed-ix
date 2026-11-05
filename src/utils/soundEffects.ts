@@ -8,8 +8,8 @@ class MatchSoundEngine {
   private ctx: AudioContext | null = null;
   public enabled: boolean = true;
 
-  private getContext(): AudioContext | null {
-    if (!this.enabled || typeof window === 'undefined') return null;
+  private getContext(force: boolean = false): AudioContext | null {
+    if ((!this.enabled && !force) || typeof window === 'undefined') return null;
     if (!this.ctx) {
       const AudioCtx =
         window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -26,8 +26,8 @@ class MatchSoundEngine {
   /**
    * Buzina de mesa para fim de período ou timeout
    */
-  public playBuzzer() {
-    const ctx = this.getContext();
+  public playBuzzer(force: boolean = false) {
+    const ctx = this.getContext(force);
     if (!ctx) return;
 
     try {

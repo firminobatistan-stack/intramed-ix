@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
   useCallback,
+  useMemo,
 } from 'react';
 import {
   Athlete,
@@ -32,18 +33,23 @@ import {
   INITIAL_MATCHES,
   INITIAL_TEAMS,
   INITIAL_ATHLETES,
-  INITIAL_USER_PROFILE,
 } from '../data/officialData';
 import {
   MODALITY_RULE_ENGINE,
   formatSecondsToClock,
   formatMsToSwimmingTime,
 } from '../data/sportRulesConfig';
+import { buildInitialTestWorkbench } from '../data/testWorkbench';
+import { matchSound } from '../utils/soundEffects';
 import {
   computeAthleteModalityStats,
   computeModalityLeaderboard,
   computeModalityStandings,
   computeTeamStats,
+  generateUniqueId,
+  getEventPointsDelta,
+  isFoulEventType,
+  recomputeMatchAndSheetFromEvents,
 } from '../utils/statsEngine';
 
 interface NewEventPayload {
@@ -92,44 +98,35 @@ interface CompetitionStoreContextValue {
   visibleMatches: Match[];
   getMatchById: (matchId: string) => Match | undefined;
   getSheetByMatchId: (matchId: string) => MatchSheet | undefined;
-  // Favoritos & Personalização (Seção 13 do Master Prompt)
   favoriteModalityIds: ModalitySlug[];
   favoriteTeamIds: string[];
   favoriteAthleteIds: string[];
   toggleFavoriteModality: (modalityId: ModalitySlug) => void;
   toggleFavoriteTeam: (teamId: string) => void;
   toggleFavoriteAthlete: (athleteId: string) => void;
-  // Notificações & Central de Alertas (Seção 14 do Master Prompt)
   notifications: AppNotificationItem[];
   markAllNotificationsAsRead: () => void;
   markNotificationAsRead: (id: string) => void;
   clearNotifications: () => void;
-  // Controles de Cronômetro e Período
   startOrResumeTimer: (matchId: string) => void;
   pauseTimer: (matchId: string) => void;
   resetPeriodTimer: (matchId: string) => void;
   endCurrentPeriod: (matchId: string) => void;
   startNextPeriod: (matchId: string) => void;
   startOvertimePeriod: (matchId: string) => void;
-  // Configuração de Categoria / Tempo (ex: Masculino 2x20 vs Feminino 2x15)
   configureMatchCategoryRule: (matchId: string, categoryName: string) => void;
-  // Registro, Edição e Exclusão de Eventos com Auditoria
   recordMatchEvent: (matchId: string, payload: NewEventPayload) => void;
   editMatchEvent: (matchId: string, payload: EditEventPayload) => void;
   deleteMatchEvent: (matchId: string, eventId: string, reason?: string) => void;
-  // Controles de Timeout e Punições 2 min
   dismissReleasedSuspension: (matchId: string, suspensionId: string) => void;
   cancelActiveTimeout: (matchId: string) => void;
-  // Escalação
   toggleLineupRole: (
     matchId: string,
     teamSide: 'home' | 'away',
     athleteId: string,
     field: 'isStarter' | 'isCaptain' | 'isGoalkeeper' | 'isPairMember'
   ) => void;
-  // Específicos de Vôlei / Sets
   finishCurrentSet: (matchId: string) => void;
-  // Específicos de Tênis de Mesa (Sub-partidas por equipe)
   recordTableTennisPoint: (
     matchId: string,
     subMatchId: string,
@@ -137,7 +134,6 @@ interface CompetitionStoreContextValue {
   ) => void;
   finishTableTennisSet: (matchId: string, subMatchId: string) => void;
   selectActiveSubMatch: (matchId: string, index: number) => void;
-  // Específicos de Natação (Provas e Raias)
   setSwimmingStrokeAndDistance: (
     matchId: string,
     stroke: SwimmingStrokeType,
@@ -149,7 +145,6 @@ interface CompetitionStoreContextValue {
     timeMs: number | null,
     status?: 'ready' | 'finished' | 'dsq' | 'dns'
   ) => void;
-  // Observações e Finalização da Súmula
   updateRefereeMetadata: (
     matchId: string,
     data: {
@@ -163,7 +158,6 @@ interface CompetitionStoreContextValue {
   ) => void;
   finalizeMatch: (matchId: string) => void;
   reopenMatchForCorrection: (matchId: string) => void;
-  // Equipes, Atletas, Autenticação e Estatísticas Derivadas (Sem Duplicação)
   visibleTeams: Team[];
   visibleAthletes: Athlete[];
   getTeamById: (teamId: string) => Team | undefined;
@@ -256,289 +250,38 @@ interface CompetitionStoreContextValue {
 
 const STORAGE_KEY_STATE = 'intramed_ix_live_engine_v3';
 const BROADCAST_CHANNEL_NAME = 'intramed_ix_live_sync_channel';
+const OPERATOR_TOKEN_SESSION_KEY = 'intramed_operator_jwt';
 
-/**
- * Gera escalação neutra exclusivamente para o MODO DE TESTE (sem nomes de pessoas reais ou fictícias).
- */
-function createNeutralTestLineup(
-  teamKey: 'home' | 'away',
-  count: number,
-  startersCount: number,
-  hasGoalkeeper: boolean,
-  isPairs: boolean
-): MatchLineupEntry[] {
-  const numbers = [1, 4, 7, 8, 9, 10, 11, 12, 14, 15];
-  return Array.from({ length: count }).map((_, idx) => {
-    const num = isPairs ? idx + 1 : numbers[idx] || idx + 1;
-    return {
-      athleteId: `test-${teamKey}-ath-${num}`,
-      athleteName: `Atleta #${num}`,
-      jerseyNumber: num,
-      isStarter: idx < startersCount,
-      isCaptain: idx === 0,
-      isGoalkeeper: hasGoalkeeper && idx === 0,
-      isPairMember: isPairs && idx < 2,
-    };
-  });
+function generateRandomMatchPin(modalityId: string): string {
+  const prefix = modalityId.slice(0, 3).toUpperCase();
+  const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let suffix = '';
+  for (let i = 0; i < 4; i++) {
+    suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return `MESA-${prefix}-${suffix}`;
 }
 
-/**
- * Constrói a bancada completa do MODO DE TESTE para todas as 10 modalidades oficiais.
- * Estritamente isolada dos dados oficiais e rotulada como MODO DE TESTE.
- */
-function buildInitialTestWorkbench(): {
-  teams: Team[];
-  athletes: Athlete[];
-  matches: Match[];
-  sheets: Record<string, MatchSheet>;
-} {
-  const allModalitySlugs = OFFICIAL_MODALITIES.map((m) => m.id);
-  const teams: Team[] = INITIAL_TEAMS.map((t) => ({
-    ...t,
-    isTestOnly: true,
-  }));
+export function getStoredOperatorToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return sessionStorage.getItem(OPERATOR_TOKEN_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
 
-  const numbers = [1, 4, 7, 8, 9, 10, 11, 12];
-  const positions = [
-    'Goleiro / Fixo',
-    'Fixo / Armador',
-    'Ala Direita',
-    'Ala Esquerda',
-    'Pivô',
-    'Armador / Ala',
-    'Ala-Pivô',
-    'Universal',
-  ];
-
-  const athletes: Athlete[] = [
-    ...numbers.map((num, idx) => ({
-      id: `test-home-ath-${num}`,
-      name: `Atleta #${num}`,
-      avatarUrl: null,
-      jerseyNumber: num,
-      position: positions[idx] || 'Atleta',
-      teamId: 'colossal',
-      modalityIds: allModalitySlugs,
-      isTestOnly: true,
-    })),
-    ...numbers.map((num, idx) => ({
-      id: `test-away-ath-${num}`,
-      name: `Atleta #${num}`,
-      avatarUrl: null,
-      jerseyNumber: num,
-      position: positions[idx] || 'Atleta',
-      teamId: 'soberana',
-      modalityIds: allModalitySlugs,
-      isTestOnly: true,
-    })),
-  ];
-
-  const matches: Match[] = [];
-  const sheets: Record<string, MatchSheet> = {};
-
-  const phaseByIndex: Array<{ phase: Match['phase']; label: string }> = [
-    { phase: 'semifinals', label: 'Semifinal' },
-    { phase: 'quarterfinals', label: 'Quartas de Final' },
-    { phase: 'group_stage', label: 'Fase Classificatória' },
-  ];
-
-  const pairings: Array<[string, string]> = [
-    ['colossal', 'soberana'],
-    ['sanguinaria', 'predadora'],
-    ['soberana', 'sanguinaria'],
-    ['predadora', 'colossal'],
-    ['colossal', 'tormenta'],
-  ];
-
-  OFFICIAL_MODALITIES.forEach((mod, index) => {
-    const matchId = `test-match-${mod.id}`;
-    const sheetId = `test-sheet-${mod.id}`;
-    const engine = MODALITY_RULE_ENGINE[mod.id];
-    const defaultCatKey = Object.keys(engine.defaultCategoryRules)[0] || 'Geral';
-    const catRule = engine.defaultCategoryRules[defaultCatKey];
-    const phaseInfo = phaseByIndex[index % phaseByIndex.length];
-
-    const isSwimming = engine.scoringModel === 'swimming_heats';
-    const isPairs = engine.supportsPairs;
-    const [homeId, awayId] = pairings[index % pairings.length];
-    const homeTeamObj = teams.find((t) => t.id === homeId) || teams[0];
-    const awayTeamObj = teams.find((t) => t.id === awayId) || teams[1];
-
-    const match: Match = {
-      id: matchId,
-      modalityId: mod.id,
-      modalityName: mod.name,
-      categoryId: `cat-${defaultCatKey.toLowerCase()}`,
-      categoryName: catRule.categoryName,
-      phase: phaseInfo.phase,
-      phaseLabel: phaseInfo.label,
-      status: 'scheduled',
-      scheduledDate: 'Modo de Teste',
-      scheduledTime: '--:--',
-      venue: mod.id === 'natacao' ? 'Piscina Oficial' : mod.id === 'volei-de-praia' ? 'Quadra de Areia' : 'Ginásio Oficial',
-      homeTeam: {
-        teamId: homeTeamObj.id,
-        teamName: isSwimming ? 'Série Oficial' : homeTeamObj.name,
-        crestUrl: homeTeamObj.crestUrl || null,
-        score: 0,
-        setsWon: 0,
-        isWinner: false,
-      },
-      awayTeam: {
-        teamId: awayTeamObj.id,
-        teamName: isSwimming ? 'Raias 1 a 6' : awayTeamObj.name,
-        crestUrl: awayTeamObj.crestUrl || null,
-        score: 0,
-        setsWon: 0,
-        isWinner: false,
-      },
-      matchSheetId: sheetId,
-      tableOfficialPassword: `MESA-${101 + index}`,
-      isTestData: true,
-    };
-
-    const periodScores = Array.from({ length: catRule.periodsCount }).map((_, idx) => ({
-      periodNumber: idx + 1,
-      label:
-        engine.scoringModel === 'sets_points' || engine.scoringModel === 'team_submatches'
-          ? `Set ${idx + 1}`
-          : engine.scoringModel === 'points_quarters'
-          ? `P${idx + 1}`
-          : `${idx + 1}º Período`,
-      homeScore: 0,
-      awayScore: 0,
-      isFinished: false,
-    }));
-
-    const sheet: MatchSheet = {
-      id: sheetId,
-      matchId,
-      modalityId: mod.id,
-      scoringModel: engine.scoringModel,
-      isTestMode: true,
-      homeLineup: createNeutralTestLineup(
-        'home',
-        isPairs ? 2 : 8,
-        isPairs ? 2 : 5,
-        engine.supportsGoalkeeper,
-        isPairs
-      ),
-      awayLineup: createNeutralTestLineup(
-        'away',
-        isPairs ? 2 : 8,
-        isPairs ? 2 : 5,
-        engine.supportsGoalkeeper,
-        isPairs
-      ),
-      timer: {
-        currentPeriod: 1,
-        totalPeriods: catRule.periodsCount,
-        periodLabel:
-          engine.scoringModel === 'sets_points'
-            ? 'Set 1'
-            : engine.scoringModel === 'swimming_heats'
-            ? 'Prova Oficial'
-            : engine.scoringModel === 'points_quarters'
-            ? '1º Quarto (P1)'
-            : '1º Período',
-        remainingSeconds: catRule.periodDurationSeconds,
-        initialPeriodSeconds: catRule.periodDurationSeconds,
-        elapsedSeconds: 0,
-        isRunning: false,
-        lifecycle: 'not_started',
-      },
-      periodScores,
-      events: [],
-      activeSuspensions: [],
-      activeTimeout: null,
-      homeTimeoutsUsed: 0,
-      awayTimeoutsUsed: 0,
-      homeFoulsCurrentPeriod: 0,
-      awayFoulsCurrentPeriod: 0,
-      subMatches:
-        mod.id === 'tenis-de-mesa'
-          ? [
-              {
-                id: 'tt-sub-1',
-                orderNumber: 1,
-                label: '1º Jogo Individual',
-                homeAthleteId: 'test-home-ath-1',
-                homeAthleteName: 'Atleta #1',
-                awayAthleteId: 'test-away-ath-1',
-                awayAthleteName: 'Atleta #1',
-                homeSetsWon: 0,
-                awaySetsWon: 0,
-                currentSetHomePoints: 0,
-                currentSetAwayPoints: 0,
-                status: 'live',
-                winnerSide: null,
-              },
-              {
-                id: 'tt-sub-2',
-                orderNumber: 2,
-                label: '2º Jogo Individual',
-                homeAthleteId: 'test-home-ath-4',
-                homeAthleteName: 'Atleta #4',
-                awayAthleteId: 'test-away-ath-4',
-                awayAthleteName: 'Atleta #4',
-                homeSetsWon: 0,
-                awaySetsWon: 0,
-                currentSetHomePoints: 0,
-                currentSetAwayPoints: 0,
-                status: 'pending',
-                winnerSide: null,
-              },
-              {
-                id: 'tt-sub-3',
-                orderNumber: 3,
-                label: '3º Jogo Decisivo',
-                homeAthleteId: 'test-home-ath-7',
-                homeAthleteName: 'Atleta #7',
-                awayAthleteId: 'test-away-ath-7',
-                awayAthleteName: 'Atleta #7',
-                homeSetsWon: 0,
-                awaySetsWon: 0,
-                currentSetHomePoints: 0,
-                currentSetAwayPoints: 0,
-                status: 'pending',
-                winnerSide: null,
-              },
-            ]
-          : undefined,
-      activeSubMatchIndex: 0,
-      swimmingStroke: mod.id === 'natacao' ? 'Crawl' : undefined,
-      swimmingDistanceLabel: mod.id === 'natacao' ? '50m Livre' : undefined,
-      swimmingLanes:
-        mod.id === 'natacao'
-          ? [1, 2, 3, 4, 5, 6].map((lane, idx) => {
-              const isHomeSide = idx % 2 === 0;
-              const num = [1, 4, 7][Math.floor(idx / 2)] || 1;
-              return {
-                laneNumber: lane,
-                athleteId: `test-${isHomeSide ? 'home' : 'away'}-ath-${num}`,
-                athleteName: `Atleta #${num}`,
-                teamName: isHomeSide ? 'Equipe 1' : 'Equipe 2',
-                registeredTimeMs: null,
-                formattedTime: null,
-                status: 'ready',
-                placement: null,
-              };
-            })
-          : undefined,
-      refereeNotes: '',
-      refereeName: '',
-      tableOfficialName: '',
-      isClosed: false,
-      closedAtIso: null,
-      syncStatus: 'synced',
-      lastUpdatedIso: new Date().toISOString(),
-    };
-
-    matches.push(match);
-    sheets[matchId] = sheet;
-  });
-
-  return { teams, athletes, matches, sheets };
+export function setStoredOperatorToken(token: string | null): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (token) {
+      sessionStorage.setItem(OPERATOR_TOKEN_SESSION_KEY, token);
+    } else {
+      sessionStorage.removeItem(OPERATOR_TOKEN_SESSION_KEY);
+    }
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 interface PersistedEngineState {
@@ -573,9 +316,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       if (saved) {
         const parsed = JSON.parse(saved) as Partial<PersistedEngineState>;
         if (parsed && Array.isArray(parsed.testMatches)) {
-          // Garante que as 5 equipes oficiais (Colossal, Soberana, Sanguinária, Predadora e Tormenta)
-          // estejam sempre sincronizadas com seus escudos e temas atuais
-          const mergeTeamsWithDefaults = (savedList?: Team[], fallbackList: Team[] = INITIAL_TEAMS): Team[] => {
+          const mergeTeamsWithDefaults = (
+            savedList?: Team[],
+            fallbackList: Team[] = INITIAL_TEAMS
+          ): Team[] => {
             if (!savedList || savedList.length === 0) return fallbackList;
             const merged = [...fallbackList];
             for (const custom of savedList) {
@@ -633,7 +377,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       // Fallback para estado inicial limpo
     }
     return {
-      isTestMode: false, // Aplicação oficial inicia limpa sem dados fictícios
+      isTestMode: false,
       officialTeams: INITIAL_TEAMS,
       officialAthletes: INITIAL_ATHLETES,
       officialMatches: INITIAL_MATCHES,
@@ -660,21 +404,91 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     }
   });
 
+  // Ref atualizada para evitar closure obsoleta no intervalo do cronômetro (Item 12 da Auditoria)
+  const unlockedMatchIdsRef = useRef<string[]>(unlockedMatchIds);
+  useEffect(() => {
+    unlockedMatchIdsRef.current = unlockedMatchIds;
+  }, [unlockedMatchIds]);
+
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
 
   const channelRef = useRef<BroadcastChannel | null>(null);
   const isApplyingRemoteUpdate = useRef(false);
+  const lastCloudUpdatedAtRef = useRef<string>('');
 
-  // Sincronização entre abas (Placar ao Vivo em uma aba + Súmula do Operador em outra)
+  // Fila de sincronização fora do setState para eliminar efeitos colaterais duplicados (Item 14 da Auditoria)
+  const syncQueueRef = useRef<
+    Array<{ collectionName: string; docId: string; data: unknown }>
+  >([]);
+
+  const enqueueCloudSync = useCallback(
+    (collectionName: string, docId: string, data: unknown) => {
+      syncQueueRef.current.push({ collectionName, docId, data });
+    },
+    []
+  );
+
+  const isUserAdmin = (user: UserProfile | null): boolean => {
+    if (!user) return false;
+    return (
+      user.role === 'administrador' ||
+      user.role === 'organizacao' ||
+      user.role === 'moderador'
+    );
+  };
+
+  const syncDocToFirestore = useCallback(
+    (collectionName: string, docId: string, data: unknown) => {
+      try {
+        const cleanData = JSON.parse(JSON.stringify(data));
+        setDoc(doc(db, collectionName, docId), cleanData, { merge: true }).catch(
+          () => {}
+        );
+        if (typeof window !== 'undefined') {
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          const opToken = getStoredOperatorToken();
+          if (opToken) {
+            headers['Authorization'] = `Bearer ${opToken}`;
+          }
+          fetch('/api/cloud-sync', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ collectionName, docId, data: cleanData }),
+          }).catch(() => {});
+        }
+      } catch {
+        // Silencioso
+      }
+    },
+    []
+  );
+
+  // Processa a fila de sincronização fora do setState
+  useEffect(() => {
+    if (syncQueueRef.current.length === 0) return;
+    const items = syncQueueRef.current.splice(0, syncQueueRef.current.length);
+    for (const item of items) {
+      syncDocToFirestore(item.collectionName, item.docId, item.data);
+    }
+  });
+
+  // Sincronização entre abas do mesmo navegador
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     if ('BroadcastChannel' in window) {
       const bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
       bc.onmessage = (ev) => {
-        if (ev.data && ev.data.type === 'STATE_SYNC') {
+        if (
+          ev.data &&
+          ev.data.type === 'STATE_SYNC' &&
+          ev.data.payload &&
+          typeof ev.data.payload === 'object'
+        ) {
           isApplyingRemoteUpdate.current = true;
           setState(ev.data.payload);
         }
@@ -685,8 +499,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     const handleStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY_STATE && e.newValue) {
         try {
-          isApplyingRemoteUpdate.current = true;
-          setState(JSON.parse(e.newValue));
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && typeof parsed === 'object') {
+            isApplyingRemoteUpdate.current = true;
+            setState(parsed);
+          }
         } catch {
           // Ignore malformed JSON
         }
@@ -711,25 +528,57 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     };
   }, []);
 
-  // Persistir e transmitir sempre que o estado mudar localmente
+  // Persistência em localStorage com Debounce de 600ms e sanitização de segredos para evitar travamentos e QuotaExceeded (Itens 21 e 22 da Auditoria)
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(state));
-      if (!isApplyingRemoteUpdate.current && channelRef.current) {
-        channelRef.current.postMessage({ type: 'STATE_SYNC', payload: state });
+    const timer = setTimeout(() => {
+      try {
+        const isAdmin = isUserAdmin(state.currentUser);
+        const sanitizedOfficialMatches = isAdmin
+          ? state.officialMatches
+          : state.officialMatches.map((m) => {
+              const { tableOfficialPassword: _pin, ...rest } = m;
+              return rest as Match;
+            });
+
+        const stateToPersist: PersistedEngineState = {
+          ...state,
+          officialMatches: sanitizedOfficialMatches,
+        };
+
+        localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(stateToPersist));
+        if (!isApplyingRemoteUpdate.current && channelRef.current) {
+          channelRef.current.postMessage({
+            type: 'STATE_SYNC',
+            payload: stateToPersist,
+          });
+        }
+        isApplyingRemoteUpdate.current = false;
+      } catch {
+        // Caso o localStorage atinja o limite de quota por fotos grandes, remove avatares em base64 apenas do cache local
+        try {
+          const slimAthletes = state.officialAthletes.map((a) => ({
+            ...a,
+            avatarUrl:
+              a.avatarUrl && a.avatarUrl.startsWith('data:') ? null : a.avatarUrl,
+          }));
+          localStorage.setItem(
+            STORAGE_KEY_STATE,
+            JSON.stringify({ ...state, officialAthletes: slimAthletes })
+          );
+        } catch {
+          // Ignore
+        }
       }
-      isApplyingRemoteUpdate.current = false;
-    } catch {
-      // Ignore quota errors
-    }
+    }, 600);
+
+    return () => clearTimeout(timer);
   }, [state]);
 
-  // Sincronização Global em Tempo Real com Cloud Firestore (Atletas, Equipes, Partidas e Súmulas)
+  // Sincronização em Tempo Real com Cloud Firestore (com verificação de revisão/timestamp para nunca reverter lançamentos mais novos)
   useEffect(() => {
     const unsubs: Array<() => void> = [];
 
     try {
-      // 1. Atletas Oficiais / Comunidade Social
       const unsubAthletes = onSnapshot(
         collection(db, 'athletes'),
         (snap) => {
@@ -748,23 +597,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               }
             }
             const nextAthletes = Array.from(byId.values());
-            let nextUser = prev.currentUser;
-            if (nextUser?.linkedAthleteId) {
-              const linked = byId.get(nextUser.linkedAthleteId);
-              if (linked) {
-                nextUser = {
-                  ...nextUser,
-                  name: linked.name || nextUser.name,
-                  avatarUrl: linked.avatarUrl ?? nextUser.avatarUrl,
-                  modalityIds: linked.modalityIds || nextUser.modalityIds,
-                };
-              }
-            }
             isApplyingRemoteUpdate.current = true;
             return {
               ...prev,
               officialAthletes: nextAthletes,
-              currentUser: nextUser,
             };
           });
         },
@@ -772,7 +608,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       );
       unsubs.push(unsubAthletes);
 
-      // 2. Equipes / Turmas Oficiais
       const unsubTeams = onSnapshot(
         collection(db, 'teams'),
         (snap) => {
@@ -801,7 +636,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       );
       unsubs.push(unsubTeams);
 
-      // 3. Partidas Oficiais ao Vivo
       const unsubMatches = onSnapshot(
         collection(db, 'matches'),
         (snap) => {
@@ -813,12 +647,19 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           setState((prev) => {
             const byId = new Map<string, Match>();
             for (const m of prev.officialMatches) byId.set(m.id, m);
+            let changed = false;
             for (const rm of remoteMatches) {
               if (!rm.isTestData) {
                 const ex = byId.get(rm.id);
-                byId.set(rm.id, ex ? { ...ex, ...rm } : rm);
+                const exRev = ex?.revision ?? 0;
+                const rmRev = rm.revision ?? 0;
+                if (!ex || rmRev >= exRev) {
+                  byId.set(rm.id, ex ? { ...ex, ...rm } : rm);
+                  changed = true;
+                }
               }
             }
+            if (!changed) return prev;
             isApplyingRemoteUpdate.current = true;
             return {
               ...prev,
@@ -830,19 +671,32 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       );
       unsubs.push(unsubMatches);
 
-      // 4. Súmulas Oficiais ao Vivo
       const unsubSheets = onSnapshot(
         collection(db, 'match_sheets'),
         (snap) => {
           if (snap.empty) return;
           setState((prev) => {
             const nextSheets = { ...prev.officialSheets };
+            let changed = false;
             snap.docs.forEach((d) => {
-              const s = d.data() as MatchSheet;
-              if (!s.isTestMode && s.matchId) {
-                nextSheets[s.matchId] = s;
+              const rs = d.data() as MatchSheet;
+              if (!rs.isTestMode && rs.matchId) {
+                const ex = nextSheets[rs.matchId];
+                const exRev = ex?.revision ?? 0;
+                const rsRev = rs.revision ?? 0;
+                const isNewerIso =
+                  !ex ||
+                  (rs.lastUpdatedIso &&
+                    ex.lastUpdatedIso &&
+                    rs.lastUpdatedIso > ex.lastUpdatedIso);
+
+                if (!ex || rsRev > exRev || (rsRev === exRev && isNewerIso)) {
+                  nextSheets[rs.matchId] = rs;
+                  changed = true;
+                }
               }
             });
+            if (!changed) return prev;
             isApplyingRemoteUpdate.current = true;
             return {
               ...prev,
@@ -862,24 +716,41 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     };
   }, []);
 
-  // Sincronização em tempo real via API Cloud Sync (/api/cloud-sync) para garantir que todos os usuários
-  // em diferentes celulares/computadores vejam sempre as mesmas inscrições, atletas, fotos e placares
+  // Sincronização em tempo real via API Cloud Sync (/api/cloud-sync) com `?since=` e comparação estrita `>` (Itens 10, 23 da Auditoria)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const fetchCloudSnapshot = async () => {
       try {
-        const res = await fetch('/api/cloud-sync').catch(() =>
-          fetch('https://intramedix.vercel.app/api/cloud-sync')
-        );
+        const headers: Record<string, string> = {};
+        const opToken = getStoredOperatorToken();
+        if (opToken) {
+          headers['Authorization'] = `Bearer ${opToken}`;
+        }
+        const sinceQuery = lastCloudUpdatedAtRef.current
+          ? `?since=${encodeURIComponent(lastCloudUpdatedAtRef.current)}`
+          : '';
+        const res = await fetch(`/api/cloud-sync${sinceQuery}`, { headers });
         if (!res || !res.ok) return;
         const payload = await res.json();
-        if (!payload || !payload.success) return;
+        if (!payload || !payload.success || payload.notModified) return;
+
+        if (payload.updatedAtIso) {
+          lastCloudUpdatedAtRef.current = payload.updatedAtIso;
+        }
+
+        // Dispara evento customizado para o RegistrationStoreContext aproveitar o mesmo payload sem fazer um 2º polling!
+        if (Array.isArray(payload.registrations)) {
+          window.dispatchEvent(
+            new CustomEvent('intramed-cloud-registrations', {
+              detail: payload.registrations,
+            })
+          );
+        }
 
         setState((prev) => {
           let changed = false;
 
-          // Mescla Atletas
           let nextAthletes = prev.officialAthletes;
           if (Array.isArray(payload.athletes) && payload.athletes.length > 0) {
             const byId = new Map<string, Athlete>();
@@ -887,7 +758,15 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             for (const r of payload.athletes as Athlete[]) {
               if (r && r.id && !r.isTestOnly) {
                 const ex = byId.get(r.id);
-                if (!ex || JSON.stringify(ex) !== JSON.stringify({ ...ex, ...r })) {
+                if (
+                  !ex ||
+                  ex.name !== r.name ||
+                  ex.avatarUrl !== r.avatarUrl ||
+                  ex.jerseyNumber !== r.jerseyNumber ||
+                  ex.position !== r.position ||
+                  ex.paymentStatus !== r.paymentStatus ||
+                  ex.memberStatus !== r.memberStatus
+                ) {
                   byId.set(r.id, ex ? { ...ex, ...r } : r);
                   changed = true;
                 }
@@ -898,7 +777,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             }
           }
 
-          // Mescla Equipes
           let nextTeams = prev.officialTeams;
           if (Array.isArray(payload.teams) && payload.teams.length > 0) {
             const byId = new Map<string, Team>();
@@ -919,7 +797,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             }
           }
 
-          // Mescla Partidas
           let nextMatches = prev.officialMatches;
           if (Array.isArray(payload.matches) && payload.matches.length > 0) {
             const byId = new Map<string, Match>();
@@ -928,16 +805,18 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             for (const rm of payload.matches as Match[]) {
               if (rm && rm.id && !rm.isTestData) {
                 const ex = byId.get(rm.id);
+                const exRev = ex?.revision ?? 0;
+                const rmRev = rm.revision ?? 0;
+                // Só aceita o remoto se a revisão for maior ou se mudou status/placar sem regredir revisão
                 if (
                   !ex ||
-                  ex.status !== rm.status ||
-                  ex.homeTeam?.score !== rm.homeTeam?.score ||
-                  ex.awayTeam?.score !== rm.awayTeam?.score ||
-                  ex.tableOfficialPassword !== rm.tableOfficialPassword ||
-                  ex.scheduledTime !== rm.scheduledTime ||
-                  ex.venue !== rm.venue
+                  rmRev > exRev ||
+                  (rmRev === exRev &&
+                    (ex.status !== rm.status ||
+                      ex.homeTeam?.score !== rm.homeTeam?.score ||
+                      ex.awayTeam?.score !== rm.awayTeam?.score))
                 ) {
-                  byId.set(rm.id, ex ? { ...ex, ...rm } : rm);
+                  byId.set(rm.id, ex ? { ...ex, ...rm, tableOfficialPassword: rm.tableOfficialPassword ?? ex.tableOfficialPassword } : rm);
                   matchChanged = true;
                   changed = true;
                 }
@@ -948,7 +827,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             }
           }
 
-          // Mescla Súmulas
           let nextSheets = prev.officialSheets;
           if (Array.isArray(payload.match_sheets) && payload.match_sheets.length > 0) {
             let sheetChanged = false;
@@ -956,7 +834,21 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             for (const rs of payload.match_sheets as MatchSheet[]) {
               if (rs && rs.matchId && !rs.isTestMode) {
                 const ex = copySheets[rs.matchId];
-                if (!ex || ex.lastUpdatedIso !== rs.lastUpdatedIso) {
+                const exRev = ex?.revision ?? 0;
+                const rsRev = rs.revision ?? 0;
+                const isStrictlyNewerTime =
+                  !ex ||
+                  (rs.lastUpdatedIso &&
+                    ex.lastUpdatedIso &&
+                    new Date(rs.lastUpdatedIso).getTime() >
+                      new Date(ex.lastUpdatedIso).getTime());
+
+                // Correção crítica Item 10 da Auditoria: usa `>` em vez de `!==` para jamais substituir súmula local mais nova por snapshot antigo
+                if (
+                  !ex ||
+                  rsRev > exRev ||
+                  (rsRev >= exRev && isStrictlyNewerTime && !ex.timer.isRunning)
+                ) {
                   copySheets[rs.matchId] = rs;
                   sheetChanged = true;
                   changed = true;
@@ -970,19 +862,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
           if (!changed) return prev;
 
-          let nextUser = prev.currentUser;
-          if (nextUser?.linkedAthleteId) {
-            const linked = nextAthletes.find((a) => a.id === nextUser?.linkedAthleteId);
-            if (linked) {
-              nextUser = {
-                ...nextUser,
-                name: linked.name || nextUser.name,
-                avatarUrl: linked.avatarUrl ?? nextUser.avatarUrl,
-                modalityIds: linked.modalityIds || nextUser.modalityIds,
-              };
-            }
-          }
-
           isApplyingRemoteUpdate.current = true;
           return {
             ...prev,
@@ -990,7 +869,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             officialTeams: nextTeams,
             officialMatches: nextMatches,
             officialSheets: nextSheets,
-            currentUser: nextUser,
           };
         });
       } catch {
@@ -999,161 +877,226 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     };
 
     fetchCloudSnapshot();
-    const interval = setInterval(fetchCloudSnapshot, 5000);
+    const interval = setInterval(fetchCloudSnapshot, 4500);
     return () => clearInterval(interval);
   }, []);
 
-  // Motor de Cronômetro Centralizado (1 segundo) — alimenta cronômetro principal, punições 2min e timeouts
+  // Motor de Cronômetro Preciso por Timestamp Real (`lastTickTimestamp` + `Date.now()`)
+  // Corrige Itens 11, 12, 13, 14, 22 e 27 da Auditoria:
+  // - Não atrasa quando o celular bloqueia a tela ou a aba fica em segundo plano;
+  // - Opera tanto em `officialSheets` quanto em `testSheets` simultaneamente;
+  // - Quando chega a 00:00, encerra o período formalmente (marca periodScores.isFinished, cria evento period_end e toca buzina);
+  // - Não clona `matches` se nenhum status mudou.
   useEffect(() => {
     const interval = setInterval(() => {
+      const nowMs = Date.now();
+
       setState((prev) => {
-        const targetSheets = prev.isTestMode ? prev.testSheets : prev.officialSheets;
-        const hasAnyRunning = Object.values(targetSheets).some(
-          (s) =>
-            s.timer.isRunning ||
-            (s.activeTimeout && s.activeTimeout.isActive) ||
-            s.activeSuspensions.some((susp) => !susp.isReleased && susp.remainingSeconds > 0 && s.timer.isRunning)
-        );
+        const checkCollectionHasRunning = (sheetsMap: Record<string, MatchSheet>) =>
+          Object.values(sheetsMap).some(
+            (s) =>
+              s.timer.isRunning ||
+              (s.activeTimeout && s.activeTimeout.isActive) ||
+              s.activeSuspensions.some(
+                (susp) => !susp.isReleased && susp.remainingSeconds > 0 && s.timer.isRunning
+              )
+          );
 
-        if (!hasAnyRunning) return prev;
+        const officialRunning = checkCollectionHasRunning(prev.officialSheets);
+        const testRunning = checkCollectionHasRunning(prev.testSheets);
 
-        const updatedSheets = { ...targetSheets };
-        const updatedMatches = [...(prev.isTestMode ? prev.testMatches : prev.officialMatches)];
+        if (!officialRunning && !testRunning) return prev;
 
-        Object.keys(updatedSheets).forEach((mId) => {
-          const sheet = updatedSheets[mId];
-          const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
-          let changed = false;
-          let nextTimer = { ...sheet.timer };
-          let nextTimeout = sheet.activeTimeout ? { ...sheet.activeTimeout } : null;
-          let nextSuspensions = sheet.activeSuspensions;
+        const processCollection = (
+          sheetsMap: Record<string, MatchSheet>,
+          matchesList: Match[],
+          isTestCollection: boolean
+        ): {
+          sheetsMap: Record<string, MatchSheet>;
+          matchesList: Match[];
+          anyChanged: boolean;
+          matchesChanged: boolean;
+        } => {
+          const updatedSheets = { ...sheetsMap };
+          let updatedMatches = matchesList;
+          let anyChanged = false;
+          let matchesChanged = false;
 
-          // 1. Contador de Timeout / Tempo Técnico
-          if (nextTimeout && nextTimeout.isActive) {
-            changed = true;
-            if (nextTimeout.remainingSeconds <= 1) {
-              nextTimeout = null;
-            } else {
-              nextTimeout.remainingSeconds -= 1;
-            }
-          }
+          for (const mId of Object.keys(updatedSheets)) {
+            const sheet = updatedSheets[mId];
+            const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
+            let sheetChanged = false;
+            let nextTimer = { ...sheet.timer };
+            let nextTimeout = sheet.activeTimeout ? { ...sheet.activeTimeout } : null;
+            let nextSuspensions = sheet.activeSuspensions;
+            let nextPeriodScores = sheet.periodScores;
+            let nextEvents = sheet.events;
 
-          // 2. Cronômetro Principal da Partida + Exclusões de 2 Minutos
-          if (nextTimer.isRunning) {
-            changed = true;
-            nextTimer.elapsedSeconds += 1;
+            // Calcula quantos segundos reais se passaram desde o último tick (protege contra aba em background)
+            const prevTickMs = nextTimer.lastTickTimestamp || nowMs - 1000;
+            const deltaSeconds = Math.max(
+              1,
+              Math.min(30, Math.round((nowMs - prevTickMs) / 1000))
+            );
 
-            if (engine.timerDirection === 'countdown') {
-              if (nextTimer.remainingSeconds > 0) {
-                nextTimer.remainingSeconds -= 1;
+            // 1. Contador de Timeout / Tempo Técnico
+            if (nextTimeout && nextTimeout.isActive) {
+              sheetChanged = true;
+              if (nextTimeout.remainingSeconds <= deltaSeconds) {
+                nextTimeout = null;
+                matchSound.playBuzzer();
+              } else {
+                nextTimeout.remainingSeconds -= deltaSeconds;
               }
-              if (nextTimer.remainingSeconds === 0) {
-                nextTimer.isRunning = false;
-                nextTimer.lifecycle = 'period_ended';
-              }
             }
 
-            // Atualiza contadores individuais de punição temporária (2 min) sincronizados com a bola rolando
-            if (sheet.activeSuspensions.length > 0) {
-              nextSuspensions = sheet.activeSuspensions.map((susp) => {
-                if (susp.isReleased || susp.remainingSeconds <= 0) {
-                  return { ...susp, remainingSeconds: 0, isReleased: true };
+            // 2. Cronômetro Principal da Partida + Exclusões de 2 Minutos
+            if (nextTimer.isRunning) {
+              sheetChanged = true;
+              nextTimer.elapsedSeconds += deltaSeconds;
+              nextTimer.lastTickTimestamp = nowMs;
+
+              if (engine.timerDirection === 'countdown') {
+                nextTimer.remainingSeconds = Math.max(
+                  0,
+                  nextTimer.remainingSeconds - deltaSeconds
+                );
+
+                // Item 27 da Auditoria: ao chegar a 0, finaliza o período com evento, status halftime e buzina
+                if (nextTimer.remainingSeconds === 0) {
+                  nextTimer.isRunning = false;
+                  nextTimer.lastTickTimestamp = null;
+                  const isLastRegularPeriod =
+                    nextTimer.currentPeriod >= nextTimer.totalPeriods;
+                  nextTimer.lifecycle = isLastRegularPeriod
+                    ? 'period_ended'
+                    : 'interval';
+
+                  nextPeriodScores = sheet.periodScores.map((p) =>
+                    p.periodNumber === nextTimer.currentPeriod
+                      ? { ...p, isFinished: true }
+                      : p
+                  );
+
+                  const endEvent: MatchEvent = {
+                    id: generateUniqueId('ev'),
+                    matchId: mId,
+                    type: 'period_end',
+                    typeLabel: `Fim — ${nextTimer.periodLabel}`,
+                    periodNumber: nextTimer.currentPeriod,
+                    periodLabel: nextTimer.periodLabel,
+                    matchClockDisplay: '00:00',
+                    createdAtIso: new Date().toISOString(),
+                    auditHistory: [],
+                  };
+                  nextEvents = [endEvent, ...sheet.events];
+
+                  matchSound.playBuzzer();
+
+                  if (!isLastRegularPeriod) {
+                    const mIdx = updatedMatches.findIndex((m) => m.id === mId);
+                    if (mIdx >= 0 && updatedMatches[mIdx].status !== 'halftime') {
+                      if (!matchesChanged) {
+                        updatedMatches = [...updatedMatches];
+                        matchesChanged = true;
+                      }
+                      updatedMatches[mIdx] = {
+                        ...updatedMatches[mIdx],
+                        status: 'halftime',
+                      };
+                    }
+                  }
                 }
-                const rem = susp.remainingSeconds - 1;
-                return {
-                  ...susp,
-                  remainingSeconds: rem,
-                  isReleased: rem <= 0,
-                };
-              });
+              }
+
+              // Punições de 2 minutos
+              if (sheet.activeSuspensions.length > 0) {
+                nextSuspensions = sheet.activeSuspensions.map((susp) => {
+                  if (susp.isReleased || susp.remainingSeconds <= 0) {
+                    return { ...susp, remainingSeconds: 0, isReleased: true };
+                  }
+                  const rem = Math.max(0, susp.remainingSeconds - deltaSeconds);
+                  if (rem === 0 && !susp.isReleased) {
+                    matchSound.playConfirmBeep();
+                  }
+                  return {
+                    ...susp,
+                    remainingSeconds: rem,
+                    isReleased: rem <= 0,
+                  };
+                });
+              }
             }
-          }
 
-          if (changed) {
-            const nextSheetObj: MatchSheet = {
-              ...sheet,
-              timer: nextTimer,
-              activeTimeout: nextTimeout,
-              activeSuspensions: nextSuspensions,
-              lastUpdatedIso: new Date().toISOString(),
-            };
-            updatedSheets[mId] = nextSheetObj;
+            if (sheetChanged) {
+              anyChanged = true;
+              const isOperatorForThisMatch =
+                isUserAdmin(prev.currentUser) ||
+                unlockedMatchIdsRef.current.includes(mId);
 
-            // Se este dispositivo é o mesário/operador da partida oficial, sincroniza o relógio na nuvem a cada 3 segundos
-            if (
-              !prev.isTestMode &&
-              nextTimer.elapsedSeconds % 3 === 0 &&
-              (isUserAdmin(prev.currentUser) || unlockedMatchIds.includes(mId))
-            ) {
-              try {
-                const cleanSheet = JSON.parse(JSON.stringify(nextSheetObj));
-                fetch('/api/cloud-sync', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    collectionName: 'match_sheets',
-                    docId: mId,
-                    data: cleanSheet,
-                  }),
-                }).catch(() => {});
-              } catch {
-                // Silencioso
+              const nextSheetObj: MatchSheet = {
+                ...sheet,
+                timer: nextTimer,
+                activeTimeout: nextTimeout,
+                activeSuspensions: nextSuspensions,
+                periodScores: nextPeriodScores,
+                events: nextEvents,
+                // Só atualiza `lastUpdatedIso` e envia para a nuvem se este aparelho for o operador da partida!
+                lastUpdatedIso: isOperatorForThisMatch
+                  ? new Date().toISOString()
+                  : sheet.lastUpdatedIso,
+              };
+              updatedSheets[mId] = nextSheetObj;
+
+              if (
+                !isTestCollection &&
+                isOperatorForThisMatch &&
+                (nextTimer.elapsedSeconds % 3 === 0 || !nextTimer.isRunning)
+              ) {
+                enqueueCloudSync('match_sheets', mId, nextSheetObj);
               }
             }
           }
-        });
 
-        if (prev.isTestMode) {
           return {
-            ...prev,
-            testMatches: updatedMatches,
-            testSheets: updatedSheets,
+            sheetsMap: updatedSheets,
+            matchesList: updatedMatches,
+            anyChanged,
+            matchesChanged,
           };
-        }
+        };
+
+        const officialRes = officialRunning
+          ? processCollection(prev.officialSheets, prev.officialMatches, false)
+          : null;
+        const testRes = testRunning
+          ? processCollection(prev.testSheets, prev.testMatches, true)
+          : null;
+
+        if (!officialRes?.anyChanged && !testRes?.anyChanged) return prev;
+
         return {
           ...prev,
-          officialMatches: updatedMatches,
-          officialSheets: updatedSheets,
+          ...(officialRes?.anyChanged
+            ? {
+                officialSheets: officialRes.sheetsMap,
+                ...(officialRes.matchesChanged
+                  ? { officialMatches: officialRes.matchesList }
+                  : {}),
+              }
+            : {}),
+          ...(testRes?.anyChanged
+            ? {
+                testSheets: testRes.sheetsMap,
+                ...(testRes.matchesChanged ? { testMatches: testRes.matchesList } : {}),
+              }
+            : {}),
         };
       });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
-
-  const isUserAdmin = (user: UserProfile | null): boolean => {
-    if (!user) return false;
-    return (
-      user.role === 'administrador' ||
-      user.role === 'organizacao' ||
-      user.role === 'moderador'
-    );
-  };
-
-  const syncDocToFirestore = useCallback(
-    (collectionName: string, docId: string, data: unknown) => {
-      try {
-        const cleanData = JSON.parse(JSON.stringify(data));
-        setDoc(doc(db, collectionName, docId), cleanData, { merge: true }).catch(() => {});
-        if (typeof window !== 'undefined') {
-          fetch('/api/cloud-sync', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ collectionName, docId, data: cleanData }),
-          }).catch(() => {
-            fetch('https://intramedix.vercel.app/api/cloud-sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ collectionName, docId, data: cleanData }),
-            }).catch(() => {});
-          });
-        }
-      } catch {
-        // Silencioso
-      }
-    },
-    []
-  );
+  }, [enqueueCloudSync]);
 
   const updateMatchAndSheet = useCallback(
     (
@@ -1161,7 +1104,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updater: (match: Match, sheet: MatchSheet) => { match: Match; sheet: MatchSheet }
     ) => {
       setState((prev) => {
-        const hasMatchUnlock = unlockedMatchIds.includes(matchId);
+        const hasMatchUnlock = unlockedMatchIdsRef.current.includes(matchId);
         if (!isUserAdmin(prev.currentUser) && !hasMatchUnlock) return prev;
         const isTest = matchId.startsWith('test-');
         const matchesList = isTest ? [...prev.testMatches] : [...prev.officialMatches];
@@ -1176,18 +1119,24 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           currentSheet
         );
 
+        const nextRevision = (currentSheet.revision ?? 0) + 1;
+        const finalizedMatch: Match = {
+          ...nextMatch,
+          revision: (matchesList[matchIdx].revision ?? 0) + 1,
+        };
         const finalizedSheet: MatchSheet = {
           ...nextSheet,
           syncStatus: isOnline ? 'synced' : 'pending_sync',
           lastUpdatedIso: new Date().toISOString(),
+          revision: nextRevision,
         };
 
-        matchesList[matchIdx] = nextMatch;
+        matchesList[matchIdx] = finalizedMatch;
         sheetsMap[matchId] = finalizedSheet;
 
         if (!isTest) {
-          syncDocToFirestore('matches', nextMatch.id, nextMatch);
-          syncDocToFirestore('match_sheets', nextMatch.id, finalizedSheet);
+          enqueueCloudSync('matches', finalizedMatch.id, finalizedMatch);
+          enqueueCloudSync('match_sheets', finalizedMatch.id, finalizedSheet);
         }
 
         return {
@@ -1199,7 +1148,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         };
       });
     },
-    [isOnline, syncDocToFirestore, unlockedMatchIds]
+    [isOnline, enqueueCloudSync]
   );
 
   const setTestMode = useCallback((enabled: boolean) => {
@@ -1272,7 +1221,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
         if (wasNotStarted) {
           nextEvents.unshift({
-            id: `ev-${Date.now()}`,
+            id: generateUniqueId('ev'),
             matchId,
             type: 'period_start',
             typeLabel: `Início — ${sheet.timer.periodLabel}`,
@@ -1296,6 +1245,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               ...sheet.timer,
               isRunning: true,
               lifecycle: 'running',
+              lastTickTimestamp: Date.now(),
             },
           },
         };
@@ -1314,6 +1264,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             ...sheet.timer,
             isRunning: false,
             lifecycle: 'paused',
+            lastTickTimestamp: null,
           },
         },
       }));
@@ -1333,6 +1284,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             elapsedSeconds: 0,
             isRunning: false,
             lifecycle: 'not_started',
+            lastTickTimestamp: null,
           },
         },
       }));
@@ -1349,20 +1301,29 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             : p
         );
 
+        const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
+        const endClockStr =
+          engine.timerDirection === 'countdown'
+            ? '00:00'
+            : getCurrentMatchClockDisplay(sheet);
+
+        // Item 37 da Auditoria: "Fim — {periodLabel}" para evitar "Fim do Prorrogação"
         const endEvent: MatchEvent = {
-          id: `ev-${Date.now()}`,
+          id: generateUniqueId('ev'),
           matchId,
           type: 'period_end',
-          typeLabel: `Fim do ${sheet.timer.periodLabel}`,
+          typeLabel: `Fim — ${sheet.timer.periodLabel}`,
           periodNumber: sheet.timer.currentPeriod,
           periodLabel: sheet.timer.periodLabel,
-          matchClockDisplay: '00:00',
+          matchClockDisplay: endClockStr,
           createdAtIso: new Date().toISOString(),
           auditHistory: [],
         };
 
         const isLastRegularPeriod =
           sheet.timer.currentPeriod >= sheet.timer.totalPeriods;
+
+        matchSound.playBuzzer();
 
         return {
           match: {
@@ -1376,8 +1337,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             timer: {
               ...sheet.timer,
               isRunning: false,
-              remainingSeconds: 0,
+              remainingSeconds:
+                engine.timerDirection === 'countdown'
+                  ? 0
+                  : sheet.timer.remainingSeconds,
               lifecycle: isLastRegularPeriod ? 'period_ended' : 'interval',
+              lastTickTimestamp: null,
             },
           },
         };
@@ -1429,6 +1394,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             periodScores: nextPeriodScores,
             homeFoulsCurrentPeriod: 0,
             awayFoulsCurrentPeriod: 0,
+            homeTimeoutsUsed: 0,
+            awayTimeoutsUsed: 0,
             timer: {
               ...sheet.timer,
               currentPeriod: nextPeriodNum,
@@ -1437,6 +1404,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               elapsedSeconds: 0,
               isRunning: false,
               lifecycle: 'not_started',
+              lastTickTimestamp: null,
             },
           },
         };
@@ -1450,7 +1418,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updateMatchAndSheet(matchId, (match, sheet) => {
         const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
         const catRule =
-          engine.defaultCategoryRules[match.categoryName || 'Masculino'] ||
+          engine.defaultCategoryRules[match.categoryName || ''] ||
           Object.values(engine.defaultCategoryRules)[0];
         const otDuration = catRule.overtimeDurationSeconds || 300;
         const nextPeriodNum = sheet.periodScores.length + 1;
@@ -1462,6 +1430,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           },
           sheet: {
             ...sheet,
+            homeFoulsCurrentPeriod: 0,
+            awayFoulsCurrentPeriod: 0,
             periodScores: [
               ...sheet.periodScores,
               {
@@ -1481,6 +1451,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               elapsedSeconds: 0,
               isRunning: false,
               lifecycle: 'overtime',
+              lastTickTimestamp: null,
             },
           },
         };
@@ -1489,12 +1460,35 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
+  // Item 28 da Auditoria: redimensiona `periodScores` quando a regra de categoria muda
   const configureMatchCategoryRule = useCallback(
     (matchId: string, categoryName: string) => {
       updateMatchAndSheet(matchId, (match, sheet) => {
         const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
         const rule = engine.defaultCategoryRules[categoryName];
         if (!rule) return { match, sheet };
+
+        const resizedPeriodScores = Array.from({ length: rule.periodsCount }).map(
+          (_, idx) => {
+            const existing = sheet.periodScores.find(
+              (p) => p.periodNumber === idx + 1
+            );
+            if (existing) return existing;
+            return {
+              periodNumber: idx + 1,
+              label:
+                engine.scoringModel === 'sets_points' ||
+                engine.scoringModel === 'team_submatches'
+                  ? `Set ${idx + 1}`
+                  : engine.scoringModel === 'points_quarters'
+                  ? `P${idx + 1}`
+                  : `${idx + 1}º Período`,
+              homeScore: 0,
+              awayScore: 0,
+              isFinished: false,
+            };
+          }
+        );
 
         return {
           match: {
@@ -1503,14 +1497,17 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           },
           sheet: {
             ...sheet,
+            periodScores: resizedPeriodScores,
             timer: {
               ...sheet.timer,
+              currentPeriod: 1,
               totalPeriods: rule.periodsCount,
               initialPeriodSeconds: rule.periodDurationSeconds,
               remainingSeconds: rule.periodDurationSeconds,
               elapsedSeconds: 0,
               isRunning: false,
               lifecycle: 'not_started',
+              lastTickTimestamp: null,
             },
           },
         };
@@ -1540,7 +1537,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             : null;
 
         const newEvent: MatchEvent = {
-          id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          id: generateUniqueId('ev'),
           matchId,
           type: payload.type,
           typeLabel: payload.typeLabel,
@@ -1563,86 +1560,35 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           auditHistory: [],
         };
 
-        let nextHomeScore = match.homeTeam.score ?? 0;
-        let nextAwayScore = match.awayTeam.score ?? 0;
-        let nextPeriodScores = [...sheet.periodScores];
-        let nextHomeFouls = sheet.homeFoulsCurrentPeriod;
-        let nextAwayFouls = sheet.awayFoulsCurrentPeriod;
-        let nextHomeTimeouts = sheet.homeTimeoutsUsed;
-        let nextAwayTimeouts = sheet.awayTimeoutsUsed;
-        let nextActiveTimeout = sheet.activeTimeout;
         let nextSuspensions = [...sheet.activeSuspensions];
+        let nextActiveTimeout = sheet.activeTimeout;
         let nextTimer = { ...sheet.timer };
         let nextHomeLineup = [...sheet.homeLineup];
         let nextAwayLineup = [...sheet.awayLineup];
 
-        // 1. Atualização de Placar (Gol, +1, +2, +3, Ponto de Set, 7 Metros, Pênalti)
-        const delta =
-          payload.pointsDelta ??
-          (payload.type === 'goal' ||
-          payload.type === 'point_1' ||
-          payload.type === 'set_point' ||
-          payload.type === 'seven_meters' ||
-          payload.type === 'penalty_goal' ||
-          payload.type === 'direct_free_throw' ||
-          payload.type === 'volleyball_ace' ||
-          payload.type === 'volleyball_block' ||
-          payload.type === 'volleyball_attack' ||
-          payload.type === 'volleyball_opponent_error'
-            ? 1
-            : payload.type === 'point_2'
-            ? 2
-            : payload.type === 'point_3'
-            ? 3
-            : 0);
-
-        if (delta > 0 && payload.teamSide) {
-          if (sheet.scoringModel === 'sets_points') {
-            // Em modalidades de sets, os pontos vão para o set atual e o placar principal mostra os sets vencidos (ou atualiza parcial)
-            nextPeriodScores = nextPeriodScores.map((ps) => {
-              if (ps.periodNumber !== sheet.timer.currentPeriod) return ps;
-              return {
-                ...ps,
-                homeScore:
-                  payload.teamSide === 'home' ? ps.homeScore + delta : ps.homeScore,
-                awayScore:
-                  payload.teamSide === 'away' ? ps.awayScore + delta : ps.awayScore,
-              };
-            });
-          } else {
-            if (payload.teamSide === 'home') nextHomeScore += delta;
-            if (payload.teamSide === 'away') nextAwayScore += delta;
-
-            nextPeriodScores = nextPeriodScores.map((ps) => {
-              if (ps.periodNumber !== sheet.timer.currentPeriod) return ps;
-              return {
-                ...ps,
-                homeScore:
-                  payload.teamSide === 'home' ? ps.homeScore + delta : ps.homeScore,
-                awayScore:
-                  payload.teamSide === 'away' ? ps.awayScore + delta : ps.awayScore,
-              };
-            });
-          }
-        }
-
-        // 2. Contabilização de Faltas da Equipe no Período
-        if (
-          (payload.type === 'foul' ||
-            payload.type === 'team_foul' ||
-            payload.type === 'technical_foul' ||
-            payload.type === 'unsportsmanlike_foul') &&
-          payload.teamSide
-        ) {
-          if (payload.teamSide === 'home') nextHomeFouls += 1;
-          if (payload.teamSide === 'away') nextAwayFouls += 1;
-        }
-
-        // 3. Punição Temporária de 2 Minutos (Handebol etc.)
+        // Punição Temporária de 2 Minutos (Item 27 da Auditoria: cálculo de retorno para countdown e countup)
         if (payload.type === 'suspension_2min' && payload.teamSide) {
-          const returnSecs = Math.max(0, sheet.timer.remainingSeconds - 120);
+          const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
+          let returnClockStr = '00:00';
+          if (engine.timerDirection === 'countdown') {
+            if (sheet.timer.remainingSeconds >= 120) {
+              returnClockStr = formatSecondsToClock(
+                sheet.timer.remainingSeconds - 120
+              );
+            } else {
+              const carryOver = 120 - sheet.timer.remainingSeconds;
+              const nextPerRem = Math.max(
+                0,
+                sheet.timer.initialPeriodSeconds - carryOver
+              );
+              returnClockStr = `${formatSecondsToClock(nextPerRem)} (Próx. Per.)`;
+            }
+          } else {
+            returnClockStr = formatSecondsToClock(sheet.timer.elapsedSeconds + 120);
+          }
+
           nextSuspensions.unshift({
-            id: `susp-${Date.now()}`,
+            id: generateUniqueId('susp'),
             eventId: newEvent.id,
             teamSide: payload.teamSide,
             teamName: teamName || 'Equipe',
@@ -1652,12 +1598,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             startedAtMatchClock: clockStr,
             durationSeconds: 120,
             remainingSeconds: 120,
-            expectedReturnMatchClock: formatSecondsToClock(returnSecs),
+            expectedReturnMatchClock: returnClockStr,
             isReleased: false,
           });
         }
 
-        // 4. Substituição: atualiza titulares/reservas automaticamente
+        // Substituição
         if (
           payload.type === 'substitution' &&
           payload.teamSide &&
@@ -1682,21 +1628,20 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           }
         }
 
-        // 5. Timeout / Tempo Técnico
+        // Timeout / Tempo Técnico
         if (payload.type === 'timeout' && payload.teamSide) {
           const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
           const catRule =
-            engine.defaultCategoryRules[match.categoryName || 'Masculino'] ||
+            engine.defaultCategoryRules[match.categoryName || ''] ||
             Object.values(engine.defaultCategoryRules)[0];
           const timeoutSecs = catRule?.timeoutDurationSeconds || 60;
-
-          if (payload.teamSide === 'home') nextHomeTimeouts += 1;
-          if (payload.teamSide === 'away') nextAwayTimeouts += 1;
 
           nextTimer = {
             ...nextTimer,
             isRunning: false,
-            lifecycle: nextTimer.lifecycle === 'running' ? 'paused' : nextTimer.lifecycle,
+            lifecycle:
+              nextTimer.lifecycle === 'running' ? 'paused' : nextTimer.lifecycle,
+            lastTickTimestamp: null,
           };
 
           nextActiveTimeout = {
@@ -1708,40 +1653,34 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           };
         }
 
+        const draftSheet: MatchSheet = {
+          ...sheet,
+          events: [newEvent, ...sheet.events],
+          activeSuspensions: nextSuspensions,
+          activeTimeout: nextActiveTimeout,
+          homeLineup: nextHomeLineup,
+          awayLineup: nextAwayLineup,
+          timer: nextTimer,
+        };
+
+        const recomputed = recomputeMatchAndSheetFromEvents(match, draftSheet);
+
         return {
           match: {
-            ...match,
-            status: match.status === 'scheduled' ? 'live' : match.status,
-            homeTeam: {
-              ...match.homeTeam,
-              score: nextHomeScore,
-            },
-            awayTeam: {
-              ...match.awayTeam,
-              score: nextAwayScore,
-            },
+            ...recomputed.match,
+            status:
+              recomputed.match.status === 'scheduled'
+                ? 'live'
+                : recomputed.match.status,
           },
-          sheet: {
-            ...sheet,
-            events: [newEvent, ...sheet.events],
-            periodScores: nextPeriodScores,
-            homeFoulsCurrentPeriod: nextHomeFouls,
-            awayFoulsCurrentPeriod: nextAwayFouls,
-            homeTimeoutsUsed: nextHomeTimeouts,
-            awayTimeoutsUsed: nextAwayTimeouts,
-            activeTimeout: nextActiveTimeout,
-            activeSuspensions: nextSuspensions,
-            homeLineup: nextHomeLineup,
-            awayLineup: nextAwayLineup,
-            timer: nextTimer,
-          },
+          sheet: recomputed.sheet,
         };
       });
     },
     [updateMatchAndSheet]
   );
 
-  // CORREÇÃO / EDIÇÃO DE EVENTO COM REGISTRO DE AUDITORIA (Item 25)
+  // CORREÇÃO / EDIÇÃO DE EVENTO COM REGISTRO DE AUDITORIA E RECÁLCULO PURO (Item 15 da Auditoria)
   const editMatchEvent = useCallback(
     (matchId: string, payload: EditEventPayload) => {
       updateMatchAndSheet(matchId, (match, sheet) => {
@@ -1772,62 +1711,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           nextAthleteName || 'Sem atleta'
         } (${nextClock})`;
 
-        // Se mudou o lado da equipe em um evento de pontuação, ajusta o placar automaticamente
-        let nextHomeScore = match.homeTeam.score ?? 0;
-        let nextAwayScore = match.awayTeam.score ?? 0;
-        let nextPeriodScores = [...sheet.periodScores];
-
-        const delta =
-          target.pointsDelta ??
-          (target.type === 'goal' ||
-          target.type === 'point_1' ||
-          target.type === 'set_point' ||
-          target.type === 'seven_meters' ||
-          target.type === 'penalty_goal' ||
-          target.type === 'direct_free_throw' ||
-          target.type === 'volleyball_ace' ||
-          target.type === 'volleyball_block' ||
-          target.type === 'volleyball_attack' ||
-          target.type === 'volleyball_opponent_error'
-            ? 1
-            : target.type === 'point_2'
-            ? 2
-            : target.type === 'point_3'
-            ? 3
-            : 0);
-
-        if (
-          delta > 0 &&
-          target.teamSide &&
-          nextTeamSide &&
-          target.teamSide !== nextTeamSide
-        ) {
-          if (sheet.scoringModel !== 'sets_points') {
-            if (target.teamSide === 'home') {
-              nextHomeScore = Math.max(0, nextHomeScore - delta);
-              nextAwayScore += delta;
-            } else {
-              nextAwayScore = Math.max(0, nextAwayScore - delta);
-              nextHomeScore += delta;
-            }
-          }
-          nextPeriodScores = nextPeriodScores.map((ps) => {
-            if (ps.periodNumber !== target.periodNumber) return ps;
-            if (target.teamSide === 'home') {
-              return {
-                ...ps,
-                homeScore: Math.max(0, ps.homeScore - delta),
-                awayScore: ps.awayScore + delta,
-              };
-            }
-            return {
-              ...ps,
-              awayScore: Math.max(0, ps.awayScore - delta),
-              homeScore: ps.homeScore + delta,
-            };
-          });
-        }
-
         const updatedEvents = sheet.events.map((ev) => {
           if (ev.id !== payload.eventId) return ev;
           return {
@@ -1846,7 +1729,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             auditHistory: [
               ...ev.auditHistory,
               {
-                id: `aud-${Date.now()}`,
+                id: generateUniqueId('aud'),
                 timestampIso: new Date().toISOString(),
                 operatorRole: 'Mesa Operadora',
                 action: 'edited' as const,
@@ -1858,97 +1741,53 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           };
         });
 
-        return {
-          match: {
-            ...match,
-            homeTeam: { ...match.homeTeam, score: nextHomeScore },
-            awayTeam: { ...match.awayTeam, score: nextAwayScore },
-          },
-          sheet: {
-            ...sheet,
-            events: updatedEvents,
-            periodScores: nextPeriodScores,
-          },
+        const draftSheet: MatchSheet = {
+          ...sheet,
+          events: updatedEvents,
         };
+
+        return recomputeMatchAndSheetFromEvents(match, draftSheet);
       });
     },
     [updateMatchAndSheet]
   );
 
-  // EXCLUSÃO DE EVENTO COM CONFIRMAÇÃO E AUDITORIA (Item 25)
+  // EXCLUSÃO DE EVENTO COM RECÁLCULO TOTAL (Placar, Sets, Faltas, Timeouts e Substituições — Item 15 da Auditoria)
   const deleteMatchEvent = useCallback(
     (matchId: string, eventId: string, reason?: string) => {
       updateMatchAndSheet(matchId, (match, sheet) => {
         const target = sheet.events.find((e) => e.id === eventId);
         if (!target || target.isDeleted) return { match, sheet };
 
-        const delta =
-          target.pointsDelta ??
-          (target.type === 'goal' ||
-          target.type === 'point_1' ||
-          target.type === 'set_point' ||
-          target.type === 'seven_meters' ||
-          target.type === 'penalty_goal' ||
-          target.type === 'direct_free_throw' ||
-          target.type === 'volleyball_ace' ||
-          target.type === 'volleyball_block' ||
-          target.type === 'volleyball_attack' ||
-          target.type === 'volleyball_opponent_error'
-            ? 1
-            : target.type === 'point_2'
-            ? 2
-            : target.type === 'point_3'
-            ? 3
-            : 0);
-
-        let nextHomeScore = match.homeTeam.score ?? 0;
-        let nextAwayScore = match.awayTeam.score ?? 0;
-        let nextPeriodScores = [...sheet.periodScores];
-        let nextHomeFouls = sheet.homeFoulsCurrentPeriod;
-        let nextAwayFouls = sheet.awayFoulsCurrentPeriod;
-
-        if (delta > 0 && target.teamSide) {
-          if (sheet.scoringModel !== 'sets_points') {
-            if (target.teamSide === 'home') {
-              nextHomeScore = Math.max(0, nextHomeScore - delta);
-            } else {
-              nextAwayScore = Math.max(0, nextAwayScore - delta);
-            }
-          }
-          nextPeriodScores = nextPeriodScores.map((ps) => {
-            if (ps.periodNumber !== target.periodNumber) return ps;
-            return {
-              ...ps,
-              homeScore:
-                target.teamSide === 'home'
-                  ? Math.max(0, ps.homeScore - delta)
-                  : ps.homeScore,
-              awayScore:
-                target.teamSide === 'away'
-                  ? Math.max(0, ps.awayScore - delta)
-                  : ps.awayScore,
-            };
-          });
-        }
-
-        if (
-          (target.type === 'foul' ||
-            target.type === 'team_foul' ||
-            target.type === 'technical_foul' ||
-            target.type === 'unsportsmanlike_foul') &&
-          target.teamSide &&
-          target.periodNumber === sheet.timer.currentPeriod
-        ) {
-          if (target.teamSide === 'home') {
-            nextHomeFouls = Math.max(0, nextHomeFouls - 1);
-          } else {
-            nextAwayFouls = Math.max(0, nextAwayFouls - 1);
-          }
-        }
-
         const prevSummary = `${target.typeLabel} • ${target.teamName || ''} • ${
           target.athleteName || 'Sem atleta'
         } (${target.matchClockDisplay})`;
+
+        // Se o evento excluído foi uma substituição, desfazemos a troca de titularidade
+        let nextHomeLineup = [...sheet.homeLineup];
+        let nextAwayLineup = [...sheet.awayLineup];
+        if (
+          target.type === 'substitution' &&
+          target.teamSide &&
+          target.athleteId &&
+          target.secondaryAthleteId
+        ) {
+          const revertSub = (list: MatchLineupEntry[]) =>
+            list.map((entry) => {
+              if (entry.athleteId === target.athleteId) {
+                return { ...entry, isStarter: true };
+              }
+              if (entry.athleteId === target.secondaryAthleteId) {
+                return { ...entry, isStarter: false };
+              }
+              return entry;
+            });
+          if (target.teamSide === 'home') {
+            nextHomeLineup = revertSub(nextHomeLineup);
+          } else {
+            nextAwayLineup = revertSub(nextAwayLineup);
+          }
+        }
 
         const updatedEvents = sheet.events.map((ev) => {
           if (ev.id !== eventId) return ev;
@@ -1958,7 +1797,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             auditHistory: [
               ...ev.auditHistory,
               {
-                id: `aud-${Date.now()}`,
+                id: generateUniqueId('aud'),
                 timestampIso: new Date().toISOString(),
                 operatorRole: 'Mesa Operadora',
                 action: 'deleted' as const,
@@ -1970,25 +1809,16 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           };
         });
 
-        const nextSuspensions = sheet.activeSuspensions.filter(
-          (s) => s.eventId !== eventId
-        );
-
-        return {
-          match: {
-            ...match,
-            homeTeam: { ...match.homeTeam, score: nextHomeScore },
-            awayTeam: { ...match.awayTeam, score: nextAwayScore },
-          },
-          sheet: {
-            ...sheet,
-            events: updatedEvents,
-            periodScores: nextPeriodScores,
-            homeFoulsCurrentPeriod: nextHomeFouls,
-            awayFoulsCurrentPeriod: nextAwayFouls,
-            activeSuspensions: nextSuspensions,
-          },
+        const draftSheet: MatchSheet = {
+          ...sheet,
+          events: updatedEvents,
+          homeLineup: nextHomeLineup,
+          awayLineup: nextAwayLineup,
+          activeTimeout:
+            target.type === 'timeout' ? null : sheet.activeTimeout,
         };
+
+        return recomputeMatchAndSheetFromEvents(match, draftSheet);
       });
     },
     [updateMatchAndSheet]
@@ -2022,7 +1852,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
-  // ESCALAÇÃO (Titulares, Reservas, Capitão, Goleiro, Dupla)
   const toggleLineupRole = useCallback(
     (
       matchId: string,
@@ -2068,20 +1897,20 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
-  // ENCERRAMENTO DE SET (VÔLEI / VÔLEI DE PRAIA)
+  // ENCERRAMENTO DE SET (VÔLEI / VÔLEI DE PRAIA — Item 16 da Auditoria: valida set empatado e encerra a partida ao atingir maioria dos sets)
   const finishCurrentSet = useCallback(
     (matchId: string) => {
       updateMatchAndSheet(matchId, (match, sheet) => {
+        if (sheet.isClosed) return { match, sheet };
         const currentSetObj = sheet.periodScores.find(
           (p) => p.periodNumber === sheet.timer.currentPeriod
         );
         if (!currentSetObj) return { match, sheet };
 
-        const homeWonSet = currentSetObj.homeScore > currentSetObj.awayScore;
-        const awayWonSet = currentSetObj.awayScore > currentSetObj.homeScore;
-
-        const nextHomeSets = (match.homeTeam.setsWon ?? 0) + (homeWonSet ? 1 : 0);
-        const nextAwaySets = (match.awayTeam.setsWon ?? 0) + (awayWonSet ? 1 : 0);
+        // Bloqueia encerrar set empatado (ex: 0x0 ou 24x24)
+        if (currentSetObj.homeScore === currentSetObj.awayScore) {
+          return { match, sheet };
+        }
 
         const updatedPeriods = sheet.periodScores.map((p) =>
           p.periodNumber === sheet.timer.currentPeriod
@@ -2089,11 +1918,28 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             : p
         );
 
+        const nextHomeSets = updatedPeriods.filter(
+          (p) => p.isFinished && p.homeScore > p.awayScore
+        ).length;
+        const nextAwaySets = updatedPeriods.filter(
+          (p) => p.isFinished && p.awayScore > p.homeScore
+        ).length;
+
+        const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
+        const catRule =
+          engine.defaultCategoryRules[match.categoryName || ''] ||
+          Object.values(engine.defaultCategoryRules)[0];
+        const setsToWin =
+          catRule?.setsToWin || Math.ceil(sheet.timer.totalPeriods / 2);
+
+        const matchDecided =
+          nextHomeSets >= setsToWin || nextAwaySets >= setsToWin;
+
         const setEndEvent: MatchEvent = {
-          id: `ev-${Date.now()}`,
+          id: generateUniqueId('ev'),
           matchId,
           type: 'set_end',
-          typeLabel: `Fim do ${sheet.timer.periodLabel} (${currentSetObj.homeScore} × ${currentSetObj.awayScore})`,
+          typeLabel: `Fim — ${sheet.timer.periodLabel} (${currentSetObj.homeScore} × ${currentSetObj.awayScore})`,
           periodNumber: sheet.timer.currentPeriod,
           periodLabel: sheet.timer.periodLabel,
           matchClockDisplay: `Set ${sheet.timer.currentPeriod}`,
@@ -2102,7 +1948,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         };
 
         const nextSetNumber = sheet.timer.currentPeriod + 1;
-        const hasMoreSets = nextSetNumber <= sheet.timer.totalPeriods;
+        const hasMoreSets =
+          !matchDecided && nextSetNumber <= sheet.timer.totalPeriods;
 
         const finalPeriods =
           hasMoreSets &&
@@ -2119,31 +1966,40 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               ]
             : updatedPeriods;
 
+        matchSound.playBuzzer();
+
         return {
           match: {
             ...match,
-            status: 'live',
+            status: matchDecided ? 'finished' : 'live',
             homeTeam: {
               ...match.homeTeam,
               score: nextHomeSets,
               setsWon: nextHomeSets,
+              isWinner: matchDecided ? nextHomeSets > nextAwaySets : false,
             },
             awayTeam: {
               ...match.awayTeam,
               score: nextAwaySets,
               setsWon: nextAwaySets,
+              isWinner: matchDecided ? nextAwaySets > nextHomeSets : false,
             },
           },
           sheet: {
             ...sheet,
             periodScores: finalPeriods,
             events: [setEndEvent, ...sheet.events],
+            homeTimeoutsUsed: 0,
+            awayTimeoutsUsed: 0,
+            isClosed: matchDecided ? true : sheet.isClosed,
+            closedAtIso: matchDecided ? new Date().toISOString() : sheet.closedAtIso,
             timer: {
               ...sheet.timer,
               currentPeriod: hasMoreSets ? nextSetNumber : sheet.timer.currentPeriod,
               periodLabel: hasMoreSets
                 ? `Set ${nextSetNumber}`
                 : sheet.timer.periodLabel,
+              lifecycle: matchDecided ? 'match_ended' : sheet.timer.lifecycle,
             },
           },
         };
@@ -2152,11 +2008,13 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
-  // TÊNIS DE MESA: Sub-partidas dentro do confronto de equipes
+  // TÊNIS DE MESA (Item 17 da Auditoria: respeita súmula fechada, bloqueia sub-partida já finalizada, ativa próxima sub-partida e encerra confronto em 2 vitórias)
   const recordTableTennisPoint = useCallback(
     (matchId: string, subMatchId: string, side: 'home' | 'away') => {
       updateMatchAndSheet(matchId, (match, sheet) => {
-        if (!sheet.subMatches) return { match, sheet };
+        if (sheet.isClosed || !sheet.subMatches) return { match, sheet };
+        const targetSm = sheet.subMatches.find((s) => s.id === subMatchId);
+        if (!targetSm || targetSm.status === 'finished') return { match, sheet };
 
         const updatedSubMatches = sheet.subMatches.map((sm) => {
           if (sm.id !== subMatchId) return sm;
@@ -2176,13 +2034,15 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
         const activeSm = updatedSubMatches.find((s) => s.id === subMatchId);
         const ev: MatchEvent = {
-          id: `ev-${Date.now()}`,
+          id: generateUniqueId('ev'),
           matchId,
           type: 'set_point',
           typeLabel: `Ponto (${activeSm?.label || 'Partida'})`,
           teamSide: side,
           teamName:
             side === 'home' ? match.homeTeam.teamName : match.awayTeam.teamName,
+          athleteId:
+            side === 'home' ? activeSm?.homeAthleteId : activeSm?.awayAthleteId,
           athleteName:
             side === 'home' ? activeSm?.homeAthleteName : activeSm?.awayAthleteName,
           periodNumber: sheet.timer.currentPeriod,
@@ -2213,7 +2073,15 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   const finishTableTennisSet = useCallback(
     (matchId: string, subMatchId: string) => {
       updateMatchAndSheet(matchId, (match, sheet) => {
-        if (!sheet.subMatches) return { match, sheet };
+        if (sheet.isClosed || !sheet.subMatches) return { match, sheet };
+        const targetSm = sheet.subMatches.find((s) => s.id === subMatchId);
+        if (
+          !targetSm ||
+          targetSm.status === 'finished' ||
+          targetSm.currentSetHomePoints === targetSm.currentSetAwayPoints
+        ) {
+          return { match, sheet };
+        }
 
         const updatedSubMatches = sheet.subMatches.map((sm) => {
           if (sm.id !== subMatchId) return sm;
@@ -2245,15 +2113,49 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           (sm) => sm.winnerSide === 'away'
         ).length;
 
+        const matchDecided =
+          totalHomeTeamMatchesWon >= 2 || totalAwayTeamMatchesWon >= 2;
+
+        // Ativa automaticamente a próxima sub-partida pendente se o confronto ainda não acabou
+        let nextActiveIndex = sheet.activeSubMatchIndex ?? 0;
+        if (!matchDecided) {
+          const nextPendingIdx = updatedSubMatches.findIndex(
+            (sm) => sm.status !== 'finished'
+          );
+          if (nextPendingIdx >= 0) {
+            nextActiveIndex = nextPendingIdx;
+            updatedSubMatches[nextPendingIdx] = {
+              ...updatedSubMatches[nextPendingIdx],
+              status: 'live',
+            };
+          }
+        }
+
         return {
           match: {
             ...match,
-            homeTeam: { ...match.homeTeam, score: totalHomeTeamMatchesWon },
-            awayTeam: { ...match.awayTeam, score: totalAwayTeamMatchesWon },
+            status: matchDecided ? 'finished' : match.status,
+            homeTeam: {
+              ...match.homeTeam,
+              score: totalHomeTeamMatchesWon,
+              isWinner: matchDecided
+                ? totalHomeTeamMatchesWon > totalAwayTeamMatchesWon
+                : false,
+            },
+            awayTeam: {
+              ...match.awayTeam,
+              score: totalAwayTeamMatchesWon,
+              isWinner: matchDecided
+                ? totalAwayTeamMatchesWon > totalHomeTeamMatchesWon
+                : false,
+            },
           },
           sheet: {
             ...sheet,
             subMatches: updatedSubMatches,
+            activeSubMatchIndex: nextActiveIndex,
+            isClosed: matchDecided ? true : sheet.isClosed,
+            closedAtIso: matchDecided ? new Date().toISOString() : sheet.closedAtIso,
           },
         };
       });
@@ -2274,7 +2176,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
-  // NATAÇÃO: Provas por Estilo e Raias com Classificação Automática
+  // NATAÇÃO (Item 30 da Auditoria: tempos empatados recebem a mesma colocação olímpica)
   const setSwimmingStrokeAndDistance = useCallback(
     (matchId: string, stroke: SwimmingStrokeType, distanceLabel: string) => {
       updateMatchAndSheet(matchId, (match, sheet) => ({
@@ -2319,26 +2221,31 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           };
         });
 
-        // Calcula automaticamente a colocação (1º, 2º, 3º...) ordenada pelo menor tempo
         const finishedSorted = [...rawUpdated]
           .filter((l) => l.status === 'finished' && l.registeredTimeMs !== null)
           .sort((a, b) => (a.registeredTimeMs || 0) - (b.registeredTimeMs || 0));
 
+        // Atribui mesma colocação em caso de empate exato em milissegundos
         const rankedLanes = rawUpdated.map((lane) => {
           if (lane.status !== 'finished' || lane.registeredTimeMs === null) {
             return { ...lane, placement: null };
           }
-          const place =
-            finishedSorted.findIndex((f) => f.laneNumber === lane.laneNumber) + 1;
-          return { ...lane, placement: place };
+          const firstWithSameTimeIdx = finishedSorted.findIndex(
+            (f) => f.registeredTimeMs === lane.registeredTimeMs
+          );
+          return {
+            ...lane,
+            placement: firstWithSameTimeIdx >= 0 ? firstWithSameTimeIdx + 1 : null,
+          };
         });
 
         const laneObj = rankedLanes.find((l) => l.laneNumber === laneNumber);
         const swimEvent: MatchEvent = {
-          id: `ev-${Date.now()}`,
+          id: generateUniqueId('ev'),
           matchId,
           type: 'swimming_time',
           typeLabel: `Tempo Registrado — Raia ${laneNumber}`,
+          athleteId: laneObj?.athleteId,
           athleteName: laneObj?.athleteName,
           teamName: laneObj?.teamName,
           periodNumber: 1,
@@ -2365,7 +2272,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
-  // METADADOS DE ARBITRAGEM E ENCERRAMENTO DA SÚMULA
   const updateRefereeMetadata = useCallback(
     (
       matchId: string,
@@ -2410,11 +2316,13 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
+  // Item 18 da Auditoria: limpa timeouts/suspensões ao encerrar e zera `isWinner` ao reabrir
   const finalizeMatch = useCallback(
     (matchId: string) => {
       updateMatchAndSheet(matchId, (match, sheet) => {
         const homeScore = match.homeTeam.score ?? 0;
         const awayScore = match.awayTeam.score ?? 0;
+        const isSwimming = sheet.scoringModel === 'swimming_heats';
 
         return {
           match: {
@@ -2422,21 +2330,28 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             status: 'finished',
             homeTeam: {
               ...match.homeTeam,
-              isWinner: homeScore > awayScore,
+              isWinner: isSwimming ? false : homeScore > awayScore,
             },
             awayTeam: {
               ...match.awayTeam,
-              isWinner: awayScore > homeScore,
+              isWinner: isSwimming ? false : awayScore > homeScore,
             },
           },
           sheet: {
             ...sheet,
             isClosed: true,
             closedAtIso: new Date().toISOString(),
+            activeTimeout: null,
+            activeSuspensions: sheet.activeSuspensions.map((s) => ({
+              ...s,
+              remainingSeconds: 0,
+              isReleased: true,
+            })),
             timer: {
               ...sheet.timer,
               isRunning: false,
               lifecycle: 'match_ended',
+              lastTickTimestamp: null,
             },
           },
         };
@@ -2451,6 +2366,14 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         match: {
           ...match,
           status: 'live',
+          homeTeam: {
+            ...match.homeTeam,
+            isWinner: false,
+          },
+          awayTeam: {
+            ...match.awayTeam,
+            isWinner: false,
+          },
         },
         sheet: {
           ...sheet,
@@ -2459,6 +2382,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           timer: {
             ...sheet.timer,
             lifecycle: 'paused',
+            lastTickTimestamp: null,
           },
         },
       }));
@@ -2466,7 +2390,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
-  // FAVORITOS & PERSONALIZAÇÃO
+  // FAVORITOS & NOTIFICAÇÕES
   const toggleFavoriteModality = useCallback((modalityId: ModalitySlug) => {
     setState((prev) => {
       const exists = prev.favoriteModalityIds.includes(modalityId);
@@ -2506,7 +2430,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     });
   }, []);
 
-  // NOTIFICAÇÕES & CENTRAL DE ALERTAS
   const markAllNotificationsAsRead = useCallback(() => {
     setState((prev) => ({
       ...prev,
@@ -2530,7 +2453,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     }));
   }, []);
 
-  // CONSULTAS DE EQUIPES, ATLETAS E ESTATÍSTICAS DERIVADAS (SEM DUPLICAÇÃO)
+  // CONSULTAS DE EQUIPES, ATLETAS E ESTATÍSTICAS DERIVADAS
   const getTeamById = useCallback(
     (teamId: string): Team | undefined => {
       return (
@@ -2625,6 +2548,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         sessionStorage.setItem('intramed_admin_session', 'true');
       } else {
         sessionStorage.removeItem('intramed_admin_session');
+        setStoredOperatorToken(null);
       }
     }
 
@@ -2667,10 +2591,39 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     ): { ok: boolean; error?: string } => {
       const cleanPass = passwordInput.trim();
       if (!cleanPass) {
-        return { ok: false, error: 'Digite a senha da partida ou a senha da organização.' };
+        return {
+          ok: false,
+          error: 'Digite a senha da partida ou a senha da organização.',
+        };
       }
 
-      // 1. Senha mestra da Comissão ("bicoduro") desbloqueia o modo Admin completo
+      const match =
+        state.officialMatches.find((m) => m.id === matchId) ||
+        state.testMatches.find((m) => m.id === matchId);
+
+      // Solicita token assinado no servidor em background para autorizar escritas em /api/cloud-sync
+      if (typeof window !== 'undefined') {
+        fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'verify_operator_pin',
+            matchId,
+            password: cleanPass,
+            officialName: officialName?.trim() || undefined,
+            expectedClientPin: match?.tableOfficialPassword || undefined,
+          }),
+        })
+          .then((r) => r.json())
+          .then((resData) => {
+            if (resData?.ok && resData?.token) {
+              setStoredOperatorToken(resData.token);
+            }
+          })
+          .catch(() => {});
+      }
+
+      // 1. Senha mestra da Comissão desbloqueia o modo Admin completo
       if (cleanPass.toLowerCase() === 'bicoduro') {
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('intramed_admin_session', 'true');
@@ -2692,10 +2645,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       }
 
       // 2. Verifica a senha exclusiva do mesário cadastrada para esta partida
-      const match =
-        state.officialMatches.find((m) => m.id === matchId) ||
-        state.testMatches.find((m) => m.id === matchId);
-
       if (!match) {
         return { ok: false, error: 'Partida não localizada.' };
       }
@@ -2712,34 +2661,40 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       if (cleanPass.toLowerCase() !== expectedPin.toLowerCase()) {
         return {
           ok: false,
-          error: 'Senha da partida incorreta. Confira o código com a comissão organizadora.',
+          error:
+            'Senha da partida incorreta. Confira o código com a comissão organizadora.',
         };
       }
 
       setUnlockedMatchIds((prev) => {
         const next = prev.includes(matchId) ? prev : [...prev, matchId];
         if (typeof window !== 'undefined') {
-          sessionStorage.setItem('intramed_unlocked_match_ids', JSON.stringify(next));
+          sessionStorage.setItem(
+            'intramed_unlocked_match_ids',
+            JSON.stringify(next)
+          );
         }
         return next;
       });
 
-      // Se o mesário informou seu nome, já preenche na súmula da partida
       if (officialName && officialName.trim()) {
         const cleanOfficial = officialName.trim();
         setState((prev) => {
           const isTest = matchId.startsWith('test-');
-          const sheetsMap = isTest ? { ...prev.testSheets } : { ...prev.officialSheets };
+          const sheetsMap = isTest
+            ? { ...prev.testSheets }
+            : { ...prev.officialSheets };
           const currentSheet = sheetsMap[matchId];
           if (!currentSheet) return prev;
           const updatedSheet: MatchSheet = {
             ...currentSheet,
             tableOfficialName: cleanOfficial,
             lastUpdatedIso: new Date().toISOString(),
+            revision: (currentSheet.revision ?? 0) + 1,
           };
           sheetsMap[matchId] = updatedSheet;
           if (!isTest) {
-            syncDocToFirestore('match_sheets', matchId, updatedSheet);
+            enqueueCloudSync('match_sheets', matchId, updatedSheet);
           }
           return {
             ...prev,
@@ -2750,13 +2705,30 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       return { ok: true };
     },
-    [state.officialMatches, state.testMatches, setCurrentUser, syncDocToFirestore]
+    [state.officialMatches, state.testMatches, setCurrentUser, enqueueCloudSync]
   );
 
   const updateMatchTablePassword = useCallback(
     (matchId: string, newPassword: string): boolean => {
       if (!canOperateOfficialData()) return false;
-      const cleanPin = newPassword.trim();
+      const cleanPin = newPassword.trim().toUpperCase();
+
+      if (typeof window !== 'undefined' && cleanPin) {
+        const opToken = getStoredOperatorToken();
+        fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(opToken ? { Authorization: `Bearer ${opToken}` } : {}),
+          },
+          body: JSON.stringify({
+            action: 'set_match_pin',
+            matchId,
+            newPin: cleanPin,
+          }),
+        }).catch(() => {});
+      }
+
       setState((prev) => {
         const isTest = matchId.startsWith('test-');
         const list = isTest ? [...prev.testMatches] : [...prev.officialMatches];
@@ -2765,10 +2737,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         const updatedMatch: Match = {
           ...list[idx],
           tableOfficialPassword: cleanPin || null,
+          hasTableOfficialPassword: Boolean(cleanPin),
+          revision: (list[idx].revision ?? 0) + 1,
         };
         list[idx] = updatedMatch;
         if (!isTest) {
-          syncDocToFirestore('matches', matchId, updatedMatch);
+          enqueueCloudSync('matches', matchId, updatedMatch);
         }
         return {
           ...prev,
@@ -2777,7 +2751,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       });
       return true;
     },
-    [canOperateOfficialData, syncDocToFirestore]
+    [canOperateOfficialData, enqueueCloudSync]
   );
 
   const canEditAthleteProfile = useCallback(
@@ -2806,7 +2780,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             if (a.id === athleteId) {
               const updated = { ...a, avatarUrl: avatarDataUrl };
               if (!updated.isTestOnly) {
-                syncDocToFirestore('athletes', athleteId, updated);
+                enqueueCloudSync('athletes', athleteId, updated);
               }
               return updated;
             }
@@ -2825,7 +2799,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       });
       return true;
     },
-    [canEditAthleteProfile, syncDocToFirestore]
+    [canEditAthleteProfile, enqueueCloudSync]
   );
 
   const updateTeamCrest = useCallback(
@@ -2837,7 +2811,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             if (t.id === teamId) {
               const updated = { ...t, crestUrl: crestDataUrl };
               if (!updated.isTestOnly) {
-                syncDocToFirestore('teams', teamId, updated);
+                enqueueCloudSync('teams', teamId, updated);
               }
               return updated;
             }
@@ -2864,7 +2838,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         };
       });
     },
-    [syncDocToFirestore]
+    [enqueueCloudSync]
   );
 
   const updateAthletePersonalInfo = useCallback(
@@ -2888,22 +2862,30 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             if (a.id === athleteId) {
               const updated: Athlete = {
                 ...a,
-                name: data.name !== undefined && data.name.trim() ? data.name.trim() : a.name,
+                name:
+                  data.name !== undefined && data.name.trim()
+                    ? data.name.trim()
+                    : a.name,
                 position: data.position !== undefined ? data.position : a.position,
                 jerseyNumber:
-                  data.jerseyNumber !== undefined ? data.jerseyNumber : a.jerseyNumber,
+                  data.jerseyNumber !== undefined
+                    ? data.jerseyNumber
+                    : a.jerseyNumber,
                 bio: data.bio !== undefined ? data.bio : a.bio,
                 instagramHandle:
-                  data.instagramHandle !== undefined ? data.instagramHandle : a.instagramHandle,
+                  data.instagramHandle !== undefined
+                    ? data.instagramHandle
+                    : a.instagramHandle,
                 modalityIds:
                   data.modalityIds !== undefined && data.modalityIds.length > 0
                     ? data.modalityIds
                     : a.modalityIds,
-                avatarUrl: data.avatarUrl !== undefined ? data.avatarUrl : a.avatarUrl,
+                avatarUrl:
+                  data.avatarUrl !== undefined ? data.avatarUrl : a.avatarUrl,
               };
               updatedAthleteObj = updated;
               if (!updated.isTestOnly) {
-                syncDocToFirestore('athletes', athleteId, updated);
+                enqueueCloudSync('athletes', athleteId, updated);
               }
               return updated;
             }
@@ -2914,7 +2896,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         const nextTest = updateList(prev.testAthletes);
 
         let nextUser = prev.currentUser;
-        if (nextUser && nextUser.linkedAthleteId === athleteId && updatedAthleteObj) {
+        if (
+          nextUser &&
+          nextUser.linkedAthleteId === athleteId &&
+          updatedAthleteObj
+        ) {
           const ua = updatedAthleteObj as Athlete;
           nextUser = {
             ...nextUser,
@@ -2933,9 +2919,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       });
       return true;
     },
-    [canEditAthleteProfile, syncDocToFirestore]
+    [canEditAthleteProfile, enqueueCloudSync]
   );
 
+  // Item 24 da Auditoria: `upsertParticipantAthlete` só envia escrita à nuvem se os campos do atleta realmente mudaram (elimina loop cascata de escritas)
   const upsertParticipantAthlete = useCallback(
     (payload: {
       id?: string;
@@ -2954,6 +2941,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       paymentStatus?: RegistrationPaymentStatus;
       memberStatus?: MemberStatus;
       autoLogin?: boolean;
+      skipCloudSync?: boolean;
     }): Athlete => {
       const cleanName = payload.name.trim();
       const cleanEmail = payload.email?.trim().toLowerCase() || null;
@@ -2976,7 +2964,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         payload.id ||
         (payload.registrationId
           ? `ath-${payload.registrationId}`
-          : `ath-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`);
+          : generateUniqueId('ath'));
 
       const athleteRecord: Athlete = {
         id: resolvedId,
@@ -2988,7 +2976,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         jerseyNumber: payload.jerseyNumber ?? existing?.jerseyNumber ?? null,
         position: payload.position?.trim() || existing?.position || 'Atleta Oficial',
         bio: payload.bio ?? existing?.bio ?? null,
-        instagramHandle: payload.instagramHandle ?? existing?.instagramHandle ?? null,
+        instagramHandle:
+          payload.instagramHandle ?? existing?.instagramHandle ?? null,
         avatarUrl: payload.avatarUrl ?? existing?.avatarUrl ?? null,
         modalityIds: defaultModalities,
         registrationId: payload.registrationId ?? existing?.registrationId ?? null,
@@ -2997,56 +2986,69 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         isTestOnly: false,
       };
 
-      syncDocToFirestore('athletes', athleteRecord.id, athleteRecord);
+      const hasChanged =
+        !existing ||
+        existing.name !== athleteRecord.name ||
+        existing.teamId !== athleteRecord.teamId ||
+        existing.jerseyNumber !== athleteRecord.jerseyNumber ||
+        existing.position !== athleteRecord.position ||
+        existing.avatarUrl !== athleteRecord.avatarUrl ||
+        existing.paymentStatus !== athleteRecord.paymentStatus ||
+        existing.memberStatus !== athleteRecord.memberStatus;
 
-      setState((prev) => {
-        const existsIdx = prev.officialAthletes.findIndex(
-          (a) => a.id === athleteRecord.id
-        );
-        const nextOfficialAthletes =
-          existsIdx >= 0
-            ? prev.officialAthletes.map((a, i) =>
-                i === existsIdx ? { ...a, ...athleteRecord } : a
-              )
-            : [athleteRecord, ...prev.officialAthletes];
+      if (hasChanged && !payload.skipCloudSync) {
+        enqueueCloudSync('athletes', athleteRecord.id, athleteRecord);
+      }
 
-        const teamObj = prev.officialTeams.find(
-          (t) => t.id === athleteRecord.teamId
-        );
+      if (hasChanged || payload.autoLogin) {
+        setState((prev) => {
+          const existsIdx = prev.officialAthletes.findIndex(
+            (a) => a.id === athleteRecord.id
+          );
+          const nextOfficialAthletes =
+            existsIdx >= 0
+              ? prev.officialAthletes.map((a, i) =>
+                  i === existsIdx ? { ...a, ...athleteRecord } : a
+                )
+              : [athleteRecord, ...prev.officialAthletes];
 
-        let nextUser = prev.currentUser;
-        if (payload.autoLogin) {
-          nextUser = {
-            id: `usr-${athleteRecord.id}`,
-            name: athleteRecord.name,
-            email:
-              athleteRecord.email ||
-              `${athleteRecord.id}@medicina.uema.br`,
-            avatarUrl: athleteRecord.avatarUrl,
-            role: 'atleta',
-            teamId: athleteRecord.teamId,
-            teamName:
-              teamObj?.name ||
-              athleteRecord.turmaLabel ||
-              'Equipe Medicina UEMA',
-            linkedAthleteId: athleteRecord.id,
-            modalityIds: athleteRecord.modalityIds,
+          const teamObj = prev.officialTeams.find(
+            (t) => t.id === athleteRecord.teamId
+          );
+
+          let nextUser = prev.currentUser;
+          if (payload.autoLogin) {
+            nextUser = {
+              id: `usr-${athleteRecord.id}`,
+              name: athleteRecord.name,
+              email:
+                athleteRecord.email ||
+                `${athleteRecord.id}@medicina.uema.br`,
+              avatarUrl: athleteRecord.avatarUrl,
+              role: 'atleta',
+              teamId: athleteRecord.teamId,
+              teamName:
+                teamObj?.name ||
+                athleteRecord.turmaLabel ||
+                'Equipe Medicina UEMA',
+              linkedAthleteId: athleteRecord.id,
+              modalityIds: athleteRecord.modalityIds,
+            };
+          }
+
+          return {
+            ...prev,
+            officialAthletes: nextOfficialAthletes,
+            currentUser: nextUser,
           };
-        }
-
-        return {
-          ...prev,
-          officialAthletes: nextOfficialAthletes,
-          currentUser: nextUser,
-        };
-      });
+        });
+      }
 
       return athleteRecord;
     },
-    [state.officialAthletes, syncDocToFirestore]
+    [state.officialAthletes, enqueueCloudSync]
   );
 
-  // CADASTRO UNIFICADO DE EQUIPES (PERÍODOS), ATLETAS E PARTIDAS
   const registerTeam = useCallback(
     (payload: {
       name: string;
@@ -3054,7 +3056,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       crestUrl?: string | null;
       modalityIds: ModalitySlug[];
     }): Team => {
-      const id = `team-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const id = generateUniqueId('team');
       const newTeam: Team = {
         id,
         name: payload.name.trim(),
@@ -3076,6 +3078,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             testTeams: [...prev.testTeams, newTeam],
           };
         }
+        enqueueCloudSync('teams', newTeam.id, newTeam);
         return {
           ...prev,
           officialTeams: [...prev.officialTeams, newTeam],
@@ -3084,7 +3087,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       return newTeam;
     },
-    []
+    [enqueueCloudSync]
   );
 
   const registerAthlete = useCallback(
@@ -3099,12 +3102,16 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       if (!isUserAdmin(state.currentUser)) {
         return {
           ok: false,
-          error: 'Apenas Administradores ou Mesários autenticados podem cadastrar atletas.',
+          error:
+            'Apenas Administradores ou Mesários autenticados podem cadastrar atletas.',
         };
       }
       const cleanName = payload.name.trim();
       if (!cleanName || !payload.teamId) {
-        return { ok: false, error: 'Informe o nome do atleta e o período/equipe.' };
+        return {
+          ok: false,
+          error: 'Informe o nome do atleta e o período/equipe.',
+        };
       }
 
       const pool = state.isTestMode ? state.testAthletes : state.officialAthletes;
@@ -3122,9 +3129,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       }
 
       const newAthlete: Athlete = {
-        id: `${state.isTestMode ? 'test-' : ''}ath-${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2, 6)}`,
+        id: `${state.isTestMode ? 'test-' : ''}${generateUniqueId('ath')}`,
         name: cleanName,
         teamId: payload.teamId,
         jerseyNumber: payload.jerseyNumber ?? null,
@@ -3136,7 +3141,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       };
 
       setState((prev) => {
-        // Também injeta automaticamente o atleta nas escalações das súmulas abertas daquela equipe e modalidade
         const targetMatches = prev.isTestMode
           ? prev.testMatches
           : prev.officialMatches;
@@ -3195,7 +3199,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             testSheets: targetSheets,
           };
         }
-        syncDocToFirestore('athletes', newAthlete.id, newAthlete);
+        enqueueCloudSync('athletes', newAthlete.id, newAthlete);
         return {
           ...prev,
           officialAthletes: [...prev.officialAthletes, newAthlete],
@@ -3205,7 +3209,13 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       return { ok: true, athlete: newAthlete };
     },
-    [state.isTestMode, state.testAthletes, state.officialAthletes, state.currentUser, syncDocToFirestore]
+    [
+      state.isTestMode,
+      state.testAthletes,
+      state.officialAthletes,
+      state.currentUser,
+      enqueueCloudSync,
+    ]
   );
 
   const createOfficialMatch = useCallback(
@@ -3235,8 +3245,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       if (!homeTeam || !awayTeam || !modality) return null;
 
       const prefix = state.isTestMode ? 'test-' : '';
-      const matchId = `${prefix}match-${Date.now()}`;
-      const sheetId = `${prefix}sheet-${Date.now()}`;
+      const matchId = `${prefix}${generateUniqueId('match')}`;
+      const sheetId = `${prefix}${generateUniqueId('sheet')}`;
       const engine = MODALITY_RULE_ENGINE[payload.modalityId];
       const catRule =
         engine.defaultCategoryRules[payload.categoryName] ||
@@ -3251,9 +3261,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           a.teamId === awayTeam.id && a.modalityIds.includes(payload.modalityId)
       );
 
+      // Item 8 da Auditoria: código aleatório de 8 caracteres para o mesário
       const generatedPin =
-        payload.tableOfficialPassword?.trim() ||
-        `MESA-${Math.floor(1000 + Math.random() * 9000)}`;
+        payload.tableOfficialPassword?.trim().toUpperCase() ||
+        generateRandomMatchPin(payload.modalityId);
 
       const newMatch: Match = {
         id: matchId,
@@ -3284,7 +3295,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         },
         matchSheetId: sheetId,
         tableOfficialPassword: generatedPin,
+        hasTableOfficialPassword: true,
         isTestData: state.isTestMode,
+        revision: 1,
       };
 
       const periodScores = Array.from({ length: catRule.periodsCount }).map(
@@ -3295,8 +3308,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             engine.scoringModel === 'team_submatches'
               ? `Set ${idx + 1}`
               : engine.scoringModel === 'points_quarters'
-                ? `P${idx + 1}`
-                : `${idx + 1}º Período`,
+              ? `P${idx + 1}`
+              : `${idx + 1}º Período`,
           homeScore: 0,
           awayScore: 0,
           isFinished: false,
@@ -3330,13 +3343,14 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             engine.scoringModel === 'sets_points'
               ? 'Set 1'
               : engine.scoringModel === 'points_quarters'
-                ? '1º Quarto (P1)'
-                : '1º Período',
+              ? '1º Quarto (P1)'
+              : '1º Período',
           remainingSeconds: catRule.periodDurationSeconds,
           initialPeriodSeconds: catRule.periodDurationSeconds,
           elapsedSeconds: 0,
           isRunning: false,
           lifecycle: 'not_started',
+          lastTickTimestamp: null,
         },
         periodScores,
         events: [],
@@ -3351,6 +3365,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         closedAtIso: null,
         syncStatus: 'synced',
         lastUpdatedIso: new Date().toISOString(),
+        revision: 1,
       };
 
       setState((prev) => {
@@ -3361,8 +3376,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             testSheets: { ...prev.testSheets, [matchId]: newSheet },
           };
         }
-        syncDocToFirestore('matches', newMatch.id, newMatch);
-        syncDocToFirestore('match_sheets', newSheet.matchId, newSheet);
+        enqueueCloudSync('matches', newMatch.id, newMatch);
+        enqueueCloudSync('match_sheets', newSheet.matchId, newSheet);
         return {
           ...prev,
           officialMatches: [newMatch, ...prev.officialMatches],
@@ -3372,77 +3387,153 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       return newMatch;
     },
-    [state.isTestMode, state.testTeams, state.officialTeams, state.testAthletes, state.officialAthletes, state.currentUser, syncDocToFirestore]
+    [
+      state.isTestMode,
+      state.testTeams,
+      state.officialTeams,
+      state.testAthletes,
+      state.officialAthletes,
+      state.currentUser,
+      enqueueCloudSync,
+    ]
+  );
+
+  // Item 22 da Auditoria: Context value memoizado com `useMemo` para evitar re-renders desnecessários
+  const contextValue = useMemo<CompetitionStoreContextValue>(
+    () => ({
+      isTestMode: state.isTestMode,
+      setTestMode,
+      resetTestEnvironment,
+      isOnline,
+      pendingSyncCount: state.pendingSyncCount,
+      visibleMatches,
+      getMatchById,
+      getSheetByMatchId,
+      favoriteModalityIds: state.favoriteModalityIds,
+      favoriteTeamIds: state.favoriteTeamIds,
+      favoriteAthleteIds: state.favoriteAthleteIds,
+      toggleFavoriteModality,
+      toggleFavoriteTeam,
+      toggleFavoriteAthlete,
+      notifications: state.notifications,
+      markAllNotificationsAsRead,
+      markNotificationAsRead,
+      clearNotifications,
+      startOrResumeTimer,
+      pauseTimer,
+      resetPeriodTimer,
+      endCurrentPeriod,
+      startNextPeriod,
+      startOvertimePeriod,
+      configureMatchCategoryRule,
+      recordMatchEvent,
+      editMatchEvent,
+      deleteMatchEvent,
+      dismissReleasedSuspension,
+      cancelActiveTimeout,
+      toggleLineupRole,
+      finishCurrentSet,
+      recordTableTennisPoint,
+      finishTableTennisSet,
+      selectActiveSubMatch,
+      setSwimmingStrokeAndDistance,
+      registerSwimmingLaneTime,
+      updateRefereeMetadata,
+      finalizeMatch,
+      reopenMatchForCorrection,
+      visibleTeams,
+      visibleAthletes,
+      getTeamById,
+      getAthleteById,
+      getAthletesByTeam,
+      getAthleteStats,
+      getTeamStats,
+      getModalityStandings,
+      getModalityLeaderboard,
+      currentUser: state.currentUser,
+      setCurrentUser,
+      canEditAthleteProfile,
+      canOperateOfficialData,
+      canOperateMatch,
+      unlockMatchAsTableOfficial,
+      updateMatchTablePassword,
+      updateAthleteAvatar,
+      updateTeamCrest,
+      updateAthletePersonalInfo,
+      upsertParticipantAthlete,
+      registerTeam,
+      registerAthlete,
+      createOfficialMatch,
+    }),
+    [
+      state.isTestMode,
+      setTestMode,
+      resetTestEnvironment,
+      isOnline,
+      state.pendingSyncCount,
+      visibleMatches,
+      getMatchById,
+      getSheetByMatchId,
+      state.favoriteModalityIds,
+      state.favoriteTeamIds,
+      state.favoriteAthleteIds,
+      toggleFavoriteModality,
+      toggleFavoriteTeam,
+      toggleFavoriteAthlete,
+      state.notifications,
+      markAllNotificationsAsRead,
+      markNotificationAsRead,
+      clearNotifications,
+      startOrResumeTimer,
+      pauseTimer,
+      resetPeriodTimer,
+      endCurrentPeriod,
+      startNextPeriod,
+      startOvertimePeriod,
+      configureMatchCategoryRule,
+      recordMatchEvent,
+      editMatchEvent,
+      deleteMatchEvent,
+      dismissReleasedSuspension,
+      cancelActiveTimeout,
+      toggleLineupRole,
+      finishCurrentSet,
+      recordTableTennisPoint,
+      finishTableTennisSet,
+      selectActiveSubMatch,
+      setSwimmingStrokeAndDistance,
+      registerSwimmingLaneTime,
+      updateRefereeMetadata,
+      finalizeMatch,
+      reopenMatchForCorrection,
+      visibleTeams,
+      visibleAthletes,
+      getTeamById,
+      getAthleteById,
+      getAthletesByTeam,
+      getAthleteStats,
+      getTeamStats,
+      getModalityStandings,
+      getModalityLeaderboard,
+      state.currentUser,
+      setCurrentUser,
+      canEditAthleteProfile,
+      canOperateOfficialData,
+      canOperateMatch,
+      unlockMatchAsTableOfficial,
+      updateMatchTablePassword,
+      updateAthleteAvatar,
+      updateTeamCrest,
+      updateAthletePersonalInfo,
+      upsertParticipantAthlete,
+      registerTeam,
+      registerAthlete,
+      createOfficialMatch,
+    ]
   );
 
   return (
-    <CompetitionStoreContext.Provider
-      value={{
-        isTestMode: state.isTestMode,
-        setTestMode,
-        resetTestEnvironment,
-        isOnline,
-        pendingSyncCount: state.pendingSyncCount,
-        visibleMatches,
-        getMatchById,
-        getSheetByMatchId,
-        favoriteModalityIds: state.favoriteModalityIds,
-        favoriteTeamIds: state.favoriteTeamIds,
-        favoriteAthleteIds: state.favoriteAthleteIds,
-        toggleFavoriteModality,
-        toggleFavoriteTeam,
-        toggleFavoriteAthlete,
-        notifications: state.notifications,
-        markAllNotificationsAsRead,
-        markNotificationAsRead,
-        clearNotifications,
-        startOrResumeTimer,
-        pauseTimer,
-        resetPeriodTimer,
-        endCurrentPeriod,
-        startNextPeriod,
-        startOvertimePeriod,
-        configureMatchCategoryRule,
-        recordMatchEvent,
-        editMatchEvent,
-        deleteMatchEvent,
-        dismissReleasedSuspension,
-        cancelActiveTimeout,
-        toggleLineupRole,
-        finishCurrentSet,
-        recordTableTennisPoint,
-        finishTableTennisSet,
-        selectActiveSubMatch,
-        setSwimmingStrokeAndDistance,
-        registerSwimmingLaneTime,
-        updateRefereeMetadata,
-        finalizeMatch,
-        reopenMatchForCorrection,
-        visibleTeams,
-        visibleAthletes,
-        getTeamById,
-        getAthleteById,
-        getAthletesByTeam,
-        getAthleteStats,
-        getTeamStats,
-        getModalityStandings,
-        getModalityLeaderboard,
-        currentUser: state.currentUser,
-        setCurrentUser,
-        canEditAthleteProfile,
-        canOperateOfficialData,
-        canOperateMatch,
-        unlockMatchAsTableOfficial,
-        updateMatchTablePassword,
-        updateAthleteAvatar,
-        updateTeamCrest,
-        updateAthletePersonalInfo,
-        upsertParticipantAthlete,
-        registerTeam,
-        registerAthlete,
-        createOfficialMatch,
-      }}
-    >
+    <CompetitionStoreContext.Provider value={contextValue}>
       {children}
     </CompetitionStoreContext.Provider>
   );

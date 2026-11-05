@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -11,24 +11,75 @@ import { SplashScreen } from './components/layout/SplashScreen';
 import { AppShell } from './components/layout/AppShell';
 import { AdminRouteGuard } from './components/layout/AdminRouteGuard';
 import { HomePage } from './pages/HomePage';
-import { CompetitionsPage } from './pages/CompetitionsPage';
-import { ModalityDetailPage } from './pages/ModalityDetailPage';
-import { BracketPage } from './pages/BracketPage';
-import { MatchesPage } from './pages/MatchesPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { LoginPage } from './pages/LoginPage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
-import { LiveMatchSheetOperatorPage } from './pages/LiveMatchSheetOperatorPage';
-import { PublicLiveScoreboardPage } from './pages/PublicLiveScoreboardPage';
-import { GeneratedMatchSheetPage } from './pages/GeneratedMatchSheetPage';
-import { FavoritesPage } from './pages/FavoritesPage';
-import { NotificationsPage } from './pages/NotificationsPage';
-import { TeamDetailPage } from './pages/TeamDetailPage';
-import { AthleteDetailPage } from './pages/AthleteDetailPage';
-import { RegistrationPage } from './pages/RegistrationPage';
-import { AdminRegistrationsPage } from './pages/AdminRegistrationsPage';
 import { RegistrationProvider } from './context/RegistrationStoreContext';
 import { OFFICIAL_MODALITIES } from './data/officialData';
+
+// Lazy-loaded pages (Code Splitting por rota para reduzir o bundle inicial em 3-4x)
+const CompetitionsPage = lazy(() =>
+  import('./pages/CompetitionsPage').then((m) => ({ default: m.CompetitionsPage }))
+);
+const ModalityDetailPage = lazy(() =>
+  import('./pages/ModalityDetailPage').then((m) => ({ default: m.ModalityDetailPage }))
+);
+const BracketPage = lazy(() =>
+  import('./pages/BracketPage').then((m) => ({ default: m.BracketPage }))
+);
+const MatchesPage = lazy(() =>
+  import('./pages/MatchesPage').then((m) => ({ default: m.MatchesPage }))
+);
+const ProfilePage = lazy(() =>
+  import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage }))
+);
+const LoginPage = lazy(() =>
+  import('./pages/LoginPage').then((m) => ({ default: m.LoginPage }))
+);
+const AdminDashboardPage = lazy(() =>
+  import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage }))
+);
+const LiveMatchSheetOperatorPage = lazy(() =>
+  import('./pages/LiveMatchSheetOperatorPage').then((m) => ({
+    default: m.LiveMatchSheetOperatorPage,
+  }))
+);
+const PublicLiveScoreboardPage = lazy(() =>
+  import('./pages/PublicLiveScoreboardPage').then((m) => ({
+    default: m.PublicLiveScoreboardPage,
+  }))
+);
+const GeneratedMatchSheetPage = lazy(() =>
+  import('./pages/GeneratedMatchSheetPage').then((m) => ({
+    default: m.GeneratedMatchSheetPage,
+  }))
+);
+const FavoritesPage = lazy(() =>
+  import('./pages/FavoritesPage').then((m) => ({ default: m.FavoritesPage }))
+);
+const NotificationsPage = lazy(() =>
+  import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage }))
+);
+const TeamDetailPage = lazy(() =>
+  import('./pages/TeamDetailPage').then((m) => ({ default: m.TeamDetailPage }))
+);
+const AthleteDetailPage = lazy(() =>
+  import('./pages/AthleteDetailPage').then((m) => ({ default: m.AthleteDetailPage }))
+);
+const RegistrationPage = lazy(() =>
+  import('./pages/RegistrationPage').then((m) => ({ default: m.RegistrationPage }))
+);
+const AdminRegistrationsPage = lazy(() =>
+  import('./pages/AdminRegistrationsPage').then((m) => ({
+    default: m.AdminRegistrationsPage,
+  }))
+);
+
+const RouteLoadingFallback: React.FC = () => (
+  <div className="min-h-[60vh] flex items-center justify-center p-6">
+    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 shadow-sm text-xs font-display font-bold text-[#0B218A]">
+      <span className="w-2.5 h-2.5 rounded-full bg-brand-yellow animate-ping" />
+      <span>Carregando módulo INTRAMED IX...</span>
+    </div>
+  </div>
+);
 
 const ScrollToTop: React.FC = () => {
   const { pathname } = useLocation();
@@ -42,41 +93,10 @@ const RoutedApp: React.FC = () => {
   const location = useLocation();
 
   // Telas em modo Full-Screen dedicado (Login, Operador de Súmula, Placar ao Vivo, Documento de Súmula)
-  if (location.pathname === '/login') {
-    return <LoginPage />;
-  }
-  if (location.pathname.endsWith('/documento') && location.pathname.startsWith('/sumula/')) {
-    return (
-      <Routes>
-        <Route
-          path="/sumula/:matchId/documento"
-          element={<GeneratedMatchSheetPage />}
-        />
-      </Routes>
-    );
-  }
-  if (location.pathname.startsWith('/sumula/')) {
-    return (
-      <Routes>
-        <Route
-          path="/sumula/:matchId"
-          element={
-            <AdminRouteGuard title="Operação de Súmula Eletrônica Ao Vivo">
-              <LiveMatchSheetOperatorPage />
-            </AdminRouteGuard>
-          }
-        />
-      </Routes>
-    );
-  }
-  if (location.pathname.startsWith('/placar')) {
-    return (
-      <Routes>
-        <Route path="/placar" element={<PublicLiveScoreboardPage />} />
-        <Route path="/placar/:matchId" element={<PublicLiveScoreboardPage />} />
-      </Routes>
-    );
-  }
+  const isFullScreenRoute =
+    location.pathname === '/login' ||
+    location.pathname.startsWith('/sumula/') ||
+    location.pathname.startsWith('/placar');
 
   const getHeaderTitle = (): string | undefined => {
     if (location.pathname === '/') return undefined;
@@ -99,43 +119,70 @@ const RoutedApp: React.FC = () => {
     return 'INTRAMED IX';
   };
 
+  if (isFullScreenRoute) {
+    return (
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route
+            path="/sumula/:matchId/documento"
+            element={<GeneratedMatchSheetPage />}
+          />
+          <Route
+            path="/sumula/:matchId"
+            element={
+              <AdminRouteGuard title="Operação de Súmula Eletrônica Ao Vivo">
+                <LiveMatchSheetOperatorPage />
+              </AdminRouteGuard>
+            }
+          />
+          <Route path="/placar" element={<PublicLiveScoreboardPage />} />
+          <Route path="/placar/:matchId" element={<PublicLiveScoreboardPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
   return (
     <AppShell title={getHeaderTitle()}>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route
-          path="/admin"
-          element={
-            <AdminRouteGuard title="Central de Arbitragem, Súmulas & Administração">
-              <AdminDashboardPage />
-            </AdminRouteGuard>
-          }
-        />
-        <Route
-          path="/admin/inscricoes"
-          element={
-            <AdminRouteGuard title="Gestão de Inscrições & Validação de Sócios">
-              <AdminRegistrationsPage />
-            </AdminRouteGuard>
-          }
-        />
-        <Route path="/inscricao" element={<RegistrationPage />} />
-        <Route path="/competicoes" element={<CompetitionsPage />} />
-        <Route
-          path="/competicoes/:modalityId"
-          element={<ModalityDetailPage />}
-        />
-        <Route path="/chaveamento" element={<BracketPage />} />
-        <Route path="/jogos" element={<MatchesPage />} />
-        <Route path="/favoritos" element={<FavoritesPage />} />
-        <Route path="/notificacoes" element={<NotificationsPage />} />
-        <Route path="/equipe" element={<TeamDetailPage />} />
-        <Route path="/equipe/:teamId" element={<TeamDetailPage />} />
-        <Route path="/atleta" element={<AthleteDetailPage />} />
-        <Route path="/atleta/:athleteId" element={<AthleteDetailPage />} />
-        <Route path="/perfil" element={<ProfilePage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminRouteGuard title="Central de Arbitragem, Súmulas & Administração">
+                <AdminDashboardPage />
+              </AdminRouteGuard>
+            }
+          />
+          <Route
+            path="/admin/inscricoes"
+            element={
+              <AdminRouteGuard title="Gestão de Inscrições & Validação de Sócios">
+                <AdminRegistrationsPage />
+              </AdminRouteGuard>
+            }
+          />
+          <Route path="/inscricao" element={<RegistrationPage />} />
+          <Route path="/competicoes" element={<CompetitionsPage />} />
+          <Route
+            path="/competicoes/:modalityId"
+            element={<ModalityDetailPage />}
+          />
+          <Route path="/chaveamento" element={<BracketPage />} />
+          <Route path="/jogos" element={<MatchesPage />} />
+          <Route path="/favoritos" element={<FavoritesPage />} />
+          <Route path="/notificacoes" element={<NotificationsPage />} />
+          <Route path="/equipe" element={<TeamDetailPage />} />
+          <Route path="/equipe/:teamId" element={<TeamDetailPage />} />
+          <Route path="/atleta" element={<AthleteDetailPage />} />
+          <Route path="/atleta/:athleteId" element={<AthleteDetailPage />} />
+          <Route path="/perfil" element={<ProfilePage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </AppShell>
   );
 };

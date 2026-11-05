@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { OFFICIAL_SERVER_LOTS } from './_lib/serverStore';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -14,6 +15,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Método não permitido. Utilize GET.' });
   }
 
+  const activeLot =
+    Object.values(OFFICIAL_SERVER_LOTS).find((l) => l.isActive) ||
+    OFFICIAL_SERVER_LOTS['lote-1-cangaceira'];
+
   const eventData = {
     id: 'intramed-ix-2026',
     title: 'INTRAMED IX — Jogos Universitários de Medicina',
@@ -24,13 +29,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     startDate: '2026-11-12T08:00:00Z',
     endDate: '2026-11-15T22:00:00Z',
     status: 'open_for_registrations',
-    activeLot: {
-      id: 'lote-1-cangaceira',
-      name: '1º Lote Oficial — IntraMed IX',
-      priceMember: 45.0,
-      priceNonMember: 80.0,
-      isActive: true,
-    },
+    activeLot,
+    lots: Object.values(OFFICIAL_SERVER_LOTS),
   };
 
   return res.status(200).json(eventData);

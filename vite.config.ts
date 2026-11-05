@@ -46,6 +46,53 @@ export default defineConfig(({ mode }) => {
                 req.on('end', () => {
                   try {
                     const body = JSON.parse(bodyStr || '{}');
+                    if (body.action === 'verify_operator_pin') {
+                      const cleanPass = String(body.password || '').trim();
+                      const matchId = body.matchId ? String(body.matchId).trim() : '';
+                      if (cleanPass === 'bicoduro') {
+                        return res.end(
+                          JSON.stringify({
+                            success: true,
+                            role: 'admin',
+                            matchId: matchId || null,
+                            token: 'dev_admin_token_bicoduro',
+                          })
+                        );
+                      }
+                      if (matchId) {
+                        const matchDoc = devCloudStore.matches[matchId];
+                        const storedPin = matchDoc?.tableOfficialPassword
+                          ? String(matchDoc.tableOfficialPassword).trim().toLowerCase()
+                          : '';
+                        if (storedPin && storedPin === cleanPass.toLowerCase()) {
+                          return res.end(
+                            JSON.stringify({
+                              success: true,
+                              role: 'mesario',
+                              matchId,
+                              token: `dev_mesario_token_${matchId}`,
+                            })
+                          );
+                        }
+                      }
+                      res.statusCode = 401;
+                      return res.end(JSON.stringify({ error: 'Senha incorreta.' }));
+                    }
+                    if (body.action === 'set_match_pin') {
+                      const mId = String(body.matchId || '').trim();
+                      const pin = String(body.pin || '').trim();
+                      if (mId && devCloudStore.matches[mId]) {
+                        devCloudStore.matches[mId].tableOfficialPassword = pin;
+                        devCloudStore.matches[mId].hasTableOfficialPassword = Boolean(pin);
+                      }
+                      return res.end(
+                        JSON.stringify({
+                          success: true,
+                          matchId: mId,
+                          hasPassword: Boolean(pin),
+                        })
+                      );
+                    }
                     const { collectionName, docId, data, batch } = body;
                     if (Array.isArray(batch)) {
                       for (const item of batch) {
@@ -365,5 +412,16 @@ export default defineConfig(({ mode }) => {
         },
       },
     ],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-firebase': ['firebase/app', 'firebase/firestore'],
+            'vendor-icons': ['lucide-react'],
+          },
+        },
+      },
+    },
   };
 });
