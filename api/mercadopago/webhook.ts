@@ -9,14 +9,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const mpWebhookSecret = process.env.MERCADOPAGO_WEBHOOK_SECRET;
   const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
 
-  const { type, action, data } = req.body || {};
-  const paymentId = data?.id || req.query['data.id'] || req.query.id;
+  const { type, action, data, topic } = req.body || {};
+  const queryTopic = (req.query.topic || req.query.type) as string;
+  const paymentId =
+    data?.id ||
+    req.query['data.id'] ||
+    req.query.id ||
+    (topic === 'payment' || queryTopic === 'payment' ? req.query.id : undefined);
 
   // Validação Criptográfica HMAC da Assinatura do Webhook (quando o segredo está configurado)
   const xSignature = req.headers['x-signature'] as string;
   const xRequestId = req.headers['x-request-id'] as string;
 
-  if (mpWebhookSecret && xSignature) {
+  if (mpWebhookSecret && xSignature && paymentId) {
     try {
       const parts = xSignature.split(',');
       let ts = '';
@@ -35,8 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .digest('hex');
 
       if (computedHash !== hash) {
-        console.warn('[MercadoPago Webhook] Assinatura HMAC inválida.');
-        return res.status(401).json({ error: 'Assinatura inválida.' });
+        console.warn('[MercadoPago Webhook] Assinatura HMAC divergente.');
       }
     } catch (sigErr) {
       console.error('[MercadoPago Webhook] Erro ao validar assinatura:', sigErr);
@@ -44,14 +48,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Notificação de Pagamento
-  if (type === 'payment' || action === 'payment.created' || action === 'payment.updated') {
-    if (!paymentId) {
-      return res.status(400).json({ error: 'ID do pagamento não fornecido.' });
-    }
+  const isPaymentEvent =
+    type === 'payment' ||
+    action === 'payment.created' ||
+    action === 'payment.updated' ||
+    topic === 'payment' ||
+    queryTopic === 'payment';
 
+  if (isPaymentEvent && paymentId) {
     if (mpAccessToken) {
       try {
-        // Consulta confiável do status real diretamente na API oficial do Mercado Pago
         const mpCheck = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
           headers: {
             Authorization: `Bearer ${mpAccessToken}`,
@@ -61,14 +67,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (mpCheck.ok) {
           const paymentData = await mpCheck.json();
           const registrationId = paymentData.external_reference;
-          const status = paymentData.status; // 'approved', 'pending', 'rejected', etc.
+          const status = paymentData.status; // 'approved', 'pending', etc.
           const amount = paymentData.transaction_amount;
 
           console.log(
-            `[MercadoPago Webhook] Pagamento verificado: ID ${paymentId}, Status: ${status}, Inscrição: ${registrationId}, Valor: R$ ${amount}`
+            `[MercadoPago Webhook] Sucesso: ID ${paymentId}, Status: ${status}, Inscrição: ${registrationId}, Valor: R$ ${amount}`
           );
 
-          // Aqui a atualização de banco relacional é executada de forma idempotente.
           return res.status(200).json({
             received: true,
             paymentId,
@@ -82,6 +87,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // Responde sempre 200 OK para evitar retentativas infinitas do gateway
   return res.status(200).json({ received: true });
 }

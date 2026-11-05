@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShieldCheck,
@@ -15,6 +15,8 @@ import {
   ChevronRight,
   Filter,
   UserCheck,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
@@ -64,6 +66,18 @@ export const RegistrationPage: React.FC = () => {
   const [payingRegistration, setPayingRegistration] = useState<Registration | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
   const [copiedPix, setCopiedPix] = useState(false);
+  const [pixLoading, setPixLoading] = useState(false);
+  const [pixError, setPixError] = useState<string | null>(null);
+  const [pixData, setPixData] = useState<{
+    paymentId: number;
+    qrCode?: string;
+    qrCodeBase64?: string;
+    ticketUrl?: string;
+    dateOfExpiration?: string;
+    amount?: number;
+  } | null>(null);
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
+  const [paymentApprovedSuccess, setPaymentApprovedSuccess] = useState(false);
 
   const selectedTurmaObj = TURMAS_MEDICINA.find((t) => t.turma === selectedTurma) || TURMAS_MEDICINA[0];
 
@@ -114,6 +128,108 @@ export const RegistrationPage: React.FC = () => {
     navigator.clipboard?.writeText(code);
     setCopiedPix(true);
     setTimeout(() => setCopiedPix(false), 3000);
+  };
+
+  // Efeito para gerar o Pix Oficial via API do Mercado Pago
+  useEffect(() => {
+    if (!payingRegistration || paymentMethod !== 'pix') {
+      setPixData(null);
+      setPixError(null);
+      setPaymentApprovedSuccess(false);
+      return;
+    }
+
+    let isMounted = true;
+    setPixLoading(true);
+    setPixError(null);
+    setPaymentApprovedSuccess(false);
+
+    fetch('/api/mercadopago/create-pix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        registrationId: payingRegistration.id,
+        athleteName: payingRegistration.athleteName,
+        athleteEmail: payingRegistration.athleteEmail,
+        athleteDocument: payingRegistration.athleteDocument,
+        turmaLabel: payingRegistration.turmaLabel,
+        authorizedPrice: payingRegistration.authorizedPrice,
+        memberStatus: payingRegistration.memberStatus,
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Erro ao gerar Pix no Mercado Pago.');
+        }
+        return data;
+      })
+      .then((data) => {
+        if (!isMounted) return;
+        setPixData({
+          paymentId: data.paymentId,
+          qrCode: data.qrCode,
+          qrCodeBase64: data.qrCodeBase64,
+          ticketUrl: data.ticketUrl,
+          dateOfExpiration: data.dateOfExpiration,
+          amount: data.amount,
+        });
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.error('Pix generation error:', err);
+        setPixError(err.message || 'Falha ao gerar QR Code Pix.');
+      })
+      .finally(() => {
+        if (isMounted) setPixLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [payingRegistration, paymentMethod]);
+
+  // Polling em background para verificar confirmação automática do Pix
+  useEffect(() => {
+    if (!pixData?.paymentId || !payingRegistration || paymentApprovedSuccess) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/mercadopago/check-payment?paymentId=${pixData.paymentId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.isApproved) {
+          setPaymentApprovedSuccess(true);
+          await simulatePaymentConfirmation(payingRegistration.id, 'pix', String(pixData.paymentId));
+        }
+      } catch {
+        // Silencioso em polling de background
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [pixData?.paymentId, payingRegistration, paymentApprovedSuccess, simulatePaymentConfirmation]);
+
+  // Consulta manual sob demanda pelo usuário
+  const handleCheckPaymentManual = async () => {
+    if (!pixData?.paymentId || !payingRegistration) return;
+    setIsCheckingPayment(true);
+    try {
+      const res = await fetch(`/api/mercadopago/check-payment?paymentId=${pixData.paymentId}`);
+      const data = await res.json();
+      if (data.isApproved) {
+        setPaymentApprovedSuccess(true);
+        await simulatePaymentConfirmation(payingRegistration.id, 'pix', String(pixData.paymentId));
+      } else {
+        alert(
+          'Pagamento ainda em processamento pelo Mercado Pago. Se você já transferiu pelo seu banco, aguarde alguns instantes que a confirmação é automática!'
+        );
+      }
+    } catch {
+      alert('Não foi possível consultar o status do pagamento no momento. Tente novamente.');
+    } finally {
+      setIsCheckingPayment(false);
+    }
   };
 
   const currentDisplayPrice = isSocioClaim
@@ -611,122 +727,230 @@ export const RegistrationPage: React.FC = () => {
       {payingRegistration && (
         <Modal
           isOpen={Boolean(payingRegistration)}
-          onClose={() => setPayingRegistration(null)}
+          onClose={() => {
+            setPayingRegistration(null);
+            setPaymentApprovedSuccess(false);
+          }}
           title="Pagamento Seguro da Inscrição"
         >
-          <div className="space-y-5">
-            <div className="p-3.5 rounded-2xl bg-brand-surface-muted border border-brand-surface-border flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-brand-text-primary block">
-                  {payingRegistration.modalityName} ({payingRegistration.categoryName})
-                </span>
-                <span className="text-[11px] text-brand-text-secondary">
-                  Atleta: {payingRegistration.athleteName}
-                </span>
+          {paymentApprovedSuccess ? (
+            <div className="py-6 px-2 text-center space-y-5 animate-in fade-in duration-300">
+              <div className="w-16 h-16 mx-auto rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-inner">
+                <CheckCircle2 className="w-10 h-10" />
               </div>
-              <span className="text-xl font-display font-extrabold text-brand-blue">
-                R$ {payingRegistration.authorizedPrice.toFixed(2)}
-              </span>
-            </div>
-
-            {/* Alternador Pix vs Cartão */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('pix')}
-                className={`p-3 rounded-xl border-2 font-display font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                  paymentMethod === 'pix'
-                    ? 'border-brand-blue bg-brand-blue-light/50 text-brand-blue shadow-sm'
-                    : 'border-brand-surface-border text-brand-text-secondary'
-                }`}
-              >
-                <QrCode className="w-4 h-4" />
-                <span>Pix Instantâneo</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('credit_card')}
-                className={`p-3 rounded-xl border-2 font-display font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                  paymentMethod === 'credit_card'
-                    ? 'border-brand-blue bg-brand-blue-light/50 text-brand-blue shadow-sm'
-                    : 'border-brand-surface-border text-brand-text-secondary'
-                }`}
-              >
-                <CreditCard className="w-4 h-4" />
-                <span>Cartão de Crédito</span>
-              </button>
-            </div>
-
-            {paymentMethod === 'pix' ? (
-              <div className="space-y-4 text-center">
-                {/* QR Code Simulado Dinâmico */}
-                <div className="w-44 h-44 mx-auto bg-white border-2 border-slate-300 rounded-2xl p-2 flex flex-col items-center justify-center shadow-sm">
-                  <div className="w-full h-full border border-dashed border-slate-400 rounded-xl flex flex-col items-center justify-center bg-slate-50">
-                    <QrCode className="w-20 h-20 text-brand-blue" />
-                    <span className="text-[10px] font-bold text-slate-600 mt-1">QR Code Pix Oficial</span>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 text-left">
-                  <label className="text-[11px] font-bold text-slate-700 block">
-                    Pix Copia e Cola:
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={`00020126580014br.gov.bcb.pix0136intramed-cangaceira-ix520400005303986540${payingRegistration.authorizedPrice.toFixed(2)}5802BR5925AAA CANGACEIRA MEDICINA6009SAO LUIS62070503***6304E8A2`}
-                      className="w-full text-xs font-mono bg-slate-100 border border-slate-300 rounded-xl px-2.5 py-2 truncate select-all"
-                    />
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        handleCopyPix(
-                          `00020126580014br.gov.bcb.pix0136intramed-cangaceira-ix520400005303986540${payingRegistration.authorizedPrice.toFixed(2)}5802BR5925AAA CANGACEIRA MEDICINA6009SAO LUIS62070503***6304E8A2`
-                        )
-                      }
-                      leftIcon={<Copy className="w-3.5 h-3.5" />}
-                    >
-                      {copiedPix ? 'Copiado!' : 'Copiar'}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 leading-relaxed text-left">
-                  <strong>Instruções:</strong> Abra o aplicativo do seu banco, escolha <strong>Pix Copia e Cola</strong> ou aponte a câmera para o QR Code. A confirmação é processada automaticamente via Mercado Pago Developers.
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
-                <div className="flex items-center gap-2 font-bold text-slate-900">
-                  <CreditCard className="w-4 h-4 text-brand-blue" />
-                  <span>Mercado Pago Checkout Pro</span>
-                </div>
-                <p>
-                  Você será redirecionado para o ambiente seguro e criptografado do Mercado Pago para efetuar o pagamento com cartão de crédito (com opção de parcelamento). O IntraMed não armazena dados confidenciais do seu cartão.
+              <div className="space-y-1">
+                <h3 className="text-xl font-display font-extrabold text-brand-text-primary">
+                  Pagamento Confirmado!
+                </h3>
+                <p className="text-xs text-brand-text-secondary max-w-sm mx-auto">
+                  Sua inscrição no <strong>INTRAMED IX</strong> está quitada com sucesso. Seu ingresso e vaga nas modalidades estão garantidos!
                 </p>
               </div>
-            )}
-
-            <div className="flex items-center justify-between pt-3 border-t border-brand-surface-border">
-              <Button variant="ghost" size="sm" onClick={() => setPayingRegistration(null)}>
-                Voltar
-              </Button>
-
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 font-medium">
+                Atleta: <strong>{payingRegistration.athleteName}</strong> • {payingRegistration.turmaLabel}
+              </div>
               <Button
                 variant="primary"
                 size="md"
-                onClick={async () => {
-                  await simulatePaymentConfirmation(payingRegistration.id, paymentMethod);
+                className="w-full"
+                onClick={() => {
                   setPayingRegistration(null);
-                  alert('Pagamento confirmado com sucesso! Sua inscrição no INTRAMED IX está garantida.');
+                  setPaymentApprovedSuccess(false);
+                  setActiveTab('minhas_inscricoes');
                 }}
               >
-                Confirmar Pagamento Realizado
+                Concluir e Ver Meu Ingresso
               </Button>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="p-3.5 rounded-2xl bg-brand-surface-muted border border-brand-surface-border flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-brand-text-primary block">
+                    {payingRegistration.modalityName} ({payingRegistration.categoryName})
+                  </span>
+                  <span className="text-[11px] text-brand-text-secondary">
+                    Atleta: {payingRegistration.athleteName}
+                  </span>
+                </div>
+                <span className="text-xl font-display font-extrabold text-brand-blue">
+                  R$ {payingRegistration.authorizedPrice.toFixed(2)}
+                </span>
+              </div>
+
+              {/* Alternador Pix vs Cartão */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('pix')}
+                  className={`p-3 rounded-xl border-2 font-display font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                    paymentMethod === 'pix'
+                      ? 'border-brand-blue bg-brand-blue-light/50 text-brand-blue shadow-sm'
+                      : 'border-brand-surface-border text-brand-text-secondary'
+                  }`}
+                >
+                  <QrCode className="w-4 h-4" />
+                  <span>Pix Oficial</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('credit_card')}
+                  className={`p-3 rounded-xl border-2 font-display font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                    paymentMethod === 'credit_card'
+                      ? 'border-brand-blue bg-brand-blue-light/50 text-brand-blue shadow-sm'
+                      : 'border-brand-surface-border text-brand-text-secondary'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Cartão de Crédito</span>
+                </button>
+              </div>
+
+              {paymentMethod === 'pix' ? (
+                <div className="space-y-4 text-center">
+                  {pixLoading ? (
+                    <div className="py-10 flex flex-col items-center justify-center space-y-3 bg-slate-50 rounded-2xl border border-slate-200">
+                      <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
+                      <span className="text-xs font-bold text-slate-700">
+                        Gerando cobrança Pix oficial no Mercado Pago...
+                      </span>
+                    </div>
+                  ) : pixError ? (
+                    <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs space-y-2 text-left">
+                      <div className="flex items-center gap-2 font-bold">
+                        <AlertTriangle className="w-4 h-4 text-rose-600" />
+                        <span>Não foi possível gerar o Pix</span>
+                      </div>
+                      <p>{pixError}</p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setPixError(null);
+                          setPaymentMethod('pix');
+                        }}
+                      >
+                        Tentar Novamente
+                      </Button>
+                    </div>
+                  ) : pixData ? (
+                    <>
+                      {/* QR Code Oficial Retornado pela API */}
+                      <div className="flex flex-col items-center justify-center space-y-2">
+                        {pixData.qrCodeBase64 ? (
+                          <div className="p-2 bg-white rounded-2xl shadow-card border border-slate-200">
+                            <img
+                              src={`data:image/png;base64,${pixData.qrCodeBase64}`}
+                              alt="QR Code Pix Mercado Pago"
+                              className="w-48 h-48 object-contain rounded-xl"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-48 h-48 flex items-center justify-center bg-slate-100 rounded-2xl border border-slate-300">
+                            <QrCode className="w-20 h-20 text-brand-blue" />
+                          </div>
+                        )}
+                        <span className="text-[11px] font-bold text-slate-600">
+                          Cobrança Oficial • Atlética Cangaceira
+                        </span>
+                      </div>
+
+                      {/* Pix Copia e Cola */}
+                      {pixData.qrCode && (
+                        <div className="space-y-1.5 text-left">
+                          <label className="text-[11px] font-bold text-slate-700 block">
+                            Código Pix Copia e Cola:
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              readOnly
+                              value={pixData.qrCode}
+                              className="w-full text-xs font-mono bg-slate-100 border border-slate-300 rounded-xl px-2.5 py-2 truncate select-all"
+                            />
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleCopyPix(pixData.qrCode || '')}
+                              leftIcon={<Copy className="w-3.5 h-3.5" />}
+                            >
+                              {copiedPix ? 'Copiado!' : 'Copiar'}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Status de aguardo em tempo real */}
+                      <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-center justify-between text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                          </span>
+                          <span className="font-medium text-[11px]">
+                            Aguardando transferência bancária...
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={isCheckingPayment}
+                          onClick={handleCheckPaymentManual}
+                          leftIcon={
+                            <RefreshCw
+                              className={`w-3.5 h-3.5 ${isCheckingPayment ? 'animate-spin' : ''}`}
+                            />
+                          }
+                          className="text-xs h-7 px-2"
+                        >
+                          Verificar
+                        </Button>
+                      </div>
+                    </>
+                  ) : null}
+
+                  <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 leading-relaxed text-left">
+                    <strong>Instruções:</strong> Abra o app do seu banco, escolha <strong>Pix Copia e Cola</strong> ou aponte a câmera para o QR Code acima. O valor será creditado diretamente para a <strong>Atlética Cangaceira</strong> e a confirmação é automática.
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
+                  <div className="flex items-center gap-2 font-bold text-slate-900">
+                    <CreditCard className="w-4 h-4 text-brand-blue" />
+                    <span>Mercado Pago Checkout Pro</span>
+                  </div>
+                  <p>
+                    O pagamento com cartão de crédito permite parcelar a inscrição. Você será transferido para a página segura do Mercado Pago para inserir os dados do cartão com total segurança.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-3 border-t border-brand-surface-border">
+                <Button variant="ghost" size="sm" onClick={() => setPayingRegistration(null)}>
+                  Fechar
+                </Button>
+
+                {isAdmin && (
+                  <Button
+                    variant="accent"
+                    size="sm"
+                    onClick={async () => {
+                      if (
+                        confirm(
+                          'Como administrador, deseja forçar a confirmação manual deste pagamento?'
+                        )
+                      ) {
+                        await simulatePaymentConfirmation(payingRegistration.id, paymentMethod);
+                        setPayingRegistration(null);
+                      }
+                    }}
+                  >
+                    Confirmar como Admin
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </Modal>
       )}
     </div>
