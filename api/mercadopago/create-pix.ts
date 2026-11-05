@@ -1,5 +1,22 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+function isValidCPF(cpf: string): boolean {
+  const clean = cpf.replace(/\D/g, '');
+  if (clean.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(clean)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(clean.charAt(i), 10) * (10 - i);
+  let rev = 11 - (sum % 11);
+  if (rev === 10 || rev === 11) rev = 0;
+  if (rev !== parseInt(clean.charAt(9), 10)) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(clean.charAt(i), 10) * (11 - i);
+  rev = 11 - (sum % 11);
+  if (rev === 10 || rev === 11) rev = 0;
+  if (rev !== parseInt(clean.charAt(10), 10)) return false;
+  return true;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -40,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const mpAccessToken = process.env.MERCADOPAGO_ACCESS_TOKEN;
   const appBaseUrl =
     process.env.APP_BASE_URL ||
-    (req.headers.host ? `https://${req.headers.host}` : 'https://intramed-ix.vercel.app');
+    (req.headers.host ? `https://${req.headers.host}` : 'https://intramedix.vercel.app');
 
   if (!mpAccessToken) {
     return res.status(500).json({
@@ -59,19 +76,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       description: `Inscrição INTRAMED IX - ${turmaLabel ? turmaLabel + ' • ' : ''}${athleteName}`,
       payment_method_id: 'pix',
       external_reference: registrationId,
-      notification_url: `${appBaseUrl}/api/mercadopago/webhook`,
       payer: {
-        email: athleteEmail && athleteEmail.includes('@') ? athleteEmail : 'contato@atleticacangaceira.com',
+        email:
+          athleteEmail && athleteEmail.includes('@')
+            ? athleteEmail
+            : 'contato@atleticacangaceira.com',
         first_name: firstName,
         last_name: lastName,
       },
     };
 
-    if (cleanDoc && (cleanDoc.length === 11 || cleanDoc.length === 14)) {
+    // Validação estrita do CPF: só anexa se os dígitos forem matematicamente válidos.
+    // Evita erro 400 "Invalid user identification number" caso o participante digite matrícula universitária.
+    if (cleanDoc && cleanDoc.length === 11 && isValidCPF(cleanDoc)) {
       (payload.payer as Record<string, unknown>).identification = {
-        type: cleanDoc.length === 14 ? 'CNPJ' : 'CPF',
+        type: 'CPF',
         number: cleanDoc,
       };
+    } else if (cleanDoc && cleanDoc.length === 14) {
+      (payload.payer as Record<string, unknown>).identification = {
+        type: 'CNPJ',
+        number: cleanDoc,
+      };
+    }
+
+    if (appBaseUrl && !appBaseUrl.includes('localhost') && appBaseUrl.startsWith('https://')) {
+      payload.notification_url = `${appBaseUrl}/api/mercadopago/webhook`;
     }
 
     const idempotencyKey = `pix_${registrationId}_${Date.now()}`;

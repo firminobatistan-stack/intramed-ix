@@ -78,6 +78,7 @@ export const RegistrationPage: React.FC = () => {
   } | null>(null);
   const [isCheckingPayment, setIsCheckingPayment] = useState(false);
   const [paymentApprovedSuccess, setPaymentApprovedSuccess] = useState(false);
+  const [isCreatingCardPreference, setIsCreatingCardPreference] = useState(false);
 
   const selectedTurmaObj = TURMAS_MEDICINA.find((t) => t.turma === selectedTurma) || TURMAS_MEDICINA[0];
 
@@ -229,6 +230,49 @@ export const RegistrationPage: React.FC = () => {
       alert('Não foi possível consultar o status do pagamento no momento. Tente novamente.');
     } finally {
       setIsCheckingPayment(false);
+    }
+  };
+
+  // Cálculo do acréscimo de taxa operadora para pagamento via Cartão de Crédito
+  const CARD_FEE_RATE = 0.05; // 5% de taxa administrativa repassada
+  const cardFeeAmount = payingRegistration
+    ? Math.round(payingRegistration.authorizedPrice * CARD_FEE_RATE * 100) / 100
+    : 0;
+  const cardTotalPrice = payingRegistration
+    ? payingRegistration.authorizedPrice + cardFeeAmount
+    : 0;
+
+  const handleCardCheckout = async () => {
+    if (!payingRegistration) return;
+    setIsCreatingCardPreference(true);
+    try {
+      const res = await fetch('/api/mercadopago/create-preference', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          registrationId: payingRegistration.id,
+          athleteName: payingRegistration.athleteName,
+          athleteEmail: payingRegistration.athleteEmail,
+          athleteDocument: payingRegistration.athleteDocument,
+          turmaLabel: payingRegistration.turmaLabel,
+          authorizedPrice: payingRegistration.authorizedPrice,
+          memberStatus: payingRegistration.memberStatus,
+          isCreditCard: true,
+          cardFeeAmount: cardFeeAmount,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.initPoint) {
+        throw new Error(data.error || 'Erro ao gerar checkout do cartão no Mercado Pago.');
+      }
+
+      // Redireciona com segurança para a página oficial do Mercado Pago Checkout
+      window.location.href = data.initPoint;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Falha ao iniciar pagamento com cartão.');
+    } finally {
+      setIsCreatingCardPreference(false);
     }
   };
 
@@ -773,9 +817,19 @@ export const RegistrationPage: React.FC = () => {
                     Atleta: {payingRegistration.athleteName}
                   </span>
                 </div>
-                <span className="text-xl font-display font-extrabold text-brand-blue">
-                  R$ {payingRegistration.authorizedPrice.toFixed(2)}
-                </span>
+                <div className="text-right">
+                  <span className="text-xl font-display font-extrabold text-brand-blue block">
+                    R${' '}
+                    {paymentMethod === 'credit_card'
+                      ? cardTotalPrice.toFixed(2)
+                      : payingRegistration.authorizedPrice.toFixed(2)}
+                  </span>
+                  {paymentMethod === 'credit_card' && (
+                    <span className="text-[10px] text-amber-700 font-bold block">
+                      Inclui taxa repassada
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Alternador Pix vs Cartão */}
@@ -914,14 +968,74 @@ export const RegistrationPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
-                  <div className="flex items-center gap-2 font-bold text-slate-900">
-                    <CreditCard className="w-4 h-4 text-brand-blue" />
-                    <span>Mercado Pago Checkout Pro</span>
+                <div className="space-y-4 text-left">
+                  {/* Detalhamento do Valor com Repasse da Taxa do Cartão */}
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-bold text-slate-900 text-xs">
+                        <CreditCard className="w-4 h-4 text-brand-blue" />
+                        <span>Cartão de Crédito (Mercado Pago)</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                        Até 6x no Cartão
+                      </span>
+                    </div>
+
+                    <div className="text-xs space-y-2 border-t border-slate-200 pt-2.5">
+                      <div className="flex justify-between text-slate-600">
+                        <span>Valor Base da Inscrição:</span>
+                        <span className="font-semibold text-slate-800">
+                          R$ {payingRegistration.authorizedPrice.toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-amber-900 bg-amber-50/90 p-2.5 rounded-xl border border-amber-200">
+                        <div className="space-y-0.5">
+                          <span className="font-bold block">
+                            Acréscimo Taxa de Operação (+5%):
+                          </span>
+                          <span className="text-[10px] text-amber-700 block">
+                            Taxa administrativa do gateway repassada ao titular
+                          </span>
+                        </div>
+                        <span className="font-extrabold text-sm text-amber-900">
+                          + R$ {cardFeeAmount.toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 text-slate-900">
+                        <span className="font-bold">Total no Cartão:</span>
+                        <span className="text-2xl font-display font-extrabold text-brand-blue">
+                          R$ {cardTotalPrice.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <p>
-                    O pagamento com cartão de crédito permite parcelar a inscrição. Você será transferido para a página segura do Mercado Pago para inserir os dados do cartão com total segurança.
-                  </p>
+
+                  <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 leading-relaxed">
+                    <strong>Aviso:</strong> O acréscimo de R$ {cardFeeAmount.toFixed(2)} corresponde à taxa de processamento do cartão. Para pagar <strong>sem acréscimo</strong>, você pode usar a opção <strong>Pix Oficial</strong> por apenas R$ {payingRegistration.authorizedPrice.toFixed(2)}.
+                  </div>
+
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 shadow-md"
+                    disabled={isCreatingCardPreference}
+                    onClick={handleCardCheckout}
+                  >
+                    {isCreatingCardPreference ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Abrindo Mercado Pago Seguro...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="w-4 h-4" />
+                        <span>Pagar no Cartão de Crédito • R$ {cardTotalPrice.toFixed(2)}</span>
+                        <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                      </>
+                    )}
+                  </Button>
                 </div>
               )}
 
