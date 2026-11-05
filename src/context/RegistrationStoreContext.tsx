@@ -279,7 +279,11 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     channel.onmessage = (ev) => {
       if (ev.data && ev.data.type === 'SYNC_REGISTRATIONS') {
         if (Array.isArray(ev.data.registrations)) {
-          setRegistrations(ev.data.registrations);
+          setRegistrations(
+            (ev.data.registrations as Registration[]).map((r) =>
+              normalizePendingRegistrationPrice(r)
+            )
+          );
         }
         if (Array.isArray(ev.data.auditLogs)) {
           setAuditLogs(ev.data.auditLogs);
@@ -312,7 +316,10 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
                 const exRev = ex?.revision ?? 0;
                 const frRev = fr.revision ?? 0;
                 if (!ex || frRev >= exRev) {
-                  byId.set(fr.id, ex ? { ...ex, ...fr } : fr);
+                  byId.set(
+                    fr.id,
+                    normalizePendingRegistrationPrice(ex ? { ...ex, ...fr } : fr)
+                  );
                 }
               }
               const merged = Array.from(byId.values());

@@ -111,6 +111,7 @@ export const RegistrationPage: React.FC = () => {
   const [athleteDocument, setAthleteDocument] = useState('');
   const [accountUsername, setAccountUsername] = useState('');
   const [accountPassword, setAccountPassword] = useState('');
+  const [accountPasswordConfirm, setAccountPasswordConfirm] = useState('');
 
   // Campos de Perfil Social / Rede Social do Torneio
   const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser?.avatarUrl || null);
@@ -200,11 +201,15 @@ export const RegistrationPage: React.FC = () => {
       return;
     }
     if (!accountUsername.trim() || !accountPassword.trim()) {
-      alert('Crie seu usuário e uma senha para sua conta de acesso.');
+      alert('Crie seu nome de usuário e uma senha para sua conta.');
       return;
     }
     if (accountPassword.trim().length < 4) {
       alert('A senha deve ter pelo menos 4 caracteres.');
+      return;
+    }
+    if (accountPassword.trim() !== accountPasswordConfirm.trim()) {
+      alert('As duas senhas digitadas não conferem.');
       return;
     }
 
@@ -764,10 +769,10 @@ export const RegistrationPage: React.FC = () => {
               {/* Dados do Atleta & Criação Automática da Conta */}
               <div className="border-t border-brand-surface-border pt-5 space-y-4">
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                  2. Dados Pessoais &amp; Criar Conta de Login
+                  2. Dados Pessoais
                 </h2>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <Input
                     label="Nome Completo *"
                     placeholder="Ex: Lucas Ferreira"
@@ -789,14 +794,6 @@ export const RegistrationPage: React.FC = () => {
                     required
                   />
                   <Input
-                    label="E-mail *"
-                    type="email"
-                    placeholder="lucas@email.com"
-                    value={athleteEmail}
-                    onChange={(e) => setAthleteEmail(e.target.value)}
-                    required
-                  />
-                  <Input
                     label="WhatsApp *"
                     placeholder="(98) 98888-7777"
                     value={athletePhone}
@@ -811,11 +808,17 @@ export const RegistrationPage: React.FC = () => {
                     required
                   />
                 </div>
+              </div>
 
-                {/* Campos de Usuário e Senha para a Conta */}
+              {/* Criação da Conta de Acesso */}
+              <div className="border-t border-brand-surface-border pt-5 space-y-4">
+                <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
+                  3. Criar Conta de Acesso
+                </h2>
+
                 <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input
-                    label="Usuário de Login *"
+                    label="Nome de Usuário *"
                     placeholder="Ex: lucas.ferreira"
                     value={accountUsername}
                     onChange={(e) =>
@@ -826,20 +829,36 @@ export const RegistrationPage: React.FC = () => {
                     required
                   />
                   <Input
-                    label="Crie uma Senha *"
+                    label="E-mail da Conta *"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={athleteEmail}
+                    onChange={(e) => setAthleteEmail(e.target.value)}
+                    required
+                  />
+                  <Input
+                    label="Senha *"
                     type="password"
                     placeholder="Mínimo 4 caracteres"
                     value={accountPassword}
                     onChange={(e) => setAccountPassword(e.target.value)}
                     required
                   />
+                  <Input
+                    label="Confirmar Senha *"
+                    type="password"
+                    placeholder="Repita a senha"
+                    value={accountPasswordConfirm}
+                    onChange={(e) => setAccountPasswordConfirm(e.target.value)}
+                    required
+                  />
                 </div>
               </div>
 
-              {/* Perfil Social do Atleta (Foto, Camisa, Instagram e Modalidades — sem posição) */}
+              {/* Perfil Social do Atleta (Foto, Camisa, Instagram e Modalidades) */}
               <div className="border-t border-brand-surface-border pt-5 space-y-4">
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                  3. Perfil do Atleta
+                  4. Perfil do Atleta
                 </h2>
 
                 <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
@@ -937,7 +956,7 @@ export const RegistrationPage: React.FC = () => {
               {/* Seção de Sócio da Atlética */}
               <div className="border-t border-brand-surface-border pt-5 space-y-3">
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                  4. Sócio da Atlética Cangaceira
+                  5. Sócio da Atlética Cangaceira
                 </h2>
 
                 <div

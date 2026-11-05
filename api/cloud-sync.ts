@@ -256,9 +256,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    const normalizeRegServerPrice = (reg: Record<string, unknown>) => {
+      if (reg.paymentStatus === 'pago') return reg;
+      const expected = computeAuthorizedServerPrice(
+        String(reg.lotId || 'lote-1-cangaceira'),
+        String(reg.memberStatus || 'nao_solicitado'),
+        Boolean(reg.requestedMemberDiscount)
+      );
+      return { ...reg, authorizedPrice: expected };
+    };
+
     const publicRegistrations = isAdminRequest
-      ? Object.values(store.registrations)
-      : Object.values(store.registrations).map((r) => sanitizeRegistrationForPublic(r));
+      ? Object.values(store.registrations).map((r) => normalizeRegServerPrice(r))
+      : Object.values(store.registrations).map((r) =>
+          sanitizeRegistrationForPublic(normalizeRegServerPrice(r))
+        );
 
     const publicMatches = Object.values(store.matches).map((m) =>
       sanitizeMatchForPublic(m, isAdminRequest)

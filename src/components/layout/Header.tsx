@@ -1,18 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
   Bell,
-  ChevronDown,
   ClipboardList,
   Menu,
   Search,
 } from 'lucide-react';
 import { QuickSearchModal } from './QuickSearchModal';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
-import { OFFICIAL_MODALITIES } from '../../data/officialData';
-import { SportIcon } from '../sports/SportIcon';
 
 interface HeaderProps {
   title?: string;
@@ -36,22 +33,11 @@ export const Header: React.FC<HeaderProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isSportDropdownOpen, setIsSportDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const { notifications, currentUser, canOperateOfficialData } =
     useCompetitionStore();
   const unreadCount = notifications.filter((n) => !n.isRead).length;
   const isAdmin = canOperateOfficialData();
-
-  // Identifica se estamos dentro de uma modalidade específica
-  const currentModalitySlug = location.pathname.startsWith('/competicoes/')
-    ? location.pathname.replace('/competicoes/', '')
-    : 'futsal';
-
-  const activeModality =
-    OFFICIAL_MODALITIES.find((m) => m.id === currentModalitySlug) ||
-    OFFICIAL_MODALITIES[0];
 
   // Atalho global Ctrl+K / Cmd+K para busca rápida
   useEffect(() => {
@@ -63,17 +49,6 @@ export const Header: React.FC<HeaderProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  // Fecha dropdown ao clicar fora
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsSportDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const isSubRoute =
@@ -137,72 +112,20 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Sports Category Pill Branca (Idêntica às Imagens 1, 2 e 3: [ ⚽ Football ▾ ]) */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsSportDropdownOpen((prev) => !prev)}
-                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white text-[#0B218A] font-display font-extrabold text-xs sm:text-sm shadow-md hover:bg-slate-50 transition-all"
-              >
-                <span className="w-5 h-5 rounded-full bg-[#0B218A]/10 flex items-center justify-center text-[#0B218A]">
-                  <SportIcon iconKey={activeModality.iconKey} className="w-3.5 h-3.5" />
-                </span>
-                <span className="truncate max-w-[130px] sm:max-w-[180px]">
-                  {activeModality.name}
-                </span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#0B218A] transition-transform ${
-                    isSportDropdownOpen ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
-
-              {isSportDropdownOpen && (
-                <div className="absolute left-0 mt-2 w-60 rounded-2xl bg-white text-slate-900 shadow-2xl border border-slate-100 py-2 z-50">
-                  <div className="px-3.5 py-1.5 border-b border-slate-100 flex items-center justify-between">
-                    <span className="text-[10px] font-display font-extrabold uppercase tracking-wider text-slate-400">
-                      10 Modalidades • INTRAMED IX
-                    </span>
-                  </div>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-slate-50">
-                    {OFFICIAL_MODALITIES.map((mod) => {
-                      const isCurrent = mod.id === activeModality.id;
-                      return (
-                        <button
-                          key={mod.id}
-                          type="button"
-                          onClick={() => {
-                            setIsSportDropdownOpen(false);
-                            navigate(`/competicoes/${mod.id}`);
-                          }}
-                          className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left text-xs font-semibold transition-colors ${
-                            isCurrent
-                              ? 'bg-[#0B218A]/5 text-[#0B218A] font-bold'
-                              : 'text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2.5">
-                            <span
-                              className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                isCurrent
-                                  ? 'bg-[#0B218A] text-white'
-                                  : 'bg-slate-100 text-[#0B218A]'
-                              }`}
-                            >
-                              <SportIcon iconKey={mod.iconKey} className="w-3.5 h-3.5" />
-                            </span>
-                            <span>{mod.name}</span>
-                          </span>
-                          {isCurrent && (
-                            <span className="w-2 h-2 rounded-full bg-brand-yellow" />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-2 text-left"
+            >
+              <img
+                src="/assets/atletica/face.png"
+                alt=""
+                className="w-7 h-7 rounded-full object-contain bg-white/10 p-0.5"
+              />
+              <span className="text-sm sm:text-base font-display font-black tracking-tight text-white">
+                INTRAMED <span className="text-brand-yellow">IX</span>
+              </span>
+            </button>
 
             {title && (
               <span className="hidden md:inline-block text-sm font-display font-bold text-white/90 pl-2 border-l border-white/15 truncate">
