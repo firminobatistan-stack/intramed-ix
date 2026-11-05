@@ -20,7 +20,10 @@ import {
   useCompetitionStore,
   setStoredOperatorToken,
 } from '../context/CompetitionStoreContext';
-import { useRegistrationStore } from '../context/RegistrationStoreContext';
+import {
+  useRegistrationStore,
+  computeClientCredentialDigest,
+} from '../context/RegistrationStoreContext';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 
 type LoginModeTab = 'admin' | 'athlete';
@@ -195,14 +198,18 @@ export const LoginPage: React.FC = () => {
 
     if (matchedReg) {
       try {
-        const savedCredsRaw = localStorage.getItem('intramed_athlete_credentials_v1');
+        localStorage.removeItem('intramed_athlete_credentials_v1');
+        const savedCredsRaw = localStorage.getItem('intramed_athlete_credentials_v2');
         if (savedCredsRaw) {
           const savedCreds = JSON.parse(savedCredsRaw);
           const credEntry =
             savedCreds[q] ||
-            (matchedReg.accountUsername ? savedCreds[matchedReg.accountUsername.toLowerCase()] : undefined) ||
+            (matchedReg.accountUsername
+              ? savedCreds[matchedReg.accountUsername.toLowerCase()]
+              : undefined) ||
             savedCreds[matchedReg.athleteEmail.toLowerCase()];
-          if (credEntry && credEntry.pass && credEntry.pass !== pass) {
+          const inputDigest = computeClientCredentialDigest(pass);
+          if (credEntry && credEntry.passDigest && credEntry.passDigest !== inputDigest) {
             setErrorMessage('Senha incorreta para esta conta.');
             return;
           }

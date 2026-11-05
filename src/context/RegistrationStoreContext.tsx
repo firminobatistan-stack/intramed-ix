@@ -19,6 +19,7 @@ import {
   INITIAL_TOURNAMENT_EVENT,
   INITIAL_DEMO_REGISTRATIONS,
   INITIAL_FINANCIAL_AUDIT_LOGS,
+  resolveLotAuthorizedPrice,
 } from '../data/registrationData';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import {
@@ -26,13 +27,34 @@ import {
   getStoredOperatorToken,
 } from './CompetitionStoreContext';
 import { generateUniqueId } from '../utils/statsEngine';
-import { db } from '../lib/firebase';
-import { collection, doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 
 const REGISTRATIONS_STORAGE_KEY = 'intramed_registrations_store_v1';
 const MY_REGISTRATIONS_KEY = 'intramed_my_registered_ids_v1';
-const LOCAL_ATHLETE_CREDENTIALS_KEY = 'intramed_athlete_credentials_v1';
+const LOCAL_ATHLETE_CREDENTIALS_KEY = 'intramed_athlete_credentials_v2';
 const SYNC_CHANNEL_NAME = 'intramed_registration_channel';
+
+/**
+ * Gera hash unidirecional para verificação offline sem armazenar senha em texto puro no localStorage.
+ */
+export function computeClientCredentialDigest(rawPassword: string): string {
+  const clean = rawPassword.trim();
+  let h1 = 0xdeadbeef ^ clean.length;
+  let h2 = 0x41c6ce57 ^ clean.length;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return `h2_${(h2 >>> 0).toString(16).padStart(8, '0')}${(h1 >>> 0)
+    .toString(16)
+    .padStart(8, '0')}`;
+}
 
 export interface CreateRegistrationPayload {
   eventId: string;
@@ -126,18 +148,29 @@ const pushRegistrationToCloud = (reg: Registration, accountPassword?: string) =>
 };
 
 /**
- * Calcula o preço vigente oficial para inscrições pendentes (Sócio: R$ 55,00 | Não Sócio: R$ 65,00).
+ * Calcula o preço vigente oficial pelo lote configurado para inscrições pendentes.
  */
 function normalizePendingRegistrationPrice(reg: Registration): Registration {
-  if (reg.paymentStatus === 'pago') return reg;
-  const expectedPrice =
-    reg.memberStatus === 'aprovado' ||
-    (reg.memberStatus === 'pendente' && reg.requestedMemberDiscount)
-      ? 55.0
-      : 65.0;
-  if (reg.authorizedPrice === expectedPrice) return reg;
+  const normalizedModName =
+    reg.modalityName?.includes('10 Modalidades')
+      ? 'Passaporte Geral (Todas as 16 Modalidades)'
+      : reg.modalityName;
+  if (reg.paymentStatus === 'pago') {
+    return normalizedModName !== reg.modalityName
+      ? { ...reg, modalityName: normalizedModName }
+      : reg;
+  }
+  const expectedPrice = resolveLotAuthorizedPrice(
+    reg.lotId,
+    reg.memberStatus,
+    reg.requestedMemberDiscount
+  );
+  if (reg.authorizedPrice === expectedPrice && normalizedModName === reg.modalityName) {
+    return reg;
+  }
   return {
     ...reg,
+    modalityName: normalizedModName,
     authorizedPrice: expectedPrice,
   };
 }
@@ -296,51 +329,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  // Sincronização em tempo real via Cloud Firestore (quando autenticado)
-  useEffect(() => {
-    try {
-      const colRef = collection(db, 'registrations');
-      const unsubscribe = onSnapshot(
-        colRef,
-        (snapshot) => {
-          if (!snapshot.empty) {
-            const firestoreList: Registration[] = [];
-            snapshot.forEach((snap) => {
-              firestoreList.push(snap.data() as Registration);
-            });
-            setRegistrations((prev) => {
-              const byId = new Map<string, Registration>();
-              for (const r of prev) byId.set(r.id, r);
-              for (const fr of firestoreList) {
-                const ex = byId.get(fr.id);
-                const exRev = ex?.revision ?? 0;
-                const frRev = fr.revision ?? 0;
-                if (!ex || frRev >= exRev) {
-                  byId.set(
-                    fr.id,
-                    normalizePendingRegistrationPrice(ex ? { ...ex, ...fr } : fr)
-                  );
-                }
-              }
-              const merged = Array.from(byId.values());
-              merged.sort(
-                (a, b) =>
-                  new Date(b.createdAtIso).getTime() -
-                  new Date(a.createdAtIso).getTime()
-              );
-              return merged;
-            });
-          }
-        },
-        () => {}
-      );
-      return () => unsubscribe();
-    } catch {
-      // Silencioso
-    }
-  }, []);
-
-  // Recebe as inscrições do polling unificado do CompetitionStoreContext (elimina o 2º polling duplicado — Item 23 da Auditoria)
+  // Recebe as inscrições do polling unificado do CompetitionStoreContext (fonte única de verdade via /api/cloud-sync)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -489,7 +478,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         modalityId: payload.modalityId || 'todas',
         modalityName:
           payload.modalityName ||
-          'Passaporte Geral (Todas as 10 Modalidades)',
+          'Passaporte Geral (Todas as 16 Modalidades)',
         selectedModalities: chosenModalities,
         categoryName: payload.categoryName,
         requestedMemberDiscount: isSocioRequested,
@@ -554,27 +543,22 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
 
       pushRegistrationToCloud(newRegistration, payload.accountPassword?.trim());
       try {
+        localStorage.removeItem('intramed_athlete_credentials_v1');
         if (payload.accountPassword?.trim()) {
+          const digest = computeClientCredentialDigest(payload.accountPassword);
           const savedCredsRaw = localStorage.getItem(LOCAL_ATHLETE_CREDENTIALS_KEY);
-          const savedCreds: Record<string, { regId: string; pass: string }> = savedCredsRaw
-            ? JSON.parse(savedCredsRaw)
-            : {};
+          const savedCreds: Record<string, { regId: string; passDigest: string }> =
+            savedCredsRaw ? JSON.parse(savedCredsRaw) : {};
           savedCreds[resolvedUsername] = {
             regId: newRegistration.id,
-            pass: payload.accountPassword.trim(),
+            passDigest: digest,
           };
           savedCreds[newRegistration.athleteEmail.toLowerCase()] = {
             regId: newRegistration.id,
-            pass: payload.accountPassword.trim(),
+            passDigest: digest,
           };
           localStorage.setItem(LOCAL_ATHLETE_CREDENTIALS_KEY, JSON.stringify(savedCreds));
         }
-      } catch {
-        // Silencioso
-      }
-      try {
-        const cleanReg = JSON.parse(JSON.stringify(newRegistration));
-        await setDoc(doc(db, 'registrations', newRegistration.id), cleanReg);
       } catch {
         // Silencioso
       }
@@ -652,15 +636,6 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       setRegistrations(nextRegs);
       broadcastState(nextRegs, auditLogs);
       pushRegistrationToCloud(updated);
-
-      try {
-        const cleanReg = JSON.parse(JSON.stringify(updated));
-        setDoc(doc(db, 'registrations', registrationId), cleanReg, {
-          merge: true,
-        }).catch(() => {});
-      } catch {
-        // Silencioso
-      }
     },
     [registrations, auditLogs, broadcastState]
   );
@@ -736,22 +711,6 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       setAuditLogs(nextLogs);
       broadcastState(nextRegs, nextLogs);
       pushRegistrationToCloud(updated);
-
-      try {
-        updateDoc(doc(db, 'registrations', registrationId), {
-          memberStatus: updated.memberStatus,
-          paymentStatus: updated.paymentStatus,
-          authorizedPrice: updated.authorizedPrice,
-          memberNotes: updated.memberNotes,
-          validatedByAdminId: updated.validatedByAdminId,
-          validatedByAdminName: updated.validatedByAdminName,
-          validatedAtIso: updated.validatedAtIso,
-          updatedAtIso: updated.updatedAtIso,
-          revision: updated.revision,
-        }).catch(() => {});
-      } catch {
-        // Silencioso
-      }
     },
     [
       canOperateOfficialData,
@@ -826,19 +785,6 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       if (isAdmin) {
         pushRegistrationToCloud(updated);
       }
-
-      try {
-        updateDoc(doc(db, 'registrations', registrationId), {
-          paymentStatus: updated.paymentStatus,
-          paymentMethod: updated.paymentMethod,
-          mpPaymentId: updated.mpPaymentId,
-          paidAtIso: updated.paidAtIso,
-          updatedAtIso: updated.updatedAtIso,
-          revision: updated.revision,
-        }).catch(() => {});
-      } catch {
-        // Silencioso
-      }
     },
     [canOperateOfficialData, registrations, auditLogs, currentUser, broadcastState]
   );
@@ -878,17 +824,6 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       setAuditLogs(nextLogs);
       broadcastState(nextRegs, nextLogs);
       pushRegistrationToCloud(updated);
-
-      try {
-        updateDoc(doc(db, 'registrations', registrationId), {
-          paymentStatus: updated.paymentStatus,
-          memberNotes: updated.memberNotes,
-          updatedAtIso: updated.updatedAtIso,
-          revision: updated.revision,
-        }).catch(() => {});
-      } catch {
-        // Silencioso
-      }
     },
     [registrations, auditLogs, currentUser, broadcastState]
   );

@@ -375,7 +375,7 @@ export const AdminDashboardPage: React.FC = () => {
               <EmptyState
                 variant="matches"
                 title="Base Oficial sem Partidas Cadastradas"
-                message="Você pode cadastrar as equipes (Períodos), atletas e criar partidas oficiais na aba 'Cadastros', ou ativar o MODO DE TESTE para operar imediatamente as 10 modalidades."
+                message="Você pode cadastrar as equipes (Períodos), atletas e criar partidas oficiais na aba 'Cadastros', ou ativar o MODO DE TESTE para operar imediatamente as 16 modalidades."
                 action={
                   <div className="flex flex-wrap items-center justify-center gap-3">
                     <Button
@@ -415,7 +415,7 @@ export const AdminDashboardPage: React.FC = () => {
                     onChange={(e) => setModalityFilter(e.target.value)}
                     className="min-h-[40px] px-3.5 py-1.5 rounded-xl bg-brand-surface-muted border border-brand-surface-border text-sm font-medium text-brand-text-primary focus:outline-none focus:border-brand-blue"
                   >
-                    <option value="todas">Todas as 10 modalidades oficiais</option>
+                    <option value="todas">Todas as 16 modalidades oficiais</option>
                     {OFFICIAL_MODALITIES.map((mod) => (
                       <option key={mod.id} value={mod.id}>
                         {mod.name}

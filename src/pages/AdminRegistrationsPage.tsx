@@ -116,7 +116,7 @@ export const AdminRegistrationsPage: React.FC = () => {
       r.athletePhone,
       r.athleteDocument,
       `"${r.turmaLabel || r.teamName || ('Turma ' + r.turma)}"`,
-      '"Passaporte Geral (Todas as 10 Modalidades)"',
+      '"Passaporte Geral (Todas as 16 Modalidades)"',
       r.categoryName,
       r.requestedMemberDiscount ? 'SIM' : 'NÃO',
       r.memberStatus.toUpperCase(),
@@ -381,7 +381,7 @@ export const AdminRegistrationsPage: React.FC = () => {
                             {reg.turmaLabel || reg.teamName || ('Turma ' + reg.turma)}
                           </span>
                           <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-bold inline-block mt-0.5">
-                            Passaporte Geral (Todas as 10 Modalidades) • {reg.categoryName}
+                            Passaporte Geral (Todas as 16 Modalidades) • {reg.categoryName}
                           </span>
                         </td>
 
@@ -644,7 +644,7 @@ export const AdminRegistrationsPage: React.FC = () => {
               <p><strong>E-mail:</strong> {validatingReg.athleteEmail} • <strong>Tel:</strong> {validatingReg.athletePhone}</p>
               <p><strong>Documento / Matrícula:</strong> {validatingReg.athleteDocument}</p>
               <p><strong>Turma / Equipe:</strong> {validatingReg.turmaLabel || validatingReg.teamName || ('Turma ' + validatingReg.turma)}</p>
-              <p><strong>Acesso Esportivo:</strong> Passaporte Geral (Todas as 10 Modalidades) • {validatingReg.categoryName}</p>
+              <p><strong>Acesso Esportivo:</strong> Passaporte Geral (Todas as 16 Modalidades) • {validatingReg.categoryName}</p>
               <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 mt-2">
                 <strong>Comprovante / Declaração anexada:</strong>{' '}
                 {validatingReg.memberDocumentProofUrl || 'Declaração padrão de filiação à Atlética Cangaceira'}

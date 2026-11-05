@@ -30,7 +30,7 @@ export const CompetitionsPage: React.FC = () => {
         />
         <div className="relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-display font-bold uppercase tracking-wider text-brand-yellow mb-2">
-            <span>10 Modalidades Oficiais • INTRAMED IX</span>
+            <span>16 Modalidades Oficiais • INTRAMED IX</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-display font-extrabold text-white">
             Modalidades Esportivas

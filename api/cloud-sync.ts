@@ -63,9 +63,31 @@ function canClientWriteDocument(
     }
 
     // Mesário não pode alterar a senha da partida
+    // Concorrência de eventos da súmula: faz união determinística por ID de evento para evitar perda de lances simultâneos
+    let mergedEvents = incoming.events;
+    if (
+      collectionName === 'match_sheets' &&
+      Array.isArray(existing?.events) &&
+      Array.isArray(incoming.events)
+    ) {
+      const incomingIds = new Set(
+        (incoming.events as Array<{ id?: string }>).map((ev) => String(ev?.id || ''))
+      );
+      // Se for uma adição normal (tamanho maior ou igual), preserva eventos recentes que possam ter chegado em paralelo
+      if (incoming.events.length >= (existing.events as unknown[]).length) {
+        const extraFromExisting = (
+          existing.events as Array<{ id?: string; createdAtIso?: string }>
+        ).filter((ev) => ev?.id && !incomingIds.has(String(ev.id)));
+        if (extraFromExisting.length > 0) {
+          mergedEvents = [...incoming.events, ...extraFromExisting];
+        }
+      }
+    }
+
     const merged: Record<string, unknown> = {
       ...(existing || {}),
       ...incoming,
+      ...(mergedEvents !== undefined ? { events: mergedEvents } : {}),
       id: docId,
       revision: Math.max(prevRevision + 1, incomingRevision),
       lastUpdatedIso: nowIso,

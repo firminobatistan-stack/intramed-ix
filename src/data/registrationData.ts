@@ -107,6 +107,24 @@ export const INITIAL_TOURNAMENT_EVENT: TournamentEvent = {
   ],
 };
 
+export function resolveLotAuthorizedPrice(
+  lotId?: string,
+  memberStatus?: string,
+  requestedMemberDiscount?: boolean
+): number {
+  const lot =
+    INITIAL_TOURNAMENT_EVENT.lots.find((l) => l.id === lotId) ||
+    INITIAL_TOURNAMENT_EVENT.lots.find((l) => l.isActive) ||
+    INITIAL_TOURNAMENT_EVENT.lots[0];
+  if (memberStatus === 'aprovado') {
+    return lot.priceMember;
+  }
+  if (memberStatus === 'rejeitado' || memberStatus === 'nao_solicitado') {
+    return lot.priceNonMember;
+  }
+  return requestedMemberDiscount ? lot.priceMember : lot.priceNonMember;
+}
+
 export const INITIAL_DEMO_REGISTRATIONS: Registration[] = [
   {
     id: 'reg-cang-001',
@@ -122,7 +140,7 @@ export const INITIAL_DEMO_REGISTRATIONS: Registration[] = [
     teamId: 'colossal',
     teamName: 'Colossal',
     modalityId: 'todas',
-    modalityName: 'Passaporte Geral (Todas as 10 Modalidades)',
+    modalityName: 'Passaporte Geral (Todas as 16 Modalidades)',
     categoryName: 'Masculino',
     requestedMemberDiscount: true,
     memberStatus: 'pendente',
@@ -147,7 +165,7 @@ export const INITIAL_DEMO_REGISTRATIONS: Registration[] = [
     teamId: 'soberana',
     teamName: 'Soberana',
     modalityId: 'todas',
-    modalityName: 'Passaporte Geral (Todas as 10 Modalidades)',
+    modalityName: 'Passaporte Geral (Todas as 16 Modalidades)',
     categoryName: 'Feminino',
     requestedMemberDiscount: true,
     memberStatus: 'aprovado',
@@ -175,7 +193,7 @@ export const INITIAL_DEMO_REGISTRATIONS: Registration[] = [
     teamId: 'sanguinaria',
     teamName: 'Sanguinária',
     modalityId: 'todas',
-    modalityName: 'Passaporte Geral (Todas as 10 Modalidades)',
+    modalityName: 'Passaporte Geral (Todas as 16 Modalidades)',
     categoryName: 'Masculino',
     requestedMemberDiscount: false,
     memberStatus: 'nao_solicitado',
