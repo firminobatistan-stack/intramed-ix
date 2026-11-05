@@ -14,12 +14,19 @@ import {
   Trophy,
   User,
   UserCheck,
+  Edit3,
+  Instagram,
+  Check,
 } from 'lucide-react';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { ModalitySlug } from '../types/domain';
 import { SportIcon } from '../components/sports/SportIcon';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Modal } from '../components/ui/Modal';
+import { Input } from '../components/ui/Input';
+import { Button } from '../components/ui/Button';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
+import { useRegistrationStore } from '../context/RegistrationStoreContext';
 
 type AthleteTab = 'profile' | 'matches' | 'stats' | 'career';
 
@@ -49,18 +56,79 @@ export const AthleteDetailPage: React.FC = () => {
     canEditAthleteProfile,
     canOperateOfficialData,
     updateAthleteAvatar,
+    updateAthletePersonalInfo,
     currentUser,
   } = useCompetitionStore();
+  const { updateRegistrationSocialProfile } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
 
   const [activeTab, setActiveTab] = useState<AthleteTab>('profile');
   const [selectedModality, setSelectedModality] = useState<ModalitySlug>('futsal');
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const resolvedAthlete =
     (athleteId ? getAthleteById(athleteId) : undefined) ||
     visibleAthletes[0] ||
     null;
+
+  const [editName, setEditName] = useState('');
+  const [editJersey, setEditJersey] = useState('');
+  const [editPosition, setEditPosition] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editInstagram, setEditInstagram] = useState('');
+  const [editModalities, setEditModalities] = useState<ModalitySlug[]>([]);
+
+  const openEditProfileModal = () => {
+    if (!resolvedAthlete) return;
+    setEditName(resolvedAthlete.name || '');
+    setEditJersey(
+      resolvedAthlete.jerseyNumber !== null && resolvedAthlete.jerseyNumber !== undefined
+        ? String(resolvedAthlete.jerseyNumber)
+        : ''
+    );
+    setEditPosition(resolvedAthlete.position || '');
+    setEditBio(resolvedAthlete.bio || '');
+    setEditInstagram(resolvedAthlete.instagramHandle || '');
+    setEditModalities(
+      resolvedAthlete.modalityIds && resolvedAthlete.modalityIds.length > 0
+        ? resolvedAthlete.modalityIds
+        : OFFICIAL_MODALITIES.map((m) => m.id)
+    );
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveProfileEdits = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resolvedAthlete) return;
+    const parsedJersey = editJersey.trim() ? parseInt(editJersey.trim(), 10) : null;
+    const safeJersey = parsedJersey && !Number.isNaN(parsedJersey) ? parsedJersey : null;
+
+    const ok = updateAthletePersonalInfo(resolvedAthlete.id, {
+      name: editName.trim() || resolvedAthlete.name,
+      jerseyNumber: safeJersey,
+      position: editPosition.trim() || 'Atleta Oficial',
+      bio: editBio.trim() || null,
+      instagramHandle: editInstagram.trim() || null,
+      modalityIds: editModalities,
+    });
+
+    if (ok) {
+      if (resolvedAthlete.registrationId) {
+        await updateRegistrationSocialProfile(resolvedAthlete.registrationId, {
+          athleteName: editName.trim() || resolvedAthlete.name,
+          jerseyNumber: safeJersey,
+          position: editPosition.trim() || 'Atleta Oficial',
+          bio: editBio.trim() || null,
+          instagramHandle: editInstagram.trim() || null,
+          selectedModalities: editModalities,
+        });
+      }
+      setIsEditModalOpen(false);
+      setUploadFeedback('Perfil social atualizado em tempo real para todos!');
+      setTimeout(() => setUploadFeedback(null), 3500);
+    }
+  };
 
   const team = resolvedAthlete ? getTeamById(resolvedAthlete.teamId) : undefined;
   const teamPrimaryHex = team?.theme?.primaryHex || '#0B218A';
@@ -93,11 +161,43 @@ export const AthleteDetailPage: React.FC = () => {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        const ok = updateAthleteAvatar(resolvedAthlete.id, reader.result);
-        if (ok) {
-          setUploadFeedback('Foto oficial atualizada com sucesso!');
-          setTimeout(() => setUploadFeedback(null), 3500);
-        }
+        const img = new Image();
+        img.onload = async () => {
+          const canvas = document.createElement('canvas');
+          const maxSize = 260;
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxSize) {
+              height = Math.round((height * maxSize) / width);
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = Math.round((width * maxSize) / height);
+              height = maxSize;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          const compressed = ctx
+            ? (ctx.drawImage(img, 0, 0, width, height),
+              canvas.toDataURL('image/jpeg', 0.82))
+            : (reader.result as string);
+
+          const ok = updateAthleteAvatar(resolvedAthlete.id, compressed);
+          if (ok) {
+            if (resolvedAthlete.registrationId) {
+              await updateRegistrationSocialProfile(resolvedAthlete.registrationId, {
+                avatarUrl: compressed,
+              });
+            }
+            setUploadFeedback('Foto oficial atualizada com sucesso!');
+            setTimeout(() => setUploadFeedback(null), 3500);
+          }
+        };
+        img.src = reader.result;
       }
     };
     reader.readAsDataURL(file);
@@ -609,24 +709,53 @@ export const AthleteDetailPage: React.FC = () => {
               ) : (
                 <span>Período • Medicina UEMA</span>
               )}
+              {resolvedAthlete?.instagramHandle && (
+                <>
+                  <span>•</span>
+                  <span className="inline-flex items-center gap-1 text-brand-yellow font-bold">
+                    <Instagram className="w-3.5 h-3.5" />
+                    <span>
+                      {resolvedAthlete.instagramHandle.startsWith('@')
+                        ? resolvedAthlete.instagramHandle
+                        : `@${resolvedAthlete.instagramHandle}`}
+                    </span>
+                  </span>
+                </>
+              )}
             </div>
 
-            {/* Ações rápidas de foto / vínculo do atleta */}
+            {resolvedAthlete?.bio && (
+              <p className="mt-2 max-w-md mx-auto text-xs text-white/90 italic bg-black/20 px-3.5 py-1.5 rounded-2xl border border-white/15">
+                &ldquo;{resolvedAthlete.bio}&rdquo;
+              </p>
+            )}
+
+            {/* Ações rápidas de foto / edição / vínculo do atleta */}
             {resolvedAthlete && (
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                 {hasEditPermission ? (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 border border-white/20 text-[11px] font-display font-bold text-brand-yellow transition-colors"
-                  >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>
-                      {resolvedAthlete.avatarUrl
-                        ? 'Trocar Foto de Perfil'
-                        : 'Enviar Foto de Perfil'}
-                    </span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 border border-white/20 text-[11px] font-display font-bold text-brand-yellow transition-colors"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>
+                        {resolvedAthlete.avatarUrl
+                          ? 'Trocar Foto'
+                          : 'Enviar Foto'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openEditProfileModal}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-yellow text-[#0B218A] hover:bg-amber-300 text-[11px] font-display font-extrabold shadow-xs transition-colors"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Editar Perfil Social</span>
+                    </button>
+                  </>
                 ) : (
                   !currentUser && (
                     <button
@@ -1021,6 +1150,109 @@ export const AthleteDetailPage: React.FC = () => {
           )}
         </section>
       )}
+
+      {/* MODAL DE EDIÇÃO DO PERFIL SOCIAL DO ATLETA (Sincronizado em Tempo Real) */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Editar Meu Perfil Social"
+        description="Suas alterações ficam visíveis em tempo real para toda a Comunidade IntraMed."
+      >
+        <form onSubmit={handleSaveProfileEdits} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Nome de Exibição"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Seu nome"
+              required
+            />
+            <Input
+              label="Nº da Camisa"
+              type="number"
+              value={editJersey}
+              onChange={(e) => setEditJersey(e.target.value)}
+              placeholder="Ex: 10"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Posição / Função"
+              value={editPosition}
+              onChange={(e) => setEditPosition(e.target.value)}
+              placeholder="Ex: Ala / Fixo / Goleiro"
+            />
+            <Input
+              label="@Instagram"
+              value={editInstagram}
+              onChange={(e) => setEditInstagram(e.target.value)}
+              placeholder="@seu.insta"
+            />
+          </div>
+
+          <Input
+            label="Bio / Frase Esportiva"
+            value={editBio}
+            onChange={(e) => setEditBio(e.target.value)}
+            placeholder="Ex: Rumo ao título!"
+          />
+
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-700">
+              Modalidades que você disputa ({editModalities.length})
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {OFFICIAL_MODALITIES.map((mod) => {
+                const isSelected = editModalities.includes(mod.id);
+                return (
+                  <button
+                    key={mod.id}
+                    type="button"
+                    onClick={() =>
+                      setEditModalities((prev) =>
+                        prev.includes(mod.id)
+                          ? prev.length > 1
+                            ? prev.filter((id) => id !== mod.id)
+                            : prev
+                          : [...prev, mod.id]
+                      )
+                    }
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-[11px] font-bold transition-all ${
+                      isSelected
+                        ? 'bg-[#0B218A] text-white border-[#0B218A]'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-[#0B218A]/40'
+                    }`}
+                  >
+                    <SportIcon
+                      iconKey={mod.iconKey}
+                      className={`w-3.5 h-3.5 ${
+                        isSelected ? 'text-brand-yellow' : 'text-[#0B218A]'
+                      }`}
+                    />
+                    <span>{mod.name}</span>
+                    {isSelected && <Check className="w-3 h-3 text-brand-yellow" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" size="sm">
+              Salvar e Publicar na Comunidade
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

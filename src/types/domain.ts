@@ -111,8 +111,16 @@ export interface Athlete {
   avatarUrl?: string | null;
   jerseyNumber?: number | null;
   position?: string | null;
+  bio?: string | null;
+  instagramHandle?: string | null;
+  email?: string | null;
+  turma?: TurmaMedicina | null;
+  turmaLabel?: string | null;
   teamId: string;
   modalityIds: ModalitySlug[];
+  registrationId?: string | null;
+  paymentStatus?: RegistrationPaymentStatus;
+  memberStatus?: MemberStatus;
   isTestOnly?: boolean;
 }
 
@@ -589,6 +597,15 @@ export interface Registration {
   modalityId?: ModalitySlug | 'todas';
   modalityName?: string; // 'Passaporte Geral (Todas as 10 Modalidades)'
   categoryName: string; // 'Masculino' | 'Feminino' | 'Geral'
+  selectedModalities?: ModalitySlug[];
+
+  // Perfil Social do Atleta Vinculado
+  linkedAthleteId?: string | null;
+  avatarUrl?: string | null;
+  jerseyNumber?: number | null;
+  position?: string | null;
+  bio?: string | null;
+  instagramHandle?: string | null;
   
   // Status e Validação de Sócio
   requestedMemberDiscount: boolean;

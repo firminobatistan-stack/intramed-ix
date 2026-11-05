@@ -8,15 +8,18 @@ import {
   EyeOff,
   ShieldAlert,
   ShieldCheck,
-  User,
   KeyRound,
   LogOut,
+  Search,
+  UserPlus,
 } from 'lucide-react';
 import { BrandMark } from '../components/layout/BrandMark';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
+import { useRegistrationStore } from '../context/RegistrationStoreContext';
+import { OFFICIAL_MODALITIES } from '../data/officialData';
 
 type LoginModeTab = 'admin' | 'athlete';
 
@@ -25,9 +28,8 @@ type LoginModeTab = 'admin' | 'athlete';
  * - Separa claramente o acesso em 2 perfis:
  *   1. Comissão Organizadora / Mesário / Admin (Acesso restrito com senha para operar Súmula ao Vivo,
  *      controlar cronômetro, lançar gols/pontos, cadastrar atletas/jogos e usar o Modo de Teste);
- *   2. Atleta Inscrito (Acesso vinculado à ficha oficial do atleta para atualizar sua própria foto de perfil).
- * - Visitantes sem login continuam podendo acompanhar o aplicativo inteiro (placares ao vivo, tabelas,
- *   equipes e estatísticas) em modo somente leitura, sem risco de alterar placares ou cronômetros.
+ *   2. Atleta Inscrito (Acesso vinculado à sua inscrição/ficha de atleta via E-mail, CPF/Matrícula ou Lista
+ *      para acessar seu passaporte e editar seu perfil social de qualquer dispositivo).
  */
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -38,7 +40,10 @@ export const LoginPage: React.FC = () => {
     visibleAthletes,
     visibleTeams,
     getTeamById,
+    upsertParticipantAthlete,
   } = useCompetitionStore();
+
+  const { registrations } = useRegistrationStore();
 
   const returnTo =
     (location.state as { returnTo?: string } | null)?.returnTo || null;
@@ -46,13 +51,14 @@ export const LoginPage: React.FC = () => {
   const [loginMode, setLoginMode] = useState<LoginModeTab>(
     returnTo?.includes('/admin') ? 'admin' : 'athlete'
   );
-  const [identifier, setIdentifier] = useState('admin@intramed.uema.br');
+  const [identifier] = useState('admin@intramed.uema.br');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  const [athleteQuery, setAthleteQuery] = useState('');
   const [selectedAthleteId, setSelectedAthleteId] = useState<string>(
     visibleAthletes[0]?.id || ''
   );
-  const [athletePin, setAthletePin] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState('');
@@ -95,11 +101,81 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
+    const q = athleteQuery.trim().toLowerCase();
+
+    // 1. Se o atleta digitou E-mail, CPF/Matrícula ou Nome, busca primeiro nas inscrições e atletas
+    if (q) {
+      const cleanDocQuery = q.replace(/\D/g, '');
+      const matchedReg = registrations.find(
+        (r) =>
+          r.athleteEmail.trim().toLowerCase() === q ||
+          (cleanDocQuery.length >= 4 &&
+            r.athleteDocument.replace(/\D/g, '') === cleanDocQuery) ||
+          r.athleteName.trim().toLowerCase() === q
+      );
+
+      if (matchedReg) {
+        const ath = upsertParticipantAthlete({
+          id: matchedReg.linkedAthleteId || `ath-${matchedReg.id}`,
+          name: matchedReg.athleteName,
+          email: matchedReg.athleteEmail,
+          teamId: matchedReg.teamId,
+          turma: matchedReg.turma,
+          turmaLabel: matchedReg.turmaLabel,
+          jerseyNumber: matchedReg.jerseyNumber ?? null,
+          position: matchedReg.position || 'Atleta Inscrito',
+          bio: matchedReg.bio ?? null,
+          instagramHandle: matchedReg.instagramHandle ?? null,
+          avatarUrl: matchedReg.avatarUrl ?? null,
+          modalityIds:
+            matchedReg.selectedModalities && matchedReg.selectedModalities.length > 0
+              ? matchedReg.selectedModalities
+              : OFFICIAL_MODALITIES.map((m) => m.id),
+          registrationId: matchedReg.id,
+          paymentStatus: matchedReg.paymentStatus,
+          memberStatus: matchedReg.memberStatus,
+          autoLogin: true,
+        });
+        navigate(returnTo || `/atleta/${ath.id}`, { replace: true });
+        return;
+      }
+
+      const matchedAth = visibleAthletes.find(
+        (a) =>
+          (a.email && a.email.trim().toLowerCase() === q) ||
+          a.name.trim().toLowerCase() === q ||
+          a.name.trim().toLowerCase().includes(q)
+      );
+
+      if (matchedAth) {
+        const team = getTeamById(matchedAth.teamId);
+        setCurrentUser({
+          id: `usr-${matchedAth.id}`,
+          name: matchedAth.name,
+          email: matchedAth.email || `${matchedAth.id}@medicina.uema.br`,
+          avatarUrl: matchedAth.avatarUrl,
+          teamId: matchedAth.teamId,
+          teamName: team?.name || matchedAth.turmaLabel || 'Equipe Medicina UEMA',
+          modalityIds: matchedAth.modalityIds,
+          role: 'atleta',
+          linkedAthleteId: matchedAth.id,
+        });
+        navigate(returnTo || `/atleta/${matchedAth.id}`, { replace: true });
+        return;
+      }
+
+      setErrorMessage(
+        'Nenhuma inscrição ou atleta encontrado com este E-mail / CPF. Verifique os dados ou faça sua inscrição agora!'
+      );
+      return;
+    }
+
+    // 2. Caso contrário, utiliza o atleta selecionado na lista
     const targetId = selectedAthleteId || visibleAthletes[0]?.id;
     const ath = visibleAthletes.find((a) => a.id === targetId);
     if (!ath) {
       setErrorMessage(
-        'Nenhum atleta selecionado ou cadastrado ainda. A organização deve inscrever os atletas no painel administrativo.'
+        'Nenhum atleta selecionado. Digite seu E-mail de inscrição ou cadastre-se na página de Inscrições.'
       );
       return;
     }
@@ -108,16 +184,16 @@ export const LoginPage: React.FC = () => {
     setCurrentUser({
       id: `usr-${ath.id}`,
       name: ath.name,
-      email: `${ath.id}@medicina.uema.br`,
+      email: ath.email || `${ath.id}@medicina.uema.br`,
       avatarUrl: ath.avatarUrl,
       teamId: ath.teamId,
-      teamName: team?.name || 'Equipe Medicina UEMA',
+      teamName: team?.name || ath.turmaLabel || 'Equipe Medicina UEMA',
       modalityIds: ath.modalityIds,
       role: 'atleta',
       linkedAthleteId: ath.id,
     });
 
-    navigate(`/atleta/${ath.id}`, { replace: true });
+    navigate(returnTo || `/atleta/${ath.id}`, { replace: true });
   };
 
   const handleRecoverySubmit = (e: React.FormEvent) => {
@@ -165,7 +241,7 @@ export const LoginPage: React.FC = () => {
                 aria-hidden="true"
               />
               <p className="text-[11px] font-bold uppercase tracking-wider text-brand-text-secondary">
-                Controle de Acesso Oficial • A.A.A. Cangaceira
+                Conta &amp; Comunidade Oficial • A.A.A. Cangaceira
               </p>
             </div>
           </div>
@@ -270,47 +346,61 @@ export const LoginPage: React.FC = () => {
                 <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-xs text-amber-950 space-y-1">
                   <p className="font-display font-extrabold flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Perfil Individual do Atleta</span>
+                    <span>Conta do Atleta Inscrito</span>
                   </p>
                   <p className="text-[11px] text-amber-900/80 leading-relaxed">
-                    Permite atualizar a <strong>sua própria foto de perfil</strong>. Atletas não têm acesso para alterar súmulas, cronômetros ou estatísticas oficiais.
+                    Entre com seu <strong>E-mail ou CPF</strong> de inscrição (ou selecione seu nome na lista) para editar sua foto, camisa, bio, modalidades e ver seu passaporte.
                   </p>
+                </div>
+
+                <Input
+                  label="Entrar por E-mail ou CPF da Inscrição"
+                  type="text"
+                  value={athleteQuery}
+                  onChange={(e) => {
+                    setAthleteQuery(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  placeholder="Digite seu e-mail ou CPF cadastrado..."
+                  leftIcon={<Search className="w-4 h-4 text-slate-400" />}
+                />
+
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-slate-200"></div>
+                  <span className="flex-shrink mx-3 text-[10px] font-bold uppercase text-slate-400">
+                    ou escolha na comunidade ({visibleAthletes.length})
+                  </span>
+                  <div className="flex-grow border-t border-slate-200"></div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-brand-text-secondary mb-1.5">
-                    Selecione seu Nome / Inscrição ({visibleAthletes.length})
+                    Atletas Inscritos na Comunidade ({visibleAthletes.length})
                   </label>
                   <select
                     value={selectedAthleteId || visibleAthletes[0]?.id || ''}
-                    onChange={(e) => setSelectedAthleteId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedAthleteId(e.target.value);
+                      setAthleteQuery('');
+                    }}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-brand-surface-border text-sm bg-white focus:outline-none focus:border-brand-blue"
                   >
                     {visibleAthletes.length === 0 ? (
                       <option value="">
-                        Nenhum atleta inscrito ainda pela comissão
+                        Nenhum atleta inscrito ainda
                       </option>
                     ) : (
                       visibleAthletes.map((ath) => {
                         const t = visibleTeams.find((tm) => tm.id === ath.teamId);
                         return (
                           <option key={ath.id} value={ath.id}>
-                            #{ath.jerseyNumber || '—'} {ath.name} ({t?.name || 'Equipe'})
+                            #{ath.jerseyNumber || '—'} {ath.name} ({t?.name || ath.turmaLabel || 'Equipe'})
                           </option>
                         );
                       })
                     )}
                   </select>
                 </div>
-
-                <Input
-                  label="Código / Matrícula do Atleta (Opcional)"
-                  type="text"
-                  value={athletePin}
-                  onChange={(e) => setAthletePin(e.target.value)}
-                  placeholder="Ex: UEMA-2026"
-                  leftIcon={<KeyRound className="w-4 h-4" />}
-                />
 
                 {errorMessage && (
                   <div
@@ -322,15 +412,25 @@ export const LoginPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="pt-1">
+                <div className="pt-1 space-y-2.5">
                   <Button
                     type="submit"
                     variant="primary"
                     size="lg"
                     fullWidth
-                    disabled={visibleAthletes.length === 0}
                   >
-                    Acessar Meu Perfil de Atleta
+                    Acessar Meu Perfil &amp; Conta
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="md"
+                    fullWidth
+                    leftIcon={<UserPlus className="w-4 h-4 text-brand-blue" />}
+                    onClick={() => navigate('/inscricao')}
+                  >
+                    Ainda não tenho inscrição (Inscrever-se)
                   </Button>
                 </div>
               </form>

@@ -94,6 +94,14 @@ export const ProfilePage: React.FC = () => {
         </div>
 
         <div className="relative z-10 flex flex-wrap items-center gap-2 self-start sm:self-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/inscricao?tab=comunidade')}
+            className="border-white/30 text-white hover:bg-white/15"
+          >
+            Comunidade IntraMed
+          </Button>
           {currentUser?.linkedAthleteId && (
             <Button
               variant="accent"
@@ -101,7 +109,7 @@ export const ProfilePage: React.FC = () => {
               leftIcon={<User className="w-4 h-4" />}
               onClick={() => navigate(`/atleta/${currentUser.linkedAthleteId}`)}
             >
-              Ver Meu Perfil de Atleta
+              Ver / Editar Meu Perfil de Atleta
             </Button>
           )}
           {!currentUser && (
@@ -111,7 +119,7 @@ export const ProfilePage: React.FC = () => {
               leftIcon={<LogIn className="w-4 h-4" />}
               onClick={() => navigate('/login')}
             >
-              Tela de Login
+              Entrar na Conta
             </Button>
           )}
         </div>

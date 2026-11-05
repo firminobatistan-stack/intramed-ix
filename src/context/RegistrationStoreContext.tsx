@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from 'react';
 import {
   TournamentEvent,
@@ -19,6 +20,7 @@ import {
   INITIAL_DEMO_REGISTRATIONS,
   INITIAL_FINANCIAL_AUDIT_LOGS,
 } from '../data/registrationData';
+import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { useCompetitionStore } from './CompetitionStoreContext';
 import { db } from '../lib/firebase';
 import { collection, doc, setDoc, updateDoc, onSnapshot } from 'firebase/firestore';
@@ -27,7 +29,7 @@ const REGISTRATIONS_STORAGE_KEY = 'intramed_registrations_store_v1';
 const MY_REGISTRATIONS_KEY = 'intramed_my_registered_ids_v1';
 const SYNC_CHANNEL_NAME = 'intramed_registration_channel';
 
-interface CreateRegistrationPayload {
+export interface CreateRegistrationPayload {
   eventId: string;
   lotId: string;
   athleteName: string;
@@ -40,9 +42,15 @@ interface CreateRegistrationPayload {
   teamName: string;
   modalityId?: ModalitySlug | 'todas';
   modalityName?: string;
+  selectedModalities?: ModalitySlug[];
   categoryName: string;
   requestedMemberDiscount: boolean;
   memberDocumentProofUrl?: string;
+  avatarUrl?: string | null;
+  jerseyNumber?: number | null;
+  position?: string | null;
+  bio?: string | null;
+  instagramHandle?: string | null;
 }
 
 interface RegistrationContextValue {
@@ -53,6 +61,18 @@ interface RegistrationContextValue {
   auditLogs: FinancialAuditLog[];
   activeLot: RegistrationLot | undefined;
   createRegistration: (payload: CreateRegistrationPayload) => Promise<Registration>;
+  updateRegistrationSocialProfile: (
+    registrationId: string,
+    data: {
+      athleteName?: string;
+      avatarUrl?: string | null;
+      jerseyNumber?: number | null;
+      position?: string | null;
+      bio?: string | null;
+      instagramHandle?: string | null;
+      selectedModalities?: ModalitySlug[];
+    }
+  ) => Promise<void>;
   validateMemberDiscount: (
     registrationId: string,
     approved: boolean,
@@ -70,10 +90,42 @@ interface RegistrationContextValue {
 
 const RegistrationContext = createContext<RegistrationContextValue | null>(null);
 
+const pushRegistrationToCloud = (reg: Registration) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const cleanReg = JSON.parse(JSON.stringify(reg));
+    fetch('/api/cloud-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        collectionName: 'registrations',
+        docId: reg.id,
+        data: cleanReg,
+      }),
+    }).catch(() => {
+      fetch('https://intramedix.vercel.app/api/cloud-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          collectionName: 'registrations',
+          docId: reg.id,
+          data: cleanReg,
+        }),
+      }).catch(() => {});
+    });
+  } catch {
+    // Silencioso
+  }
+};
+
 export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { currentUser, canOperateOfficialData } = useCompetitionStore();
+  const {
+    currentUser,
+    canOperateOfficialData,
+    upsertParticipantAthlete,
+  } = useCompetitionStore();
 
   const [tournamentEvent] = useState<TournamentEvent>(INITIAL_TOURNAMENT_EVENT);
 
@@ -116,6 +168,8 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     return INITIAL_FINANCIAL_AUDIT_LOGS;
   });
 
+  const syncedRegSignaturesRef = useRef<Map<string, string>>(new Map());
+
   // Salva no LocalStorage e sincroniza com abas abertas
   useEffect(() => {
     try {
@@ -127,6 +181,41 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       // Quota exceeded
     }
   }, [registrations, auditLogs]);
+
+  // Garante que toda inscrição existente na plataforma tenha seu perfil social de atleta publicado
+  // para que todos os usuários vejam os inscritos na rede social e nas equipes
+  useEffect(() => {
+    if (!registrations || registrations.length === 0) return;
+
+    registrations.forEach((reg) => {
+      if (reg.paymentStatus === 'cancelado') return;
+      const sig = `${reg.updatedAtIso}_${reg.paymentStatus}_${reg.memberStatus}_${reg.avatarUrl || ''}_${reg.jerseyNumber || ''}_${reg.position || ''}`;
+      if (syncedRegSignaturesRef.current.get(reg.id) === sig) return;
+      syncedRegSignaturesRef.current.set(reg.id, sig);
+
+      upsertParticipantAthlete({
+        id: reg.linkedAthleteId || `ath-${reg.id}`,
+        name: reg.athleteName,
+        email: reg.athleteEmail,
+        teamId: reg.teamId,
+        turma: reg.turma,
+        turmaLabel: reg.turmaLabel,
+        jerseyNumber: reg.jerseyNumber ?? null,
+        position: reg.position || 'Atleta Inscrito',
+        bio: reg.bio ?? null,
+        instagramHandle: reg.instagramHandle ?? null,
+        avatarUrl: reg.avatarUrl ?? null,
+        modalityIds:
+          reg.selectedModalities && reg.selectedModalities.length > 0
+            ? reg.selectedModalities
+            : OFFICIAL_MODALITIES.map((m) => m.id),
+        registrationId: reg.id,
+        paymentStatus: reg.paymentStatus,
+        memberStatus: reg.memberStatus,
+        autoLogin: false,
+      });
+    });
+  }, [registrations, upsertParticipantAthlete]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
@@ -160,12 +249,21 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
             snapshot.forEach((snap) => {
               firestoreList.push(snap.data() as Registration);
             });
-            firestoreList.sort(
-              (a, b) =>
-                new Date(b.createdAtIso).getTime() -
-                new Date(a.createdAtIso).getTime()
-            );
-            setRegistrations(firestoreList);
+            setRegistrations((prev) => {
+              const byId = new Map<string, Registration>();
+              for (const r of prev) byId.set(r.id, r);
+              for (const fr of firestoreList) {
+                const ex = byId.get(fr.id);
+                byId.set(fr.id, ex ? { ...ex, ...fr } : fr);
+              }
+              const merged = Array.from(byId.values());
+              merged.sort(
+                (a, b) =>
+                  new Date(b.createdAtIso).getTime() -
+                  new Date(a.createdAtIso).getTime()
+              );
+              return merged;
+            });
           }
         },
         (error) => {
@@ -176,6 +274,59 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (err) {
       console.warn('Failed to attach Firestore listener:', err);
     }
+  }, []);
+
+  // Sincronização em tempo real via API Cloud Sync (/api/cloud-sync) entre diferentes dispositivos
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const syncWithCloudServer = async () => {
+      try {
+        const res = await fetch('/api/cloud-sync').catch(() =>
+          fetch('https://intramedix.vercel.app/api/cloud-sync')
+        );
+        if (!res || !res.ok) return;
+        const payload = await res.json();
+        if (!payload || !Array.isArray(payload.registrations)) return;
+
+        if (payload.registrations.length > 0) {
+          setRegistrations((prev) => {
+            const byId = new Map<string, Registration>();
+            for (const r of prev) byId.set(r.id, r);
+            let hasDiff = false;
+            for (const cr of payload.registrations as Registration[]) {
+              if (!cr || !cr.id) continue;
+              const ex = byId.get(cr.id);
+              if (
+                !ex ||
+                ex.updatedAtIso !== cr.updatedAtIso ||
+                ex.paymentStatus !== cr.paymentStatus ||
+                ex.memberStatus !== cr.memberStatus ||
+                ex.avatarUrl !== cr.avatarUrl ||
+                ex.jerseyNumber !== cr.jerseyNumber
+              ) {
+                byId.set(cr.id, ex ? { ...ex, ...cr } : cr);
+                hasDiff = true;
+              }
+            }
+            if (!hasDiff) return prev;
+            const merged = Array.from(byId.values());
+            merged.sort(
+              (a, b) =>
+                new Date(b.createdAtIso).getTime() -
+                new Date(a.createdAtIso).getTime()
+            );
+            return merged;
+          });
+        }
+      } catch {
+        // Silencioso
+      }
+    };
+
+    syncWithCloudServer();
+    const interval = setInterval(syncWithCloudServer, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const broadcastState = (regs: Registration[], logs: FinancialAuditLog[]) => {
@@ -199,7 +350,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   }, [tournamentEvent]);
 
-  // 1. CRIAR INSCRIÇÃO (Backend Rules Protection)
+  // 1. CRIAR INSCRIÇÃO + CRIAR PERFIL SOCIAL DO ATLETA + LOGIN AUTOMÁTICO
   const createRegistration = useCallback(
     async (payload: CreateRegistrationPayload): Promise<Registration> => {
       const lot =
@@ -209,18 +360,24 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         throw new Error('Nenhum lote de inscrição ativo encontrado para o evento.');
       }
 
-      // Regra de Ouro: A solicitação de sócio NUNCA concede o desconto diretamente.
-      // Inscrição fica aguardando validação manual e o valor sócio fica travado após aprovação.
       const isSocioRequested = payload.requestedMemberDiscount;
       const initialPrice = isSocioRequested
         ? lot.priceMember
         : lot.priceNonMember;
 
+      const regId = `reg-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+      const linkedAthleteId = `ath-${regId}`;
+      const chosenModalities =
+        payload.selectedModalities && payload.selectedModalities.length > 0
+          ? payload.selectedModalities
+          : OFFICIAL_MODALITIES.map((m) => m.id);
+
       const newRegistration: Registration = {
-        id: `reg-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`,
+        id: regId,
         eventId: payload.eventId,
         lotId: lot.id,
-        userId: currentUser?.id || `user-anon-${Date.now()}`,
+        userId: `usr-${linkedAthleteId}`,
+        linkedAthleteId,
         athleteName: payload.athleteName.trim(),
         athleteEmail: payload.athleteEmail.trim(),
         athletePhone: payload.athletePhone.trim(),
@@ -231,6 +388,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         teamName: payload.teamName,
         modalityId: payload.modalityId || 'todas',
         modalityName: payload.modalityName || 'Passaporte Geral (Todas as 10 Modalidades)',
+        selectedModalities: chosenModalities,
         categoryName: payload.categoryName,
         requestedMemberDiscount: isSocioRequested,
         memberStatus: isSocioRequested ? 'pendente' : 'nao_solicitado',
@@ -242,9 +400,34 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           ? 'aguardando_validacao'
           : 'pendente',
         authorizedPrice: initialPrice,
+        avatarUrl: payload.avatarUrl || null,
+        jerseyNumber: payload.jerseyNumber ?? null,
+        position: payload.position?.trim() || 'Atleta Inscrito',
+        bio: payload.bio?.trim() || null,
+        instagramHandle: payload.instagramHandle?.trim() || null,
         createdAtIso: new Date().toISOString(),
         updatedAtIso: new Date().toISOString(),
       };
+
+      // Cria/atualiza o perfil público do atleta na comunidade e autentica o usuário na hora
+      upsertParticipantAthlete({
+        id: linkedAthleteId,
+        name: newRegistration.athleteName,
+        email: newRegistration.athleteEmail,
+        teamId: newRegistration.teamId,
+        turma: newRegistration.turma,
+        turmaLabel: newRegistration.turmaLabel,
+        jerseyNumber: newRegistration.jerseyNumber,
+        position: newRegistration.position,
+        bio: newRegistration.bio,
+        instagramHandle: newRegistration.instagramHandle,
+        avatarUrl: newRegistration.avatarUrl,
+        modalityIds: chosenModalities,
+        registrationId: newRegistration.id,
+        paymentStatus: newRegistration.paymentStatus,
+        memberStatus: newRegistration.memberStatus,
+        autoLogin: true,
+      });
 
       const auditEntry: FinancialAuditLog = {
         id: `audit-${Date.now().toString(36)}`,
@@ -271,9 +454,11 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         return next;
       });
 
-      // Persistência em nuvem no Cloud Firestore
+      // Persistência em nuvem (Cloud Firestore + Servidor Cloud Sync)
+      pushRegistrationToCloud(newRegistration);
       try {
-        await setDoc(doc(db, 'registrations', newRegistration.id), newRegistration);
+        const cleanReg = JSON.parse(JSON.stringify(newRegistration));
+        await setDoc(doc(db, 'registrations', newRegistration.id), cleanReg);
       } catch (err) {
         console.warn('Firestore setDoc registration notice:', err);
       }
@@ -281,7 +466,9 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       // Persistência local dos IDs inscritos neste dispositivo
       try {
         setMyRegisteredIds((prevIds) => {
-          const nextIds = prevIds.includes(newRegistration.id) ? prevIds : [...prevIds, newRegistration.id];
+          const nextIds = prevIds.includes(newRegistration.id)
+            ? prevIds
+            : [...prevIds, newRegistration.id];
           localStorage.setItem(MY_REGISTRATIONS_KEY, JSON.stringify(nextIds));
           return nextIds;
         });
@@ -291,7 +478,66 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
 
       return newRegistration;
     },
-    [tournamentEvent, activeLot, currentUser]
+    [tournamentEvent, activeLot, upsertParticipantAthlete]
+  );
+
+  // ATUALIZAR PERFIL SOCIAL VINCULADO À INSCRIÇÃO
+  const updateRegistrationSocialProfile = useCallback(
+    async (
+      registrationId: string,
+      data: {
+        athleteName?: string;
+        avatarUrl?: string | null;
+        jerseyNumber?: number | null;
+        position?: string | null;
+        bio?: string | null;
+        instagramHandle?: string | null;
+        selectedModalities?: ModalitySlug[];
+      }
+    ): Promise<void> => {
+      setRegistrations((prev) => {
+        const target = prev.find((r) => r.id === registrationId);
+        if (!target) return prev;
+
+        const updated: Registration = {
+          ...target,
+          athleteName:
+            data.athleteName !== undefined && data.athleteName.trim()
+              ? data.athleteName.trim()
+              : target.athleteName,
+          avatarUrl: data.avatarUrl !== undefined ? data.avatarUrl : target.avatarUrl,
+          jerseyNumber:
+            data.jerseyNumber !== undefined ? data.jerseyNumber : target.jerseyNumber,
+          position: data.position !== undefined ? data.position : target.position,
+          bio: data.bio !== undefined ? data.bio : target.bio,
+          instagramHandle:
+            data.instagramHandle !== undefined
+              ? data.instagramHandle
+              : target.instagramHandle,
+          selectedModalities:
+            data.selectedModalities !== undefined
+              ? data.selectedModalities
+              : target.selectedModalities,
+          updatedAtIso: new Date().toISOString(),
+        };
+
+        const nextRegs = prev.map((r) => (r.id === registrationId ? updated : r));
+        broadcastState(nextRegs, auditLogs);
+        pushRegistrationToCloud(updated);
+
+        try {
+          const cleanReg = JSON.parse(JSON.stringify(updated));
+          setDoc(doc(db, 'registrations', registrationId), cleanReg, { merge: true }).catch(
+            () => {}
+          );
+        } catch {
+          // Silencioso
+        }
+
+        return nextRegs;
+      });
+    },
+    [auditLogs]
   );
 
   // 2. VALIDAÇÃO MANUAL DE SÓCIO POR ADMINISTRADOR
@@ -352,7 +598,8 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           return nextLogs;
         });
 
-        // Sincroniza validação de sócio no Cloud Firestore
+        pushRegistrationToCloud(updated);
+
         try {
           updateDoc(doc(db, 'registrations', registrationId), {
             memberStatus: updated.memberStatus,
@@ -421,7 +668,8 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           return nextLogs;
         });
 
-        // Sincroniza pagamento confirmado no Cloud Firestore
+        pushRegistrationToCloud(updated);
+
         try {
           updateDoc(doc(db, 'registrations', registrationId), {
             paymentStatus: updated.paymentStatus,
@@ -473,7 +721,8 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           return nextLogs;
         });
 
-        // Sincroniza cancelamento no Cloud Firestore
+        pushRegistrationToCloud(updated);
+
         try {
           updateDoc(doc(db, 'registrations', registrationId), {
             paymentStatus: updated.paymentStatus,
@@ -514,6 +763,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     return registrations.filter((r) => {
       if (myRegisteredIds.includes(r.id)) return true;
       if (currentUser?.email && r.athleteEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
+      if (currentUser?.linkedAthleteId && r.linkedAthleteId === currentUser.linkedAthleteId) return true;
       if (currentUser?.id && r.userId === currentUser.id) return true;
       return false;
     });
@@ -530,6 +780,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       auditLogs,
       activeLot,
       createRegistration,
+      updateRegistrationSocialProfile,
       validateMemberDiscount,
       simulatePaymentConfirmation,
       cancelRegistration,
@@ -544,6 +795,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       auditLogs,
       activeLot,
       createRegistration,
+      updateRegistrationSocialProfile,
       validateMemberDiscount,
       simulatePaymentConfirmation,
       cancelRegistration,

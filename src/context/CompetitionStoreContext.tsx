@@ -21,7 +21,12 @@ import {
   Team,
   TournamentPhaseType,
   UserProfile,
+  TurmaMedicina,
+  RegistrationPaymentStatus,
+  MemberStatus,
 } from '../types/domain';
+import { db } from '../lib/firebase';
+import { collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
 import {
   OFFICIAL_MODALITIES,
   INITIAL_MATCHES,
@@ -186,8 +191,34 @@ interface CompetitionStoreContextValue {
   updateTeamCrest: (teamId: string, crestDataUrl: string) => void;
   updateAthletePersonalInfo: (
     athleteId: string,
-    data: { position?: string; jerseyNumber?: number | null }
+    data: {
+      name?: string;
+      position?: string;
+      jerseyNumber?: number | null;
+      bio?: string | null;
+      instagramHandle?: string | null;
+      modalityIds?: ModalitySlug[];
+      avatarUrl?: string | null;
+    }
   ) => boolean;
+  upsertParticipantAthlete: (payload: {
+    id?: string;
+    name: string;
+    email?: string | null;
+    teamId: string;
+    turma?: TurmaMedicina | null;
+    turmaLabel?: string | null;
+    jerseyNumber?: number | null;
+    position?: string | null;
+    bio?: string | null;
+    instagramHandle?: string | null;
+    avatarUrl?: string | null;
+    modalityIds?: ModalitySlug[];
+    registrationId?: string | null;
+    paymentStatus?: RegistrationPaymentStatus;
+    memberStatus?: MemberStatus;
+    autoLogin?: boolean;
+  }) => Athlete;
   registerTeam: (payload: {
     name: string;
     shortName?: string;
@@ -675,6 +706,282 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     }
   }, [state]);
 
+  // Sincronização Global em Tempo Real com Cloud Firestore (Atletas, Equipes, Partidas e Súmulas)
+  useEffect(() => {
+    const unsubs: Array<() => void> = [];
+
+    try {
+      // 1. Atletas Oficiais / Comunidade Social
+      const unsubAthletes = onSnapshot(
+        collection(db, 'athletes'),
+        (snap) => {
+          if (snap.empty) return;
+          const remoteAthletes = snap.docs.map((d) => ({
+            ...(d.data() as Athlete),
+            id: d.id,
+          }));
+          setState((prev) => {
+            const byId = new Map<string, Athlete>();
+            for (const a of prev.officialAthletes) byId.set(a.id, a);
+            for (const r of remoteAthletes) {
+              if (!r.isTestOnly) {
+                const existing = byId.get(r.id);
+                byId.set(r.id, existing ? { ...existing, ...r } : r);
+              }
+            }
+            const nextAthletes = Array.from(byId.values());
+            let nextUser = prev.currentUser;
+            if (nextUser?.linkedAthleteId) {
+              const linked = byId.get(nextUser.linkedAthleteId);
+              if (linked) {
+                nextUser = {
+                  ...nextUser,
+                  name: linked.name || nextUser.name,
+                  avatarUrl: linked.avatarUrl ?? nextUser.avatarUrl,
+                  modalityIds: linked.modalityIds || nextUser.modalityIds,
+                };
+              }
+            }
+            isApplyingRemoteUpdate.current = true;
+            return {
+              ...prev,
+              officialAthletes: nextAthletes,
+              currentUser: nextUser,
+            };
+          });
+        },
+        () => {}
+      );
+      unsubs.push(unsubAthletes);
+
+      // 2. Equipes / Turmas Oficiais
+      const unsubTeams = onSnapshot(
+        collection(db, 'teams'),
+        (snap) => {
+          if (snap.empty) return;
+          const remoteTeams = snap.docs.map((d) => ({
+            ...(d.data() as Team),
+            id: d.id,
+          }));
+          setState((prev) => {
+            const byId = new Map<string, Team>();
+            for (const t of prev.officialTeams) byId.set(t.id, t);
+            for (const rt of remoteTeams) {
+              if (!rt.isTestOnly) {
+                const ex = byId.get(rt.id);
+                byId.set(rt.id, ex ? { ...ex, ...rt } : rt);
+              }
+            }
+            isApplyingRemoteUpdate.current = true;
+            return {
+              ...prev,
+              officialTeams: Array.from(byId.values()),
+            };
+          });
+        },
+        () => {}
+      );
+      unsubs.push(unsubTeams);
+
+      // 3. Partidas Oficiais ao Vivo
+      const unsubMatches = onSnapshot(
+        collection(db, 'matches'),
+        (snap) => {
+          if (snap.empty) return;
+          const remoteMatches = snap.docs.map((d) => ({
+            ...(d.data() as Match),
+            id: d.id,
+          }));
+          setState((prev) => {
+            const byId = new Map<string, Match>();
+            for (const m of prev.officialMatches) byId.set(m.id, m);
+            for (const rm of remoteMatches) {
+              if (!rm.isTestData) {
+                const ex = byId.get(rm.id);
+                byId.set(rm.id, ex ? { ...ex, ...rm } : rm);
+              }
+            }
+            isApplyingRemoteUpdate.current = true;
+            return {
+              ...prev,
+              officialMatches: Array.from(byId.values()),
+            };
+          });
+        },
+        () => {}
+      );
+      unsubs.push(unsubMatches);
+
+      // 4. Súmulas Oficiais ao Vivo
+      const unsubSheets = onSnapshot(
+        collection(db, 'match_sheets'),
+        (snap) => {
+          if (snap.empty) return;
+          setState((prev) => {
+            const nextSheets = { ...prev.officialSheets };
+            snap.docs.forEach((d) => {
+              const s = d.data() as MatchSheet;
+              if (!s.isTestMode && s.matchId) {
+                nextSheets[s.matchId] = s;
+              }
+            });
+            isApplyingRemoteUpdate.current = true;
+            return {
+              ...prev,
+              officialSheets: nextSheets,
+            };
+          });
+        },
+        () => {}
+      );
+      unsubs.push(unsubSheets);
+    } catch {
+      // Fallback offline gracioso
+    }
+
+    return () => {
+      unsubs.forEach((fn) => fn());
+    };
+  }, []);
+
+  // Sincronização em tempo real via API Cloud Sync (/api/cloud-sync) para garantir que todos os usuários
+  // em diferentes celulares/computadores vejam sempre as mesmas inscrições, atletas, fotos e placares
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const fetchCloudSnapshot = async () => {
+      try {
+        const res = await fetch('/api/cloud-sync').catch(() =>
+          fetch('https://intramedix.vercel.app/api/cloud-sync')
+        );
+        if (!res || !res.ok) return;
+        const payload = await res.json();
+        if (!payload || !payload.success) return;
+
+        setState((prev) => {
+          let changed = false;
+
+          // Mescla Atletas
+          let nextAthletes = prev.officialAthletes;
+          if (Array.isArray(payload.athletes) && payload.athletes.length > 0) {
+            const byId = new Map<string, Athlete>();
+            for (const a of prev.officialAthletes) byId.set(a.id, a);
+            for (const r of payload.athletes as Athlete[]) {
+              if (r && r.id && !r.isTestOnly) {
+                const ex = byId.get(r.id);
+                if (!ex || JSON.stringify(ex) !== JSON.stringify({ ...ex, ...r })) {
+                  byId.set(r.id, ex ? { ...ex, ...r } : r);
+                  changed = true;
+                }
+              }
+            }
+            if (changed) {
+              nextAthletes = Array.from(byId.values());
+            }
+          }
+
+          // Mescla Equipes
+          let nextTeams = prev.officialTeams;
+          if (Array.isArray(payload.teams) && payload.teams.length > 0) {
+            const byId = new Map<string, Team>();
+            for (const t of prev.officialTeams) byId.set(t.id, t);
+            let teamChanged = false;
+            for (const rt of payload.teams as Team[]) {
+              if (rt && rt.id && !rt.isTestOnly) {
+                const ex = byId.get(rt.id);
+                if (!ex || ex.crestUrl !== rt.crestUrl || ex.name !== rt.name) {
+                  byId.set(rt.id, ex ? { ...ex, ...rt } : rt);
+                  teamChanged = true;
+                  changed = true;
+                }
+              }
+            }
+            if (teamChanged) {
+              nextTeams = Array.from(byId.values());
+            }
+          }
+
+          // Mescla Partidas
+          let nextMatches = prev.officialMatches;
+          if (Array.isArray(payload.matches) && payload.matches.length > 0) {
+            const byId = new Map<string, Match>();
+            for (const m of prev.officialMatches) byId.set(m.id, m);
+            let matchChanged = false;
+            for (const rm of payload.matches as Match[]) {
+              if (rm && rm.id && !rm.isTestData) {
+                const ex = byId.get(rm.id);
+                if (
+                  !ex ||
+                  ex.status !== rm.status ||
+                  ex.homeTeam?.score !== rm.homeTeam?.score ||
+                  ex.awayTeam?.score !== rm.awayTeam?.score
+                ) {
+                  byId.set(rm.id, ex ? { ...ex, ...rm } : rm);
+                  matchChanged = true;
+                  changed = true;
+                }
+              }
+            }
+            if (matchChanged) {
+              nextMatches = Array.from(byId.values());
+            }
+          }
+
+          // Mescla Súmulas
+          let nextSheets = prev.officialSheets;
+          if (Array.isArray(payload.match_sheets) && payload.match_sheets.length > 0) {
+            let sheetChanged = false;
+            const copySheets = { ...prev.officialSheets };
+            for (const rs of payload.match_sheets as MatchSheet[]) {
+              if (rs && rs.matchId && !rs.isTestMode) {
+                const ex = copySheets[rs.matchId];
+                if (!ex || ex.lastUpdatedIso !== rs.lastUpdatedIso) {
+                  copySheets[rs.matchId] = rs;
+                  sheetChanged = true;
+                  changed = true;
+                }
+              }
+            }
+            if (sheetChanged) {
+              nextSheets = copySheets;
+            }
+          }
+
+          if (!changed) return prev;
+
+          let nextUser = prev.currentUser;
+          if (nextUser?.linkedAthleteId) {
+            const linked = nextAthletes.find((a) => a.id === nextUser?.linkedAthleteId);
+            if (linked) {
+              nextUser = {
+                ...nextUser,
+                name: linked.name || nextUser.name,
+                avatarUrl: linked.avatarUrl ?? nextUser.avatarUrl,
+                modalityIds: linked.modalityIds || nextUser.modalityIds,
+              };
+            }
+          }
+
+          isApplyingRemoteUpdate.current = true;
+          return {
+            ...prev,
+            officialAthletes: nextAthletes,
+            officialTeams: nextTeams,
+            officialMatches: nextMatches,
+            officialSheets: nextSheets,
+            currentUser: nextUser,
+          };
+        });
+      } catch {
+        // Silencioso
+      }
+    };
+
+    fetchCloudSnapshot();
+    const interval = setInterval(fetchCloudSnapshot, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Motor de Cronômetro Centralizado (1 segundo) — alimenta cronômetro principal, punições 2min e timeouts
   useEffect(() => {
     const interval = setInterval(() => {
@@ -779,6 +1086,31 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     );
   };
 
+  const syncDocToFirestore = useCallback(
+    (collectionName: string, docId: string, data: unknown) => {
+      try {
+        const cleanData = JSON.parse(JSON.stringify(data));
+        setDoc(doc(db, collectionName, docId), cleanData, { merge: true }).catch(() => {});
+        if (typeof window !== 'undefined') {
+          fetch('/api/cloud-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ collectionName, docId, data: cleanData }),
+          }).catch(() => {
+            fetch('https://intramedix.vercel.app/api/cloud-sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ collectionName, docId, data: cleanData }),
+            }).catch(() => {});
+          });
+        }
+      } catch {
+        // Silencioso
+      }
+    },
+    []
+  );
+
   const updateMatchAndSheet = useCallback(
     (
       matchId: string,
@@ -799,12 +1131,19 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           currentSheet
         );
 
-        matchesList[matchIdx] = nextMatch;
-        sheetsMap[matchId] = {
+        const finalizedSheet: MatchSheet = {
           ...nextSheet,
           syncStatus: isOnline ? 'synced' : 'pending_sync',
           lastUpdatedIso: new Date().toISOString(),
         };
+
+        matchesList[matchIdx] = nextMatch;
+        sheetsMap[matchId] = finalizedSheet;
+
+        if (!isTest) {
+          syncDocToFirestore('matches', nextMatch.id, nextMatch);
+          syncDocToFirestore('match_sheets', nextMatch.id, finalizedSheet);
+        }
 
         return {
           ...prev,
@@ -815,7 +1154,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         };
       });
     },
-    [isOnline]
+    [isOnline, syncDocToFirestore]
   );
 
   const setTestMode = useCallback((enabled: boolean) => {
@@ -2288,9 +2627,16 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       if (!canEditAthleteProfile(athleteId)) return false;
       setState((prev) => {
         const updateList = (list: Athlete[]) =>
-          list.map((a) =>
-            a.id === athleteId ? { ...a, avatarUrl: avatarDataUrl } : a
-          );
+          list.map((a) => {
+            if (a.id === athleteId) {
+              const updated = { ...a, avatarUrl: avatarDataUrl };
+              if (!updated.isTestOnly) {
+                syncDocToFirestore('athletes', athleteId, updated);
+              }
+              return updated;
+            }
+            return a;
+          });
         const nextUser =
           prev.currentUser && prev.currentUser.linkedAthleteId === athleteId
             ? { ...prev.currentUser, avatarUrl: avatarDataUrl }
@@ -2304,66 +2650,225 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       });
       return true;
     },
-    [canEditAthleteProfile]
+    [canEditAthleteProfile, syncDocToFirestore]
   );
 
-  const updateTeamCrest = useCallback((teamId: string, crestDataUrl: string) => {
-    setState((prev) => {
-      if (!isUserAdmin(prev.currentUser)) return prev;
-      const updateTeams = (list: Team[]) =>
-        list.map((t) => (t.id === teamId ? { ...t, crestUrl: crestDataUrl } : t));
-      const updateMatches = (list: Match[]) =>
-        list.map((m) => ({
-          ...m,
-          homeTeam:
-            m.homeTeam.teamId === teamId
-              ? { ...m.homeTeam, crestUrl: crestDataUrl }
-              : m.homeTeam,
-          awayTeam:
-            m.awayTeam.teamId === teamId
-              ? { ...m.awayTeam, crestUrl: crestDataUrl }
-              : m.awayTeam,
-        }));
-      return {
-        ...prev,
-        officialTeams: updateTeams(prev.officialTeams),
-        testTeams: updateTeams(prev.testTeams),
-        officialMatches: updateMatches(prev.officialMatches),
-        testMatches: updateMatches(prev.testMatches),
-      };
-    });
-  }, []);
+  const updateTeamCrest = useCallback(
+    (teamId: string, crestDataUrl: string) => {
+      setState((prev) => {
+        if (!isUserAdmin(prev.currentUser)) return prev;
+        const updateTeams = (list: Team[]) =>
+          list.map((t) => {
+            if (t.id === teamId) {
+              const updated = { ...t, crestUrl: crestDataUrl };
+              if (!updated.isTestOnly) {
+                syncDocToFirestore('teams', teamId, updated);
+              }
+              return updated;
+            }
+            return t;
+          });
+        const updateMatches = (list: Match[]) =>
+          list.map((m) => ({
+            ...m,
+            homeTeam:
+              m.homeTeam.teamId === teamId
+                ? { ...m.homeTeam, crestUrl: crestDataUrl }
+                : m.homeTeam,
+            awayTeam:
+              m.awayTeam.teamId === teamId
+                ? { ...m.awayTeam, crestUrl: crestDataUrl }
+                : m.awayTeam,
+          }));
+        return {
+          ...prev,
+          officialTeams: updateTeams(prev.officialTeams),
+          testTeams: updateTeams(prev.testTeams),
+          officialMatches: updateMatches(prev.officialMatches),
+          testMatches: updateMatches(prev.testMatches),
+        };
+      });
+    },
+    [syncDocToFirestore]
+  );
 
   const updateAthletePersonalInfo = useCallback(
     (
       athleteId: string,
-      data: { position?: string; jerseyNumber?: number | null }
+      data: {
+        name?: string;
+        position?: string;
+        jerseyNumber?: number | null;
+        bio?: string | null;
+        instagramHandle?: string | null;
+        modalityIds?: ModalitySlug[];
+        avatarUrl?: string | null;
+      }
     ): boolean => {
       if (!canEditAthleteProfile(athleteId)) return false;
       setState((prev) => {
+        let updatedAthleteObj: Athlete | null = null;
         const updateList = (list: Athlete[]) =>
-          list.map((a) =>
-            a.id === athleteId
-              ? {
-                  ...a,
-                  position:
-                    data.position !== undefined ? data.position : a.position,
-                  jerseyNumber:
-                    data.jerseyNumber !== undefined
-                      ? data.jerseyNumber
-                      : a.jerseyNumber,
-                }
-              : a
-          );
+          list.map((a) => {
+            if (a.id === athleteId) {
+              const updated: Athlete = {
+                ...a,
+                name: data.name !== undefined && data.name.trim() ? data.name.trim() : a.name,
+                position: data.position !== undefined ? data.position : a.position,
+                jerseyNumber:
+                  data.jerseyNumber !== undefined ? data.jerseyNumber : a.jerseyNumber,
+                bio: data.bio !== undefined ? data.bio : a.bio,
+                instagramHandle:
+                  data.instagramHandle !== undefined ? data.instagramHandle : a.instagramHandle,
+                modalityIds:
+                  data.modalityIds !== undefined && data.modalityIds.length > 0
+                    ? data.modalityIds
+                    : a.modalityIds,
+                avatarUrl: data.avatarUrl !== undefined ? data.avatarUrl : a.avatarUrl,
+              };
+              updatedAthleteObj = updated;
+              if (!updated.isTestOnly) {
+                syncDocToFirestore('athletes', athleteId, updated);
+              }
+              return updated;
+            }
+            return a;
+          });
+
+        const nextOfficial = updateList(prev.officialAthletes);
+        const nextTest = updateList(prev.testAthletes);
+
+        let nextUser = prev.currentUser;
+        if (nextUser && nextUser.linkedAthleteId === athleteId && updatedAthleteObj) {
+          const ua = updatedAthleteObj as Athlete;
+          nextUser = {
+            ...nextUser,
+            name: ua.name,
+            avatarUrl: ua.avatarUrl,
+            modalityIds: ua.modalityIds,
+          };
+        }
+
         return {
           ...prev,
-          officialAthletes: updateList(prev.officialAthletes),
-          testAthletes: updateList(prev.testAthletes),
+          officialAthletes: nextOfficial,
+          testAthletes: nextTest,
+          currentUser: nextUser,
         };
       });
       return true;
     },
-    [canEditAthleteProfile]
+    [canEditAthleteProfile, syncDocToFirestore]
+  );
+
+  const upsertParticipantAthlete = useCallback(
+    (payload: {
+      id?: string;
+      name: string;
+      email?: string | null;
+      teamId: string;
+      turma?: TurmaMedicina | null;
+      turmaLabel?: string | null;
+      jerseyNumber?: number | null;
+      position?: string | null;
+      bio?: string | null;
+      instagramHandle?: string | null;
+      avatarUrl?: string | null;
+      modalityIds?: ModalitySlug[];
+      registrationId?: string | null;
+      paymentStatus?: RegistrationPaymentStatus;
+      memberStatus?: MemberStatus;
+      autoLogin?: boolean;
+    }): Athlete => {
+      const cleanName = payload.name.trim();
+      const cleanEmail = payload.email?.trim().toLowerCase() || null;
+      const defaultModalities: ModalitySlug[] =
+        payload.modalityIds && payload.modalityIds.length > 0
+          ? payload.modalityIds
+          : OFFICIAL_MODALITIES.map((m) => m.id);
+
+      const existing = state.officialAthletes.find(
+        (a) =>
+          (payload.id && a.id === payload.id) ||
+          (payload.registrationId && a.registrationId === payload.registrationId) ||
+          (cleanEmail && a.email?.toLowerCase() === cleanEmail) ||
+          (a.teamId === payload.teamId &&
+            a.name.trim().toLowerCase() === cleanName.toLowerCase())
+      );
+
+      const resolvedId =
+        existing?.id ||
+        payload.id ||
+        (payload.registrationId
+          ? `ath-${payload.registrationId}`
+          : `ath-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`);
+
+      const athleteRecord: Athlete = {
+        id: resolvedId,
+        name: cleanName || existing?.name || 'Atleta IntraMed',
+        email: cleanEmail || existing?.email || null,
+        teamId: payload.teamId || existing?.teamId || 'sanguinaria',
+        turma: payload.turma ?? existing?.turma ?? null,
+        turmaLabel: payload.turmaLabel ?? existing?.turmaLabel ?? null,
+        jerseyNumber: payload.jerseyNumber ?? existing?.jerseyNumber ?? null,
+        position: payload.position?.trim() || existing?.position || 'Atleta Oficial',
+        bio: payload.bio ?? existing?.bio ?? null,
+        instagramHandle: payload.instagramHandle ?? existing?.instagramHandle ?? null,
+        avatarUrl: payload.avatarUrl ?? existing?.avatarUrl ?? null,
+        modalityIds: defaultModalities,
+        registrationId: payload.registrationId ?? existing?.registrationId ?? null,
+        paymentStatus: payload.paymentStatus ?? existing?.paymentStatus,
+        memberStatus: payload.memberStatus ?? existing?.memberStatus,
+        isTestOnly: false,
+      };
+
+      syncDocToFirestore('athletes', athleteRecord.id, athleteRecord);
+
+      setState((prev) => {
+        const existsIdx = prev.officialAthletes.findIndex(
+          (a) => a.id === athleteRecord.id
+        );
+        const nextOfficialAthletes =
+          existsIdx >= 0
+            ? prev.officialAthletes.map((a, i) =>
+                i === existsIdx ? { ...a, ...athleteRecord } : a
+              )
+            : [athleteRecord, ...prev.officialAthletes];
+
+        const teamObj = prev.officialTeams.find(
+          (t) => t.id === athleteRecord.teamId
+        );
+
+        let nextUser = prev.currentUser;
+        if (payload.autoLogin) {
+          nextUser = {
+            id: `usr-${athleteRecord.id}`,
+            name: athleteRecord.name,
+            email:
+              athleteRecord.email ||
+              `${athleteRecord.id}@medicina.uema.br`,
+            avatarUrl: athleteRecord.avatarUrl,
+            role: 'atleta',
+            teamId: athleteRecord.teamId,
+            teamName:
+              teamObj?.name ||
+              athleteRecord.turmaLabel ||
+              'Equipe Medicina UEMA',
+            linkedAthleteId: athleteRecord.id,
+            modalityIds: athleteRecord.modalityIds,
+          };
+        }
+
+        return {
+          ...prev,
+          officialAthletes: nextOfficialAthletes,
+          currentUser: nextUser,
+        };
+      });
+
+      return athleteRecord;
+    },
+    [state.officialAthletes, syncDocToFirestore]
   );
 
   // CADASTRO UNIFICADO DE EQUIPES (PERÍODOS), ATLETAS E PARTIDAS
@@ -2515,6 +3020,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             testSheets: targetSheets,
           };
         }
+        syncDocToFirestore('athletes', newAthlete.id, newAthlete);
         return {
           ...prev,
           officialAthletes: [...prev.officialAthletes, newAthlete],
@@ -2524,7 +3030,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       return { ok: true, athlete: newAthlete };
     },
-    [state.isTestMode, state.testAthletes, state.officialAthletes, state.currentUser]
+    [state.isTestMode, state.testAthletes, state.officialAthletes, state.currentUser, syncDocToFirestore]
   );
 
   const createOfficialMatch = useCallback(
@@ -2674,6 +3180,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             testSheets: { ...prev.testSheets, [matchId]: newSheet },
           };
         }
+        syncDocToFirestore('matches', newMatch.id, newMatch);
+        syncDocToFirestore('match_sheets', newSheet.matchId, newSheet);
         return {
           ...prev,
           officialMatches: [newMatch, ...prev.officialMatches],
@@ -2683,7 +3191,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       return newMatch;
     },
-    [state.isTestMode, state.testTeams, state.officialTeams, state.testAthletes, state.officialAthletes, state.currentUser]
+    [state.isTestMode, state.testTeams, state.officialTeams, state.testAthletes, state.officialAthletes, state.currentUser, syncDocToFirestore]
   );
 
   return (
@@ -2745,6 +3253,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         updateAthleteAvatar,
         updateTeamCrest,
         updateAthletePersonalInfo,
+        upsertParticipantAthlete,
         registerTeam,
         registerAthlete,
         createOfficialMatch,

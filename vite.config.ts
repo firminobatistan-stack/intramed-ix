@@ -14,7 +14,66 @@ export default defineConfig(({ mode }) => {
       {
         name: 'mercadopago-api-dev-server',
         configureServer(server) {
+          const devCloudStore: Record<string, Record<string, Record<string, unknown>>> = {
+            registrations: {},
+            athletes: {},
+            teams: {},
+            matches: {},
+            match_sheets: {},
+          };
+
           server.middlewares.use(async (req, res, next) => {
+            if (req.url?.startsWith('/api/cloud-sync')) {
+              res.setHeader('Content-Type', 'application/json');
+              if (req.method === 'GET') {
+                return res.end(
+                  JSON.stringify({
+                    success: true,
+                    updatedAtIso: new Date().toISOString(),
+                    registrations: Object.values(devCloudStore.registrations),
+                    athletes: Object.values(devCloudStore.athletes),
+                    teams: Object.values(devCloudStore.teams),
+                    matches: Object.values(devCloudStore.matches),
+                    match_sheets: Object.values(devCloudStore.match_sheets),
+                  })
+                );
+              }
+              if (req.method === 'POST') {
+                let bodyStr = '';
+                req.on('data', (chunk) => {
+                  bodyStr += chunk;
+                });
+                req.on('end', () => {
+                  try {
+                    const body = JSON.parse(bodyStr || '{}');
+                    const { collectionName, docId, data, batch } = body;
+                    if (Array.isArray(batch)) {
+                      for (const item of batch) {
+                        if (item?.collectionName && item?.docId && item?.data && devCloudStore[item.collectionName]) {
+                          devCloudStore[item.collectionName][item.docId] = {
+                            ...(devCloudStore[item.collectionName][item.docId] || {}),
+                            ...item.data,
+                            id: item.docId,
+                          };
+                        }
+                      }
+                    } else if (collectionName && docId && data && devCloudStore[collectionName]) {
+                      devCloudStore[collectionName][String(docId)] = {
+                        ...(devCloudStore[collectionName][String(docId)] || {}),
+                        ...data,
+                        id: String(docId),
+                      };
+                    }
+                    return res.end(JSON.stringify({ success: true, updatedAtIso: new Date().toISOString() }));
+                  } catch (e) {
+                    res.statusCode = 400;
+                    return res.end(JSON.stringify({ error: String(e) }));
+                  }
+                });
+                return;
+              }
+            }
+
             if (!req.url?.startsWith('/api/mercadopago/')) {
               return next();
             }
