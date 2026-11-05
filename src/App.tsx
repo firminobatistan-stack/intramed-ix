@@ -33,6 +33,9 @@ const ProfilePage = lazy(() =>
 const LoginPage = lazy(() =>
   import('./pages/LoginPage').then((m) => ({ default: m.LoginPage }))
 );
+const FirstAccessPage = lazy(() =>
+  import('./pages/FirstAccessPage').then((m) => ({ default: m.FirstAccessPage }))
+);
 const AdminDashboardPage = lazy(() =>
   import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage }))
 );
@@ -92,9 +95,10 @@ const ScrollToTop: React.FC = () => {
 const RoutedApp: React.FC = () => {
   const location = useLocation();
 
-  // Telas em modo Full-Screen dedicado (Login, Operador de Súmula, Placar ao Vivo, Documento de Súmula)
+  // Telas em modo Full-Screen dedicado (Login, Primeiro Acesso, Operador de Súmula, Placar ao Vivo, Documento de Súmula)
   const isFullScreenRoute =
     location.pathname === '/login' ||
+    location.pathname === '/primeiro-acesso' ||
     location.pathname.startsWith('/sumula/') ||
     location.pathname.startsWith('/placar');
 
@@ -124,6 +128,7 @@ const RoutedApp: React.FC = () => {
       <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/primeiro-acesso" element={<FirstAccessPage />} />
           <Route
             path="/sumula/:matchId/documento"
             element={<GeneratedMatchSheetPage />}

@@ -55,7 +55,7 @@ export const LoginPage: React.FC = () => {
   const [loginMode, setLoginMode] = useState<LoginModeTab>(
     returnTo?.includes('/admin') ? 'admin' : 'athlete'
   );
-  const [identifier] = useState('admin@intramed.uema.br');
+  const [adminEmail, setAdminEmail] = useState('cangaceira@uema.com');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -72,59 +72,77 @@ export const LoginPage: React.FC = () => {
     setErrorMessage(null);
 
     const cleanPass = password.trim();
+    const cleanEmail = adminEmail.trim().toLowerCase();
 
-    if (!cleanPass) {
-      setErrorMessage('Informe a senha da comissão organizadora.');
+    if (!cleanEmail) {
+      setErrorMessage('Informe o e-mail da conta administrativa.');
       return;
     }
 
-    let isAuthorized = cleanPass === 'bicoduro';
+    if (!cleanPass) {
+      setErrorMessage('Informe a senha de acesso.');
+      return;
+    }
 
     try {
       const res = await fetch('/api/cloud-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'verify_operator_pin',
+          action: 'admin_login',
+          email: cleanEmail,
           password: cleanPass,
         }),
       });
       const data = await res.json().catch(() => null);
-      if (res.ok && data?.success && data?.role === 'admin' && data?.token) {
+
+      if (res.ok && data?.ok && data?.token) {
         setStoredOperatorToken(data.token);
-        isAuthorized = true;
-      } else if (res.status === 401) {
-        isAuthorized = false;
+
+        if (data.mustChangePassword) {
+          sessionStorage.setItem('intramed_admin_session', 'restricted_first_access');
+          setCurrentUser({
+            id: data.user?.id || 'usr_master_cangaceira',
+            name: data.user?.name || 'Atlética Cangaceira',
+            email: data.user?.email || cleanEmail,
+            avatarUrl: '/assets/atletica/logo.png',
+            teamId: null,
+            teamName: data.user?.organization || 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+            modalityIds: [],
+            role: (data.user?.role as any) || 'moderador_master',
+            linkedAthleteId: null,
+            mustChangePassword: true,
+          });
+          navigate('/primeiro-acesso', { replace: true });
+          return;
+        }
+
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('intramed_admin_session', 'true');
+        }
+
+        setCurrentUser({
+          id: data.user?.id || 'usr-admin-intramed',
+          name: data.user?.name || 'Atlética Cangaceira',
+          email: data.user?.email || cleanEmail,
+          avatarUrl: '/assets/atletica/logo.png',
+          teamId: null,
+          teamName: data.user?.organization || 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+          modalityIds: [],
+          role: (data.user?.role as any) || 'moderador_master',
+          linkedAthleteId: null,
+          mustChangePassword: false,
+        });
+
+        navigate(returnTo || '/admin', { replace: true });
+        return;
+      } else {
+        setErrorMessage(data?.error || 'Senha ou e-mail administrativo incorreto.');
+        return;
       }
     } catch {
-      // Fallback offline local caso o servidor esteja inacessível
+      setErrorMessage('Falha ao conectar com o servidor. Verifique sua conexão.');
     }
-
-    if (!isAuthorized) {
-      setErrorMessage('Senha incorreta. Acesso não autorizado.');
-      return;
-    }
-
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('intramed_admin_session', 'true');
-    }
-
-    setCurrentUser({
-      id: 'usr-admin-intramed',
-      name:
-        identifier.trim() && identifier.includes('@')
-          ? `Comissão (${identifier.split('@')[0]})`
-          : 'Comissão Organizadora • A.A.A. Cangaceira',
-      email: identifier.trim() || 'organizacao@intramed.uema.br',
-      avatarUrl: '/assets/atletica/logo.png',
-      teamId: null,
-      teamName: 'Arbitragem & Organização INTRAMED IX',
-      modalityIds: [],
-      role: 'administrador',
-      linkedAthleteId: null,
-    });
-
-    navigate(returnTo || '/admin', { replace: true });
   };
 
   const handleAthleteSubmit = async (e: React.FormEvent) => {
@@ -356,7 +374,22 @@ export const LoginPage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="space-y-1.5">
+              <div className="space-y-3">
+                <Input
+                  label="E-mail Administrativo"
+                  type="email"
+                  name="adminEmail"
+                  autoComplete="username"
+                  value={adminEmail}
+                  onChange={(e) => {
+                    setAdminEmail(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  placeholder="cangaceira@uema.com"
+                  leftIcon={<Mail className="w-4 h-4 text-slate-400" />}
+                  required
+                />
+
                 <Input
                   label="Senha de Acesso"
                   type={showPassword ? 'text' : 'password'}

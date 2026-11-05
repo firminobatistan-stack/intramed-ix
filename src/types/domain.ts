@@ -4,8 +4,26 @@
  * Nenhum dado fictício oficial é instanciado.
  */
 
-// 1. USUÁRIOS E PERMISSÕES
-export type UserRole = 'atleta' | 'organizacao' | 'moderador' | 'administrador';
+// 1. USUÁRIOS E PERMISSÕES HIERÁRQUICAS (RBAC — 5 NÍVEIS)
+export type UserRole =
+  | 'usuario'          // Nível 1: Usuário comum
+  | 'atleta'           // Nível 2: Atleta com inscrição confirmada
+  | 'mesario'          // Nível 3: Mesário de partida
+  | 'moderador'        // Nível 4: Moderador da atlética
+  | 'moderador_master' // Nível 5: Moderador Master (Cangaceira@uema.com)
+  // Legados mantidos para compatibilidade
+  | 'organizacao'
+  | 'administrador';
+
+export const USER_ROLE_LEVELS: Record<UserRole, number> = {
+  usuario: 1,
+  atleta: 2,
+  mesario: 3,
+  moderador: 4,
+  organizacao: 4,
+  administrador: 4,
+  moderador_master: 5,
+};
 
 export interface UserProfile {
   id: string;
@@ -18,6 +36,37 @@ export interface UserProfile {
   linkedAthleteId?: string | null;
   modalityIds: string[];
   registrationCode?: string | null;
+  mustChangePassword?: boolean;
+  isActive?: boolean;
+  createdAtIso?: string;
+  lastLoginAtIso?: string;
+}
+
+export interface AdminActionAuditLog {
+  id: string;
+  timestampIso: string;
+  actorId: string;
+  actorName: string;
+  actorRole: UserRole;
+  action:
+    | 'MASTER_PROVISION'
+    | 'PASSWORD_CHANGED'
+    | 'USER_PROMOTED'
+    | 'USER_DEMOTED'
+    | 'USER_SUSPENDED'
+    | 'USER_ACTIVATED'
+    | 'MEMBER_APPROVED'
+    | 'MEMBER_REJECTED'
+    | 'PAYMENT_CONFIRMED'
+    | 'MATCH_RESCHEDULED'
+    | 'MATCH_CANCELLED'
+    | 'SHEET_CORRECTED';
+  targetEntity: 'user' | 'registration' | 'athlete' | 'match' | 'sheet';
+  targetId: string;
+  details: string;
+  previousValue?: unknown;
+  newValue?: unknown;
+  justification?: string;
 }
 
 // 2. MODALIDADES E CONFIGURAÇÃO DE REGRAS

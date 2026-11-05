@@ -18,11 +18,11 @@ interface HeaderProps {
 }
 
 /**
- * Cabeçalho inspirado diretamente nas 5 imagens do case "All Sports":
+ * Cabeçalho inspirado diretamente no case visual:
  * - Fundo Azul Royal com textura hexagonal sutil (.all-sports-header);
- * - Linha superior: Botão Menu/Voltar + Pílula Branca Seletora de Esporte ("Sports Category": [⚽ Futsal ▾])
- *   + Botões de Calendário/Busca ("Search With Calendar") e Sino ("Notification") à direita;
- * - Menu Bar inferior integrado no próprio cabeçalho azul ("LiveTV", "Matches", "Leagues")
+ * - Linha superior: Botão Menu/Voltar + Logo Oficial INTRAMED IX
+ *   + Botões de Busca ("Search") e Sino ("Notification") à direita;
+ * - Menu Bar inferior integrado no próprio cabeçalho azul ("Ao Vivo", "Partidas", "Modalidades", "Períodos", "Atletas")
  *   com barra indicadora Amarela (#FACC15) na aba ativa.
  */
 export const Header: React.FC<HeaderProps> = ({

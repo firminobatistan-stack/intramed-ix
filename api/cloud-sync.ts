@@ -8,14 +8,20 @@ import {
   extractBearerOrHeaderToken,
   getCloudStore,
   handleNonApprovedPaymentStatusOnServer,
+  hashPassword,
   hashSecretPin,
+  isMasterAccount,
   markRegistrationPaidOnServer,
+  MASTER_MODERATOR_EMAIL,
   MirrorDocumentToFirestoreRest,
   parseJsonSafe,
   parseSafeBody,
+  protectMasterAccount,
   sanitizeMatchForPublic,
   sanitizeRegistrationForPublic,
   saveCloudStore,
+  USER_ROLE_LEVELS,
+  UserRole,
   verifyMasterAdminPassword,
   verifySignedOperatorToken,
 } from './_lib/serverStore.js';
@@ -35,9 +41,13 @@ function canClientWriteDocument(
   existing: Record<string, unknown> | undefined,
   authTokenPayload: ReturnType<typeof verifySignedOperatorToken>
 ): { allowed: boolean; sanitizedData: Record<string, unknown>; reason?: string } {
-  const isAdmin = authTokenPayload?.role === 'admin';
+  const roleLevel = authTokenPayload?.role
+    ? USER_ROLE_LEVELS[authTokenPayload.role as UserRole] || (authTokenPayload.role === 'admin' ? 4 : 0)
+    : 0;
+  const isAdmin = roleLevel >= 4;
   const isMesarioForMatch =
-    authTokenPayload?.role === 'mesario' && authTokenPayload.matchId === docId;
+    (authTokenPayload?.role === 'mesario' || roleLevel >= 4) &&
+    (!authTokenPayload?.matchId || authTokenPayload.matchId === docId);
 
   const nowIso = new Date().toISOString();
   const prevRevision = Number(existing?.revision || 0);
@@ -270,7 +280,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const store = await ensureCloudStoreHydrated();
   const rawToken = extractBearerOrHeaderToken(req.headers as Record<string, unknown>);
   const verifiedToken = verifySignedOperatorToken(rawToken);
-  const isAdminRequest = verifiedToken?.role === 'admin';
+  const operatorRoleLevel = verifiedToken?.role
+    ? USER_ROLE_LEVELS[verifiedToken.role as UserRole] || (verifiedToken.role === 'admin' ? 4 : 0)
+    : 0;
+  const isAdminRequest = operatorRoleLevel >= 4;
+  const isMasterRequest = verifiedToken?.role === 'moderador_master' || operatorRoleLevel >= 5;
 
   // GET: Retorna snapshot sincronizado (com suporte a ?since=updatedAtIso e projeção LGPD sem PII/senhas)
   if (req.method === 'GET') {
@@ -483,6 +497,393 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({
         ok: true,
         registration: sanitizeRegistrationForPublic(matchedReg),
+      });
+    }
+
+    // AÇÃO 2D: Login Administrativo com Hierarquia RBAC (Níveis 1 a 5)
+    if (action === 'admin_login') {
+      const emailInput = String(body.email || body.identifier || '')
+        .trim()
+        .toLowerCase();
+      const passwordInput = String(body.password || '').trim();
+
+      if (!emailInput || !passwordInput) {
+        return res.status(400).json({
+          ok: false,
+          error: 'E-mail e senha são obrigatórios.',
+        });
+      }
+
+      const adminUsers = store.admin_users || {};
+      const user = adminUsers[emailInput];
+
+      if (!user) {
+        // Suporte legado: se for a senha mestra geral de emergência
+        if (verifyMasterAdminPassword(passwordInput)) {
+          const legacyToken = createSignedOperatorToken({
+            role: 'moderador',
+            officialName: 'Comissão Organizadora',
+            email: emailInput,
+          });
+          return res.status(200).json({
+            ok: true,
+            token: legacyToken,
+            role: 'moderador',
+            user: {
+              email: emailInput,
+              name: 'Comissão Organizadora',
+              role: 'moderador',
+              organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+              mustChangePassword: false,
+            },
+          });
+        }
+        return res.status(401).json({
+          ok: false,
+          error: 'Usuário administrativo não encontrado.',
+        });
+      }
+
+      if (user.isActive === false) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Conta inativa ou suspensa. Contate o Moderador Master da Atlética.',
+        });
+      }
+
+      const inputHash = hashPassword(passwordInput);
+      const isPasswordValid =
+        inputHash === user.passwordHash ||
+        (isMasterAccount(user.email as string) && verifyMasterAdminPassword(passwordInput));
+
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          ok: false,
+          error: 'Senha administrativa incorreta.',
+        });
+      }
+
+      const mustChange = Boolean(user.mustChangePassword);
+      const userRole = (user.role as UserRole) || 'moderador';
+      const token = createSignedOperatorToken({
+        role: userRole,
+        email: user.email as string,
+        officialName: (user.name as string) || 'Operador',
+        mustChangePassword: mustChange,
+      });
+
+      // Atualiza último login
+      user.lastLoginAtIso = new Date().toISOString();
+      saveCloudStore(store);
+
+      return res.status(200).json({
+        ok: true,
+        token,
+        role: userRole,
+        mustChangePassword: mustChange,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          organization: user.organization,
+          mustChangePassword: mustChange,
+        },
+      });
+    }
+
+    // AÇÃO 2E: Alteração de Senha (Primeiro Acesso Obrigatório ou Troca Periódica)
+    if (action === 'change_admin_password') {
+      if (!verifiedToken?.email) {
+        return res.status(401).json({
+          ok: false,
+          error: 'Sessão inválida ou expirada para troca de senha.',
+        });
+      }
+
+      const newPassword = String(body.newPassword || '').trim();
+      const confirmPassword = String(body.confirmPassword || '').trim();
+
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({
+          ok: false,
+          error: 'A nova senha deve possuir no mínimo 6 caracteres.',
+        });
+      }
+
+      if (confirmPassword && newPassword !== confirmPassword) {
+        return res.status(400).json({
+          ok: false,
+          error: 'A confirmação de senha não confere.',
+        });
+      }
+
+      const emailKey = verifiedToken.email.toLowerCase();
+      const adminUsers = store.admin_users || {};
+      const user = adminUsers[emailKey];
+
+      if (!user) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Usuário não localizado no servidor.',
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+      user.passwordHash = hashPassword(newPassword);
+      user.mustChangePassword = false;
+      user.updatedAtIso = nowIso;
+
+      if (!store.admin_audit_logs) {
+        store.admin_audit_logs = [];
+      }
+      store.admin_audit_logs.push({
+        id: `audit_${Date.now()}_pwd`,
+        action: 'password_change',
+        performedByEmail: user.email as string,
+        performedByRole: user.role as string,
+        targetEmail: user.email as string,
+        timestampIso: nowIso,
+        details: 'Senha alterada com sucesso; pendência de primeiro acesso removida.',
+      });
+
+      saveCloudStore(store);
+
+      // Emite novo token desbloqueado
+      const newToken = createSignedOperatorToken({
+        role: (user.role as UserRole) || 'moderador',
+        email: user.email as string,
+        officialName: (user.name as string) || 'Operador',
+        mustChangePassword: false,
+      });
+
+      return res.status(200).json({
+        ok: true,
+        token: newToken,
+        message: 'Senha atualizada com sucesso!',
+        mustChangePassword: false,
+      });
+    }
+
+    // AÇÃO 2F: Listagem de Usuários e Atletas com Gestão RBAC (Restrito a Moderador / Master)
+    if (action === 'list_admin_users') {
+      if (!isAdminRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas moderadores e master podem visualizar a listagem completa de usuários.',
+        });
+      }
+
+      const adminUsers = Object.values(store.admin_users || {}).map((u) => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        organization: u.organization,
+        isActive: u.isActive !== false,
+        mustChangePassword: Boolean(u.mustChangePassword),
+        createdAtIso: u.createdAtIso,
+        lastLoginAtIso: u.lastLoginAtIso,
+      }));
+
+      const auditLogs = (store.admin_audit_logs || []).slice(-50).reverse();
+
+      return res.status(200).json({
+        ok: true,
+        users: adminUsers,
+        auditLogs: isMasterRequest ? auditLogs : [],
+      });
+    }
+
+    // AÇÃO 2G: Atualização de Papel/Cargo (Exclusivo do Moderador Master Nível 5)
+    if (action === 'update_user_role') {
+      if (!isMasterRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas o Moderador Master (Nível 5) pode alterar os cargos de usuários.',
+        });
+      }
+
+      const targetEmail = String(body.targetEmail || '').trim().toLowerCase();
+      const targetRole = String(body.targetRole || '').trim().toLowerCase() as UserRole;
+      const validRoles: UserRole[] = ['usuario', 'atleta', 'mesario', 'moderador'];
+
+      if (!targetEmail || !targetRole) {
+        return res.status(400).json({
+          ok: false,
+          error: 'E-mail alvo e novo cargo são obrigatórios.',
+        });
+      }
+
+      if (!validRoles.includes(targetRole)) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Cargo inválido para atribuição. O cargo Moderador Master é único e intransferível.',
+        });
+      }
+
+      // Blindagem: Moderador Master não pode ser rebaixado
+      if (isMasterAccount(targetEmail)) {
+        return res.status(403).json({
+          ok: false,
+          error: `Operação negada: A conta Moderador Master (${MASTER_MODERATOR_EMAIL}) não pode ser alterada.`,
+        });
+      }
+
+      const adminUsers = store.admin_users || {};
+      let targetUser = adminUsers[targetEmail];
+      const nowIso = new Date().toISOString();
+
+      if (!targetUser) {
+        // Cria usuário no admin_users se ainda não existia
+        targetUser = {
+          id: `usr_${Date.now()}`,
+          email: targetEmail,
+          name: String(body.targetName || targetEmail.split('@')[0]),
+          role: targetRole,
+          organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+          isActive: true,
+          mustChangePassword: true,
+          createdAtIso: nowIso,
+          updatedAtIso: nowIso,
+        };
+        adminUsers[targetEmail] = targetUser;
+      } else {
+        targetUser.role = targetRole;
+        targetUser.updatedAtIso = nowIso;
+      }
+
+      if (!store.admin_audit_logs) {
+        store.admin_audit_logs = [];
+      }
+      store.admin_audit_logs.push({
+        id: `audit_${Date.now()}_role`,
+        action: 'update_role',
+        performedByEmail: verifiedToken?.email || 'master',
+        performedByRole: 'moderador_master',
+        targetEmail,
+        timestampIso: nowIso,
+        details: `Cargo alterado para ${targetRole}`,
+      });
+
+      saveCloudStore(store);
+
+      return res.status(200).json({
+        ok: true,
+        message: `Cargo do usuário ${targetEmail} atualizado para ${targetRole}.`,
+        user: {
+          email: targetUser.email,
+          role: targetUser.role,
+        },
+      });
+    }
+
+    // AÇÃO 2H: Ativação / Desativação de Usuário (Exclusivo do Moderador Master Nível 5)
+    if (action === 'toggle_user_active') {
+      if (!isMasterRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas o Moderador Master pode ativar ou desativar acessos.',
+        });
+      }
+
+      const targetEmail = String(body.targetEmail || '').trim().toLowerCase();
+      const isActive = Boolean(body.isActive);
+
+      if (isMasterAccount(targetEmail) && !isActive) {
+        return res.status(403).json({
+          ok: false,
+          error: 'A conta Moderador Master não pode ser desativada.',
+        });
+      }
+
+      const adminUsers = store.admin_users || {};
+      const targetUser = adminUsers[targetEmail];
+
+      if (!targetUser) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Usuário não encontrado.',
+        });
+      }
+
+      targetUser.isActive = isActive;
+      targetUser.updatedAtIso = new Date().toISOString();
+
+      if (!store.admin_audit_logs) {
+        store.admin_audit_logs = [];
+      }
+      store.admin_audit_logs.push({
+        id: `audit_${Date.now()}_status`,
+        action: 'toggle_active',
+        performedByEmail: verifiedToken?.email || 'master',
+        performedByRole: 'moderador_master',
+        targetEmail,
+        timestampIso: new Date().toISOString(),
+        details: `Conta ${isActive ? 'reativada' : 'desativada'}`,
+      });
+
+      saveCloudStore(store);
+
+      return res.status(200).json({
+        ok: true,
+        message: `Status da conta ${targetEmail} alterado para ${isActive ? 'Ativa' : 'Inativa'}.`,
+      });
+    }
+
+    // AÇÃO 2I: Validação e Auditoria de Sócios da Atlética
+    if (action === 'review_member_status') {
+      if (!isAdminRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas a moderação pode aprovar ou rejeitar comprovação de sócios.',
+        });
+      }
+
+      const registrationId = String(body.registrationId || '').trim();
+      const approved = Boolean(body.approved);
+      const justification = String(body.justification || '').trim();
+
+      const reg = store.registrations[registrationId];
+      if (!reg) {
+        return res.status(404).json({
+          ok: false,
+          error: 'Inscrição não encontrada.',
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+      reg.isMember = approved;
+      reg.memberStatus = approved ? 'aprovado' : 'rejeitado';
+      reg.memberVerificationStatus = approved ? 'approved' : 'rejected';
+      if (!approved && justification) {
+        reg.rejectionReason = justification;
+      }
+      reg.memberVerifiedAtIso = nowIso;
+      reg.memberVerifiedBy = verifiedToken?.email || 'moderação';
+
+      if (!store.admin_audit_logs) {
+        store.admin_audit_logs = [];
+      }
+      store.admin_audit_logs.push({
+        id: `audit_${Date.now()}_member`,
+        action: approved ? 'approve_member' : 'reject_member',
+        performedByEmail: verifiedToken?.email || 'moderação',
+        performedByRole: verifiedToken?.role || 'moderador',
+        targetId: registrationId,
+        timestampIso: nowIso,
+        details: approved
+          ? 'Comprovante de sócio aprovado'
+          : `Comprovante rejeitado: ${justification || 'Sem justificativa'}`,
+      });
+
+      saveCloudStore(store);
+      void MirrorDocumentToFirestoreRest('registrations', registrationId, reg);
+
+      return res.status(200).json({
+        ok: true,
+        message: approved ? 'Condição de sócio aprovada!' : 'Solicitação de sócio rejeitada.',
+        registration: sanitizeRegistrationForPublic(reg),
       });
     }
 

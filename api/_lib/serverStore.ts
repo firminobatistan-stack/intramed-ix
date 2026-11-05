@@ -13,6 +13,27 @@ export interface SyncDiagnosticLogEntry {
   details?: Record<string, unknown>;
 }
 
+export type UserRole = 'usuario' | 'atleta' | 'mesario' | 'moderador' | 'moderador_master';
+
+export const USER_ROLE_LEVELS: Record<UserRole, number> = {
+  usuario: 1,
+  atleta: 2,
+  mesario: 3,
+  moderador: 4,
+  moderador_master: 5,
+};
+
+export interface AdminActionAuditLog {
+  id: string;
+  action: string;
+  performedByEmail: string;
+  performedByRole: string;
+  targetEmail?: string;
+  targetId?: string;
+  timestampIso: string;
+  details?: string;
+}
+
 export interface CloudCollectionMap {
   registrations: Record<string, Record<string, unknown>>;
   athletes: Record<string, Record<string, unknown>>;
@@ -20,10 +41,14 @@ export interface CloudCollectionMap {
   matches: Record<string, Record<string, unknown>>;
   match_sheets: Record<string, Record<string, unknown>>;
   match_secrets: Record<string, { pinHash: string; pinDisplay?: string; updatedAtIso: string }>;
+  admin_users?: Record<string, Record<string, unknown>>;
+  admin_audit_logs?: AdminActionAuditLog[];
   sync_logs?: SyncDiagnosticLogEntry[];
   hydratedFromFirestoreAtIso?: string;
   updatedAtIso: string;
 }
+
+export const MASTER_MODERATOR_EMAIL = 'cangaceira@uema.com';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -174,10 +199,20 @@ export function hashSecretPin(pin: string): string {
     .digest('hex');
 }
 
+export function hashPassword(password: string): string {
+  return crypto
+    .createHmac('sha256', getServerSigningSecret())
+    .update(password.trim())
+    .digest('hex');
+}
+
 export interface SignedOperatorTokenPayload {
-  role: 'admin' | 'mesario';
-  matchId?: string;
+  role: UserRole | 'admin';
+  email?: string;
+  userId?: string;
   officialName?: string;
+  mustChangePassword?: boolean;
+  matchId?: string;
   iat: number;
   exp: number;
 }
@@ -248,8 +283,64 @@ export function verifyMasterAdminPassword(input: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
+export function isMasterAccount(email?: string | null): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase() === MASTER_MODERATOR_EMAIL.toLowerCase();
+}
+
+export function protectMasterAccount(targetEmail: string, actionDesc: string): void {
+  if (isMasterAccount(targetEmail)) {
+    throw new Error(
+      `Operação negada (${actionDesc}): A conta Moderador Master (${MASTER_MODERATOR_EMAIL}) é protegida e não pode ser rebaixada, desativada ou excluída.`
+    );
+  }
+}
+
+export function ensureMasterAccountProvisioned(store: CloudCollectionMap): void {
+  if (!store.admin_users) {
+    store.admin_users = {};
+  }
+  if (!store.admin_audit_logs) {
+    store.admin_audit_logs = [];
+  }
+  const emailKey = MASTER_MODERATOR_EMAIL.toLowerCase();
+  const existingMaster = store.admin_users[emailKey];
+
+  if (!existingMaster) {
+    const initialPass = process.env.INTRAMED_MASTER_INITIAL_PASSWORD || 'campeao2027';
+    const nowIso = new Date().toISOString();
+    store.admin_users[emailKey] = {
+      id: 'usr_master_cangaceira',
+      email: emailKey,
+      name: 'Atlética Cangaceira',
+      role: 'moderador_master',
+      organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+      passwordHash: hashPassword(initialPass),
+      mustChangePassword: true,
+      isActive: true,
+      createdAtIso: nowIso,
+      updatedAtIso: nowIso,
+    };
+    store.admin_audit_logs.push({
+      id: `audit_${Date.now()}_prov`,
+      action: 'provision_master',
+      performedByEmail: 'system',
+      performedByRole: 'system',
+      targetEmail: emailKey,
+      timestampIso: nowIso,
+      details: 'Conta Moderador Master provisionada com primeiro acesso obrigatório',
+    });
+  } else {
+    // Blindagem de cargo permanente
+    existingMaster.role = 'moderador_master';
+    existingMaster.isActive = true;
+    existingMaster.organization = 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira';
+  }
+}
+
 export function getCloudStore(): CloudCollectionMap {
   if (global.__INTRAMED_CLOUD_STORE_V2__) {
+    ensureMasterAccountProvisioned(global.__INTRAMED_CLOUD_STORE_V2__);
     return global.__INTRAMED_CLOUD_STORE_V2__;
   }
 
@@ -265,8 +356,11 @@ export function getCloudStore(): CloudCollectionMap {
           matches: parsed.matches || {},
           match_sheets: parsed.match_sheets || {},
           match_secrets: parsed.match_secrets || {},
+          admin_users: parsed.admin_users || {},
+          admin_audit_logs: parsed.admin_audit_logs || [],
           updatedAtIso: parsed.updatedAtIso || new Date().toISOString(),
         };
+        ensureMasterAccountProvisioned(global.__INTRAMED_CLOUD_STORE_V2__);
         return global.__INTRAMED_CLOUD_STORE_V2__;
       }
     }
@@ -281,12 +375,16 @@ export function getCloudStore(): CloudCollectionMap {
     matches: {},
     match_sheets: {},
     match_secrets: {},
+    admin_users: {},
+    admin_audit_logs: [],
     updatedAtIso: new Date().toISOString(),
   };
+  ensureMasterAccountProvisioned(global.__INTRAMED_CLOUD_STORE_V2__);
   return global.__INTRAMED_CLOUD_STORE_V2__;
 }
 
 export function saveCloudStore(store: CloudCollectionMap) {
+  ensureMasterAccountProvisioned(store);
   store.updatedAtIso = new Date().toISOString();
   global.__INTRAMED_CLOUD_STORE_V2__ = store;
   try {

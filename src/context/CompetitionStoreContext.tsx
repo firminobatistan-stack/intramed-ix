@@ -2653,7 +2653,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     return (
       state.currentUser.role === 'administrador' ||
       state.currentUser.role === 'organizacao' ||
-      state.currentUser.role === 'moderador'
+      state.currentUser.role === 'moderador' ||
+      (state.currentUser.role as string) === 'moderador_master'
     );
   }, [state.currentUser]);
 

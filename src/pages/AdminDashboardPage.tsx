@@ -36,7 +36,7 @@ import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Tabs, TabItem } from '../components/ui/Tabs';
 
-type AdminTab = 'partidas' | 'cadastros' | 'regras' | 'auditoria';
+type AdminTab = 'partidas' | 'cadastros' | 'usuarios' | 'regras' | 'auditoria';
 
 const ADMIN_TABS: TabItem[] = [
   {
@@ -48,6 +48,11 @@ const ADMIN_TABS: TabItem[] = [
     id: 'cadastros',
     label: 'Cadastros (Períodos, Atletas & Jogos)',
     icon: <Users className="w-4 h-4" />,
+  },
+  {
+    id: 'usuarios',
+    label: 'Gestão de Usuários & RBAC',
+    icon: <ShieldCheck className="w-4 h-4" />,
   },
   {
     id: 'regras',
@@ -151,6 +156,127 @@ export const AdminDashboardPage: React.FC = () => {
   >([]);
   const [pendingOfflineItems, setPendingOfflineItems] = useState<QueuedSyncItem[]>([]);
   const [isFlushingQueue, setIsFlushingQueue] = useState(false);
+
+  // Estados de Gestão de Usuários & RBAC
+  interface AdminUserItem {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    organization?: string;
+    isActive: boolean;
+    mustChangePassword?: boolean;
+    createdAtIso?: string;
+    lastLoginAtIso?: string;
+  }
+  const [adminUsersList, setAdminUsersList] = useState<AdminUserItem[]>([]);
+  const [adminAuditLogs, setAdminAuditLogs] = useState<
+    Array<{
+      id: string;
+      action: string;
+      performedByEmail: string;
+      performedByRole: string;
+      targetEmail?: string;
+      timestampIso: string;
+      details?: string;
+    }>
+  >([]);
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [selectedUserForRole, setSelectedUserForRole] = useState<AdminUserItem | null>(null);
+  const [selectedNewRole, setSelectedNewRole] = useState<string>('mesario');
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+  const loadAdminUsers = React.useCallback(async () => {
+    setIsLoadingUsers(true);
+    try {
+      const opToken = getStoredOperatorToken();
+      const res = await fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${opToken}`,
+          'x-intramed-token': opToken || '',
+        },
+        body: JSON.stringify({ action: 'list_admin_users' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.users)) {
+          setAdminUsersList(data.users);
+        }
+        if (Array.isArray(data.auditLogs)) {
+          setAdminAuditLogs(data.auditLogs);
+        }
+      }
+    } catch {
+      // Offline
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'usuarios') {
+      loadAdminUsers();
+    }
+  }, [activeTab, loadAdminUsers]);
+
+  const handleUpdateRole = async (targetEmail: string, newRole: string) => {
+    try {
+      const opToken = getStoredOperatorToken();
+      const res = await fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${opToken}`,
+          'x-intramed-token': opToken || '',
+        },
+        body: JSON.stringify({
+          action: 'update_user_role',
+          targetEmail,
+          targetRole: newRole,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok) {
+        showNotice('ok', data.message || 'Cargo atualizado com sucesso!');
+        setSelectedUserForRole(null);
+        loadAdminUsers();
+      } else {
+        showNotice('err', data?.error || 'Erro ao atualizar cargo do usuário.');
+      }
+    } catch {
+      showNotice('err', 'Falha de conexão com o servidor.');
+    }
+  };
+
+  const handleToggleActive = async (targetEmail: string, currentActive: boolean) => {
+    try {
+      const opToken = getStoredOperatorToken();
+      const res = await fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${opToken}`,
+          'x-intramed-token': opToken || '',
+        },
+        body: JSON.stringify({
+          action: 'toggle_user_active',
+          targetEmail,
+          isActive: !currentActive,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok) {
+        showNotice('ok', data.message || 'Status alterado com sucesso!');
+        loadAdminUsers();
+      } else {
+        showNotice('err', data?.error || 'Erro ao alterar status do usuário.');
+      }
+    } catch {
+      showNotice('err', 'Falha de conexão com o servidor.');
+    }
+  };
 
   const loadSyncDiagnostics = React.useCallback(async () => {
     setPendingOfflineItems(getPendingQueueItems());
@@ -1105,6 +1231,298 @@ export const AdminDashboardPage: React.FC = () => {
                     </button>
                   );
                 })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ABA: GESTÃO DE USUÁRIOS & HIERARQUIA RBAC (5 NÍVEIS) */}
+      {activeTab === 'usuarios' && (
+        <div className="space-y-6">
+          {/* Card Informativo da Conta Master & Hierarquia */}
+          <div className="rounded-3xl bg-gradient-to-r from-[#0B218A] to-[#1E3A8A] text-white p-6 shadow-card">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30 text-xs font-bold">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Governança Oficial • A.A.A. Cangaceira</span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-display font-black tracking-tight">
+                  Controle de Acessos &amp; Hierarquia RBAC
+                </h3>
+                <p className="text-xs sm:text-sm text-white/80 max-w-2xl leading-relaxed">
+                  Sistema de autorização em 5 níveis estritos. A conta Moderador Master possui governança exclusiva sobre a atribuição de papéis e possui blindagem permanente contra exclusão ou rebaixamento.
+                </p>
+              </div>
+
+              <div className="bg-white/10 border border-white/15 rounded-2xl p-4 flex flex-col gap-1 min-w-[240px]">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-white/70">
+                  Moderador Master Ativo
+                </span>
+                <span className="text-sm font-extrabold text-brand-yellow truncate">
+                  cangaceira@uema.com
+                </span>
+                <span className="text-[11px] text-white/60">
+                  A.A.A. de Medicina UEMA – Cangaceira
+                </span>
+              </div>
+            </div>
+
+            {/* Régua explicativa dos 5 níveis */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mt-5 pt-4 border-t border-white/15">
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <span className="text-[10px] font-black uppercase text-brand-yellow block">Nível 5 • Master</span>
+                <span className="text-xs font-bold text-white block mt-0.5">Moderador Master</span>
+                <span className="text-[10px] text-white/60 block mt-0.5">Governança total</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <span className="text-[10px] font-black uppercase text-sky-300 block">Nível 4 • Mod</span>
+                <span className="text-xs font-bold text-white block mt-0.5">Moderador</span>
+                <span className="text-[10px] text-white/60 block mt-0.5">Comissão &amp; Sócios</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <span className="text-[10px] font-black uppercase text-emerald-300 block">Nível 3 • Mesa</span>
+                <span className="text-xs font-bold text-white block mt-0.5">Mesário</span>
+                <span className="text-[10px] text-white/60 block mt-0.5">Súmulas ao vivo</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <span className="text-[10px] font-black uppercase text-amber-300 block">Nível 2 • Atleta</span>
+                <span className="text-xs font-bold text-white block mt-0.5">Atleta</span>
+                <span className="text-[10px] text-white/60 block mt-0.5">Passaporte esportivo</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <span className="text-[10px] font-black uppercase text-slate-300 block">Nível 1 • Usuário</span>
+                <span className="text-xs font-bold text-white block mt-0.5">Usuário</span>
+                <span className="text-[10px] text-white/60 block mt-0.5">Comunidade &amp; Torcida</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela de Usuários e Gestão de Cargos */}
+          <div className="bg-white rounded-3xl border border-brand-surface-border p-6 shadow-card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-base font-display font-extrabold text-slate-900">
+                  Usuários Administrativos &amp; Operadores
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Gerencie atribuições de mesários, moderadores e acesso aos painéis oficiais.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                  placeholder="Buscar por e-mail ou nome..."
+                  className="px-3.5 py-2 rounded-xl text-xs bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={loadAdminUsers}
+                  disabled={isLoadingUsers}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingUsers ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="bg-slate-50 border-y border-slate-200 uppercase text-[10px] font-bold text-slate-500 tracking-wider">
+                  <tr>
+                    <th className="py-3 px-4">Usuário</th>
+                    <th className="py-3 px-4">E-mail</th>
+                    <th className="py-3 px-4">Cargo / Nível</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {adminUsersList
+                    .filter((u) => {
+                      if (!userSearchTerm.trim()) return true;
+                      const q = userSearchTerm.toLowerCase();
+                      return u.email.toLowerCase().includes(q) || u.name.toLowerCase().includes(q);
+                    })
+                    .map((user) => {
+                      const isMasterUser = user.email.toLowerCase() === 'cangaceira@uema.com';
+                      return (
+                        <tr key={user.id || user.email} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3.5 px-4 font-semibold text-slate-900">
+                            <div className="flex items-center gap-2">
+                              {isMasterUser && <span className="text-amber-500 text-sm">👑</span>}
+                              <span>{user.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-600 font-mono text-[11px]">
+                            {user.email}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                user.role === 'moderador_master'
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  : user.role === 'moderador'
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                  : user.role === 'mesario'
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              {user.role}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`inline-flex items-center gap-1 text-[11px] font-semibold ${
+                                user.isActive ? 'text-emerald-700' : 'text-rose-600'
+                              }`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  user.isActive ? 'bg-emerald-500' : 'bg-rose-500'
+                                }`}
+                              />
+                              {user.isActive ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            {isMasterUser ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200">
+                                <Shield className="w-3 h-3" />
+                                <span>Blindagem Master</span>
+                              </span>
+                            ) : (
+                              <div className="inline-flex items-center gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-xs py-1 px-2.5 h-7"
+                                  onClick={() => {
+                                    setSelectedUserForRole(user);
+                                    setSelectedNewRole(user.role);
+                                  }}
+                                >
+                                  Alterar Cargo
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={user.isActive ? 'ghost' : 'outline'}
+                                  className={`text-xs py-1 px-2.5 h-7 ${
+                                    user.isActive ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600'
+                                  }`}
+                                  onClick={() => handleToggleActive(user.email, user.isActive)}
+                                >
+                                  {user.isActive ? 'Desativar' : 'Ativar'}
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal de Alteração de Cargo */}
+            {selectedUserForRole && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-base font-display font-extrabold text-slate-900">
+                      Alterar Cargo de Acesso
+                    </h5>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserForRole(null)}
+                      className="text-slate-400 hover:text-slate-600 text-sm font-bold"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-slate-600">
+                    Defina o nível de autorização para o operador <strong>{selectedUserForRole.email}</strong>:
+                  </p>
+
+                  <div className="space-y-2">
+                    {[
+                      { role: 'moderador', label: 'Moderador (Nível 4)', desc: 'Aprovação de sócios e gerenciamento geral' },
+                      { role: 'mesario', label: 'Mesário Oficial (Nível 3)', desc: 'Operação de súmulas ao vivo e lances' },
+                      { role: 'atleta', label: 'Atleta Inscrito (Nível 2)', desc: 'Acesso à carteirinha e dados esportivos' },
+                      { role: 'usuario', label: 'Usuário Padrão (Nível 1)', desc: 'Acesso torcedor sem privilégios de edição' },
+                    ].map((item) => (
+                      <label
+                        key={item.role}
+                        className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-all ${
+                          selectedNewRole === item.role
+                            ? 'bg-brand-blue/5 border-brand-blue'
+                            : 'bg-slate-50 border-slate-200 hover:bg-white'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="newRole"
+                          value={item.role}
+                          checked={selectedNewRole === item.role}
+                          onChange={(e) => setSelectedNewRole(e.target.value)}
+                          className="mt-0.5 text-brand-blue focus:ring-brand-blue"
+                        />
+                        <div>
+                          <span className="block text-xs font-bold text-slate-900">{item.label}</span>
+                          <span className="block text-[11px] text-slate-500">{item.desc}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedUserForRole(null)}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => handleUpdateRole(selectedUserForRole.email, selectedNewRole)}
+                    >
+                      Confirmar Cargo
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Histórico de Auditoria RBAC */}
+          {adminAuditLogs.length > 0 && (
+            <div className="bg-white rounded-3xl border border-brand-surface-border p-6 shadow-card space-y-3">
+              <h4 className="text-sm font-display font-bold text-slate-900 uppercase tracking-wider">
+                Trilha de Auditoria • Ações Administrativas Recentes
+              </h4>
+              <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                {adminAuditLogs.map((log) => (
+                  <div key={log.id} className="py-2.5 flex items-center justify-between text-xs">
+                    <div className="space-y-0.5">
+                      <span className="font-bold text-slate-900">{log.action}</span>
+                      <p className="text-slate-500 text-[11px]">
+                        Por: {log.performedByEmail} ({log.performedByRole}) {log.targetEmail ? `→ Alvo: ${log.targetEmail}` : ''}
+                      </p>
+                      {log.details && <p className="text-slate-600 text-[11px] italic">{log.details}</p>}
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {new Date(log.timestampIso).toLocaleString('pt-BR')}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}

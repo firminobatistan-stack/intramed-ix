@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, Navigate } from 'react-router-dom';
 import {
   Lock,
   ShieldAlert,
@@ -21,20 +21,16 @@ import { Input } from '../ui/Input';
 interface AdminRouteGuardProps {
   children: React.ReactNode;
   title?: string;
+  requiredRoleLevel?: number;
 }
 
-/**
- * Guardião de Rotas Restritas à Comissão / Arbitragem / Mesários (`/admin` e `/sumula/:matchId`).
- * - Para rotas de súmula (`/sumula/:matchId`), permite desbloqueio por:
- *   1. Senha individual do Mesário daquela partida (`match.tableOfficialPassword`); ou
- *   2. Senha geral da Comissão Organizadora (`"bicoduro"`).
- * - Para rotas administrativas gerais (`/admin`), exige a senha da Comissão Organizadora (`"bicoduro"`).
- */
 export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
   children,
   title = 'Área Restrita da Organização',
+  requiredRoleLevel = 4,
 }) => {
   const {
+    currentUser,
     setCurrentUser,
     canOperateOfficialData,
     canOperateMatch,
@@ -44,6 +40,11 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams<{ matchId?: string }>();
+
+  // Se o usuário precisa trocar a senha no primeiro acesso, força redirecionamento
+  if (currentUser?.mustChangePassword) {
+    return <Navigate to="/primeiro-acesso" replace />;
+  }
 
   // Identifica se o acesso é para operar a súmula de uma partida específica
   const matchIdFromPath =
@@ -59,6 +60,7 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
   const targetMatch = matchIdFromPath ? getMatchById(matchIdFromPath) : undefined;
 
   const [officialName, setOfficialName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,48 +90,70 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
     }
 
     const cleanPass = password.trim();
-    let isAuthorized = cleanPass === 'bicoduro';
+    const cleanEmail = adminEmail.trim().toLowerCase() || 'cangaceira@uema.com';
+
+    if (!cleanPass) {
+      setError('Informe a senha de acesso.');
+      return;
+    }
 
     try {
       const res = await fetch('/api/cloud-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'verify_operator_pin',
+          action: 'admin_login',
+          email: cleanEmail,
           password: cleanPass,
         }),
       });
       const data = await res.json().catch(() => null);
-      if (res.ok && data?.success && data?.role === 'admin' && data?.token) {
+
+      if (res.ok && data?.ok && data?.token) {
         setStoredOperatorToken(data.token);
-        isAuthorized = true;
-      } else if (res.status === 401) {
-        isAuthorized = false;
+
+        if (data.mustChangePassword) {
+          sessionStorage.setItem('intramed_admin_session', 'restricted_first_access');
+          setCurrentUser({
+            id: data.user?.id || 'usr_master_cangaceira',
+            name: data.user?.name || 'Atlética Cangaceira',
+            email: data.user?.email || cleanEmail,
+            avatarUrl: '/assets/atletica/logo.png',
+            teamId: null,
+            teamName: data.user?.organization || 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+            modalityIds: [],
+            role: (data.user?.role as any) || 'moderador_master',
+            linkedAthleteId: null,
+            mustChangePassword: true,
+          });
+          navigate('/primeiro-acesso', { replace: true });
+          return;
+        }
+
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('intramed_admin_session', 'true');
+        }
+
+        setCurrentUser({
+          id: data.user?.id || 'usr_admin_intramed',
+          name: data.user?.name || 'Atlética Cangaceira',
+          email: data.user?.email || cleanEmail,
+          avatarUrl: '/assets/atletica/logo.png',
+          teamId: null,
+          teamName: data.user?.organization || 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+          modalityIds: [],
+          role: (data.user?.role as any) || 'moderador_master',
+          linkedAthleteId: null,
+          mustChangePassword: false,
+        });
+        return;
+      } else {
+        setError(data?.error || 'Credenciais inválidas. Verifique e-mail e senha.');
+        return;
       }
     } catch {
-      // Fallback local
+      setError('Erro de conexão ao validar credenciais com o servidor.');
     }
-
-    if (!isAuthorized) {
-      setError('Senha incorreta. Acesso não autorizado.');
-      return;
-    }
-
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('intramed_admin_session', 'true');
-    }
-
-    setCurrentUser({
-      id: 'usr-admin-intramed',
-      name: 'Comissão Organizadora • A.A.A. Cangaceira',
-      email: 'organizacao@intramed.uema.br',
-      avatarUrl: '/assets/atletica/logo.png',
-      teamId: null,
-      teamName: 'Arbitragem & Organização INTRAMED IX',
-      modalityIds: [],
-      role: 'administrador',
-      linkedAthleteId: null,
-    });
   };
 
   return (
