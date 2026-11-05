@@ -79,7 +79,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const items = [
       {
         id: String(registrationId),
-        title: `Inscricao INTRAMED IX - ${turmaLabel ? turmaLabel + ' - ' : ''}Passaporte Geral (${athleteName || 'Atleta'})`,
+        title: `Intramed Cangaceira — Inscrição ${turmaLabel ? turmaLabel + ' • ' : ''}Passaporte (${athleteName || 'Atleta'})`,
+        description: 'Inscrição Oficial INTRAMED IX — Atlética Cangaceira Medicina UEMA',
         quantity: 1,
         unit_price: basePrice,
         currency_id: 'BRL',
@@ -89,7 +90,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (fee > 0) {
       items.push({
         id: `${registrationId}-taxa-cartao`,
-        title: 'Taxa Administrativa Operadora de Cartao (Repasse Gateway)',
+        title: 'Intramed Cangaceira — Acréscimo Operadora de Cartão',
+        description: 'Repasse de taxa administrativa do gateway de cartão',
         quantity: 1,
         unit_price: fee,
         currency_id: 'BRL',
@@ -104,6 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const buildPreferencePayload = (payerEmail: string) => {
       const p: Record<string, unknown> = {
         items,
+        statement_descriptor: 'INTRAMED CANG',
         payer: {
           name: (athleteName || 'Atleta IntraMed').trim(),
           email: payerEmail,

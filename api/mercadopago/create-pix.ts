@@ -84,7 +84,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const buildPayload = (payerEmail: string) => {
       const p: Record<string, unknown> = {
         transaction_amount: amount,
-        description: `Inscricao INTRAMED IX - ${turmaLabel ? turmaLabel + ' - ' : ''}${firstName} ${lastName}`.slice(0, 200),
+        description: `Intramed Cangaceira - Inscricao ${turmaLabel ? turmaLabel + ' - ' : ''}${firstName} ${lastName}`.slice(0, 200),
+        statement_descriptor: 'INTRAMED CANG',
         payment_method_id: 'pix',
         external_reference: String(registrationId),
         payer: {
