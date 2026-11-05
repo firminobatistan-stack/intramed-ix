@@ -79,6 +79,7 @@ export const RegistrationPage: React.FC = () => {
   const [isCheckingPayment, setIsCheckingPayment] = useState(false);
   const [paymentApprovedSuccess, setPaymentApprovedSuccess] = useState(false);
   const [isCreatingCardPreference, setIsCreatingCardPreference] = useState(false);
+  const [pixRetryCount, setPixRetryCount] = useState(0);
 
   const selectedTurmaObj = TURMAS_MEDICINA.find((t) => t.turma === selectedTurma) || TURMAS_MEDICINA[0];
 
@@ -188,7 +189,7 @@ export const RegistrationPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [payingRegistration, paymentMethod]);
+  }, [payingRegistration, paymentMethod, pixRetryCount]);
 
   // Polling em background para verificar confirmação automática do Pix
   useEffect(() => {
@@ -881,7 +882,7 @@ export const RegistrationPage: React.FC = () => {
                         size="sm"
                         onClick={() => {
                           setPixError(null);
-                          setPaymentMethod('pix');
+                          setPixRetryCount((c) => c + 1);
                         }}
                       >
                         Tentar Novamente

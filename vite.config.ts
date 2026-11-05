@@ -1,21 +1,8 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
-function isValidCPF(cpf: string): boolean {
-  const clean = cpf.replace(/\D/g, '');
-  if (clean.length !== 11) return false;
-  if (/^(\d)\1{10}$/.test(clean)) return false;
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(clean.charAt(i), 10) * (10 - i);
-  let rev = 11 - (sum % 11);
-  if (rev === 10 || rev === 11) rev = 0;
-  if (rev !== parseInt(clean.charAt(9), 10)) return false;
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(clean.charAt(i), 10) * (11 - i);
-  rev = 11 - (sum % 11);
-  if (rev === 10 || rev === 11) rev = 0;
-  if (rev !== parseInt(clean.charAt(10), 10)) return false;
-  return true;
+function isValidEmail(email: string): boolean {
+  return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
 }
 
 export default defineConfig(({ mode }) => {
@@ -48,7 +35,6 @@ export default defineConfig(({ mode }) => {
                     registrationId,
                     athleteName,
                     athleteEmail,
-                    athleteDocument,
                     turmaLabel,
                     authorizedPrice,
                     memberStatus,
@@ -70,49 +56,56 @@ export default defineConfig(({ mode }) => {
                     );
                   }
 
-                  const cleanDoc = athleteDocument ? String(athleteDocument).replace(/\D/g, '') : '';
-                  const nameParts = (athleteName || 'Atleta IntraMed').trim().split(/\s+/);
-                  const firstName = nameParts[0] || 'Atleta';
-                  const lastName = nameParts.slice(1).join(' ') || 'IntraMed';
+                  const rawName = (athleteName || 'Atleta IntraMed').trim();
+                  const nameParts = rawName.split(/\s+/);
+                  const firstName = (nameParts[0] || 'Atleta').replace(/[^a-zA-ZÀ-ÿ\s]/g, '') || 'Atleta';
+                  const lastName = (nameParts.slice(1).join(' ') || 'IntraMed').replace(/[^a-zA-ZÀ-ÿ\s]/g, '') || 'IntraMed';
 
-                  const payload: Record<string, unknown> = {
-                    transaction_amount: Number(authorizedPrice),
-                    description: `Inscrição INTRAMED IX - ${turmaLabel ? turmaLabel + ' • ' : ''}${athleteName}`,
+                  const cleanEmail = (athleteEmail || '').trim().toLowerCase();
+                  const safeEmail = isValidEmail(cleanEmail)
+                    ? cleanEmail
+                    : `atleta.${Date.now()}@intramed.com.br`;
+
+                  const amount = Math.round(Number(authorizedPrice) * 100) / 100;
+
+                  const buildPayload = (payerEmail: string) => ({
+                    transaction_amount: amount,
+                    description: `Inscricao INTRAMED IX - ${turmaLabel ? turmaLabel + ' - ' : ''}${firstName} ${lastName}`.slice(0, 200),
                     payment_method_id: 'pix',
-                    external_reference: registrationId,
+                    external_reference: String(registrationId),
                     payer: {
-                      email:
-                        athleteEmail && athleteEmail.includes('@')
-                          ? athleteEmail
-                          : 'contato@atleticacangaceira.com',
+                      email: payerEmail,
                       first_name: firstName,
                       last_name: lastName,
                     },
-                  };
+                  });
 
-                  if (cleanDoc && cleanDoc.length === 11 && isValidCPF(cleanDoc)) {
-                    (payload.payer as Record<string, unknown>).identification = {
-                      type: 'CPF',
-                      number: cleanDoc,
-                    };
-                  } else if (cleanDoc && cleanDoc.length === 14) {
-                    (payload.payer as Record<string, unknown>).identification = {
-                      type: 'CNPJ',
-                      number: cleanDoc,
-                    };
-                  }
-
-                  const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
+                  let mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
                     method: 'POST',
                     headers: {
                       Authorization: `Bearer ${mpAccessToken}`,
                       'Content-Type': 'application/json',
-                      'X-Idempotency-Key': `pix_${registrationId}_${Date.now()}`,
+                      'X-Idempotency-Key': `pix_${registrationId}_${Date.now()}_1`,
                     },
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify(buildPayload(safeEmail)),
                   });
 
-                  const data = await mpRes.json();
+                  let data = await mpRes.json();
+
+                  if (!mpRes.ok) {
+                    const fallbackEmail = `inscricao.${Date.now()}@atleticacangaceira.com.br`;
+                    mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${mpAccessToken}`,
+                        'Content-Type': 'application/json',
+                        'X-Idempotency-Key': `pix_${registrationId}_${Date.now()}_2`,
+                      },
+                      body: JSON.stringify(buildPayload(fallbackEmail)),
+                    });
+                    data = await mpRes.json();
+                  }
+
                   res.statusCode = mpRes.status;
                   res.setHeader('Content-Type', 'application/json');
 
@@ -161,7 +154,6 @@ export default defineConfig(({ mode }) => {
                     registrationId,
                     athleteName,
                     athleteEmail,
-                    athleteDocument,
                     turmaLabel,
                     authorizedPrice,
                     memberStatus,
@@ -169,7 +161,7 @@ export default defineConfig(({ mode }) => {
                     cardFeeAmount,
                   } = body;
 
-                  if (!registrationId || !authorizedPrice || !athleteEmail) {
+                  if (!registrationId || !authorizedPrice) {
                     res.statusCode = 400;
                     res.setHeader('Content-Type', 'application/json');
                     return res.end(JSON.stringify({ error: 'Parâmetros incompletos.' }));
@@ -181,17 +173,17 @@ export default defineConfig(({ mode }) => {
                     return res.end(JSON.stringify({ error: 'Inscrição de sócio pendente de validação.' }));
                   }
 
-                  const basePrice = Number(authorizedPrice);
+                  const basePrice = Math.round(Number(authorizedPrice) * 100) / 100;
                   const fee = isCreditCard
                     ? cardFeeAmount
-                      ? Number(cardFeeAmount)
+                      ? Math.round(Number(cardFeeAmount) * 100) / 100
                       : Math.round(basePrice * 0.05 * 100) / 100
                     : 0;
 
                   const items = [
                     {
-                      id: registrationId,
-                      title: `Inscrição INTRAMED IX — ${turmaLabel ? turmaLabel + ' • ' : ''}Passaporte Geral (${athleteName})`,
+                      id: String(registrationId),
+                      title: `Inscricao INTRAMED IX - ${turmaLabel ? turmaLabel + ' - ' : ''}Passaporte Geral (${athleteName || 'Atleta'})`,
                       quantity: 1,
                       unit_price: basePrice,
                       currency_id: 'BRL',
@@ -201,46 +193,60 @@ export default defineConfig(({ mode }) => {
                   if (fee > 0) {
                     items.push({
                       id: `${registrationId}-taxa-cartao`,
-                      title: 'Taxa Administrativa Operadora de Cartão (Repasse Gateway)',
+                      title: 'Taxa Administrativa Operadora de Cartao (Repasse Gateway)',
                       quantity: 1,
                       unit_price: fee,
                       currency_id: 'BRL',
                     });
                   }
 
-                  const cleanDoc = athleteDocument ? String(athleteDocument).replace(/\D/g, '') : '';
-                  const payerData: Record<string, unknown> = {
-                    name: athleteName,
-                    email: athleteEmail,
-                  };
-
-                  if (cleanDoc && cleanDoc.length === 11 && isValidCPF(cleanDoc)) {
-                    payerData.identification = { type: 'CPF', number: cleanDoc };
-                  }
+                  const cleanEmail = (athleteEmail || '').trim().toLowerCase();
+                  const safeEmail = isValidEmail(cleanEmail)
+                    ? cleanEmail
+                    : `atleta.${Date.now()}@intramed.com.br`;
 
                   const appBaseUrl = 'https://intramedix.vercel.app';
 
-                  const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
+                  const buildPrefPayload = (payerEmail: string) => ({
+                    items,
+                    payer: {
+                      name: (athleteName || 'Atleta IntraMed').trim(),
+                      email: payerEmail,
+                    },
+                    back_urls: {
+                      success: `${appBaseUrl}/inscricao?status=sucesso&reg=${registrationId}`,
+                      pending: `${appBaseUrl}/inscricao?status=pendente&reg=${registrationId}`,
+                      failure: `${appBaseUrl}/inscricao?status=falha&reg=${registrationId}`,
+                    },
+                    auto_return: 'approved',
+                    external_reference: String(registrationId),
+                    payment_methods: { installments: 6 },
+                  });
+
+                  let mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
                     method: 'POST',
                     headers: {
                       Authorization: `Bearer ${mpAccessToken}`,
                       'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                      items,
-                      payer: payerData,
-                      back_urls: {
-                        success: `${appBaseUrl}/inscricao?status=sucesso&reg=${registrationId}`,
-                        pending: `${appBaseUrl}/inscricao?status=pendente&reg=${registrationId}`,
-                        failure: `${appBaseUrl}/inscricao?status=falha&reg=${registrationId}`,
-                      },
-                      auto_return: 'approved',
-                      external_reference: registrationId,
-                      payment_methods: { installments: 6 },
-                    }),
+                    body: JSON.stringify(buildPrefPayload(safeEmail)),
                   });
 
-                  const data = await mpRes.json();
+                  let data = await mpRes.json();
+
+                  if (!mpRes.ok) {
+                    const fallbackEmail = `inscricao.${Date.now()}@atleticacangaceira.com.br`;
+                    mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
+                      method: 'POST',
+                      headers: {
+                        Authorization: `Bearer ${mpAccessToken}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify(buildPrefPayload(fallbackEmail)),
+                    });
+                    data = await mpRes.json();
+                  }
+
                   res.statusCode = mpRes.status;
                   res.setHeader('Content-Type', 'application/json');
                   return res.end(

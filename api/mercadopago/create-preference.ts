@@ -1,20 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-function isValidCPF(cpf: string): boolean {
-  const clean = cpf.replace(/\D/g, '');
-  if (clean.length !== 11) return false;
-  if (/^(\d)\1{10}$/.test(clean)) return false;
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(clean.charAt(i), 10) * (10 - i);
-  let rev = 11 - (sum % 11);
-  if (rev === 10 || rev === 11) rev = 0;
-  if (rev !== parseInt(clean.charAt(9), 10)) return false;
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(clean.charAt(i), 10) * (11 - i);
-  rev = 11 - (sum % 11);
-  if (rev === 10 || rev === 11) rev = 0;
-  if (rev !== parseInt(clean.charAt(10), 10)) return false;
-  return true;
+function isValidEmail(email: string): boolean {
+  return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -35,7 +22,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     registrationId,
     athleteName,
     athleteEmail,
-    athleteDocument,
     turmaLabel,
     authorizedPrice,
     memberStatus,
@@ -43,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     cardFeeAmount,
   } = req.body || {};
 
-  if (!registrationId || !authorizedPrice || !athleteEmail) {
+  if (!registrationId || !authorizedPrice) {
     return res.status(400).json({
       error: 'Parâmetros incompletos para criação da ordem de pagamento.',
     });
@@ -69,81 +55,90 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const cleanDoc = athleteDocument ? String(athleteDocument).replace(/\D/g, '') : '';
-    const basePrice = Number(authorizedPrice);
-    const fee = isCreditCard ? (cardFeeAmount ? Number(cardFeeAmount) : Math.round(basePrice * 0.05 * 100) / 100) : 0;
+    const basePrice = Math.round(Number(authorizedPrice) * 100) / 100;
+    const fee = isCreditCard
+      ? cardFeeAmount
+        ? Math.round(Number(cardFeeAmount) * 100) / 100
+        : Math.round(basePrice * 0.05 * 100) / 100
+      : 0;
 
     const items = [
       {
-        id: registrationId,
-        title: `Inscrição INTRAMED IX — ${turmaLabel ? turmaLabel + ' • ' : ''}Passaporte Geral (${athleteName})`,
+        id: String(registrationId),
+        title: `Inscricao INTRAMED IX - ${turmaLabel ? turmaLabel + ' - ' : ''}Passaporte Geral (${athleteName || 'Atleta'})`,
         quantity: 1,
         unit_price: basePrice,
         currency_id: 'BRL',
       },
     ];
 
-    // Se o pagamento for no cartão, discrimina o acréscimo da operadora/gateway repassado
     if (fee > 0) {
       items.push({
         id: `${registrationId}-taxa-cartao`,
-        title: 'Taxa Administrativa Operadora de Cartão (Repasse Gateway)',
+        title: 'Taxa Administrativa Operadora de Cartao (Repasse Gateway)',
         quantity: 1,
         unit_price: fee,
         currency_id: 'BRL',
       });
     }
 
-    const payerData: Record<string, unknown> = {
-      name: athleteName,
-      email: athleteEmail,
+    const cleanEmail = (athleteEmail || '').trim().toLowerCase();
+    const safeEmail = isValidEmail(cleanEmail)
+      ? cleanEmail
+      : `atleta.${Date.now()}@intramed.com.br`;
+
+    const buildPreferencePayload = (payerEmail: string) => {
+      const p: Record<string, unknown> = {
+        items,
+        payer: {
+          name: (athleteName || 'Atleta IntraMed').trim(),
+          email: payerEmail,
+        },
+        back_urls: {
+          success: `${appBaseUrl}/inscricao?status=sucesso&reg=${registrationId}`,
+          pending: `${appBaseUrl}/inscricao?status=pendente&reg=${registrationId}`,
+          failure: `${appBaseUrl}/inscricao?status=falha&reg=${registrationId}`,
+        },
+        auto_return: 'approved',
+        external_reference: String(registrationId),
+        payment_methods: {
+          installments: 6,
+        },
+      };
+
+      if (appBaseUrl && !appBaseUrl.includes('localhost') && appBaseUrl.startsWith('https://')) {
+        p.notification_url = `${appBaseUrl}/api/mercadopago/webhook`;
+      }
+      return p;
     };
 
-    if (cleanDoc && cleanDoc.length === 11 && isValidCPF(cleanDoc)) {
-      payerData.identification = {
-        type: 'CPF',
-        number: cleanDoc,
-      };
-    } else if (cleanDoc && cleanDoc.length === 14) {
-      payerData.identification = {
-        type: 'CNPJ',
-        number: cleanDoc,
-      };
-    }
-
-    const payload: Record<string, unknown> = {
-      items,
-      payer: payerData,
-      back_urls: {
-        success: `${appBaseUrl}/inscricao?status=sucesso&reg=${registrationId}`,
-        pending: `${appBaseUrl}/inscricao?status=pendente&reg=${registrationId}`,
-        failure: `${appBaseUrl}/inscricao?status=falha&reg=${registrationId}`,
-      },
-      auto_return: 'approved',
-      external_reference: registrationId,
-      payment_methods: {
-        installments: 6,
-      },
-    };
-
-    if (appBaseUrl && !appBaseUrl.includes('localhost') && appBaseUrl.startsWith('https://')) {
-      payload.notification_url = `${appBaseUrl}/api/mercadopago/webhook`;
-    }
-
-    const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
+    let mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${mpAccessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildPreferencePayload(safeEmail)),
     });
 
-    const data = await mpResponse.json();
+    let data = await mpResponse.json();
+
+    if (!mpResponse.ok) {
+      const fallbackEmail = `inscricao.${Date.now()}@atleticacangaceira.com.br`;
+      mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${mpAccessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(buildPreferencePayload(fallbackEmail)),
+      });
+      data = await mpResponse.json();
+    }
 
     if (!mpResponse.ok) {
       return res.status(mpResponse.status).json({
-        error: 'Falha ao criar preferência junto à API do Mercado Pago.',
+        error: data.message || 'Falha ao criar preferência junto à API do Mercado Pago.',
         details: data,
       });
     }

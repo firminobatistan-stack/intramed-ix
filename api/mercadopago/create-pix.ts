@@ -1,20 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-function isValidCPF(cpf: string): boolean {
-  const clean = cpf.replace(/\D/g, '');
-  if (clean.length !== 11) return false;
-  if (/^(\d)\1{10}$/.test(clean)) return false;
-  let sum = 0;
-  for (let i = 0; i < 9; i++) sum += parseInt(clean.charAt(i), 10) * (10 - i);
-  let rev = 11 - (sum % 11);
-  if (rev === 10 || rev === 11) rev = 0;
-  if (rev !== parseInt(clean.charAt(9), 10)) return false;
-  sum = 0;
-  for (let i = 0; i < 10; i++) sum += parseInt(clean.charAt(i), 10) * (11 - i);
-  rev = 11 - (sum % 11);
-  if (rev === 10 || rev === 11) rev = 0;
-  if (rev !== parseInt(clean.charAt(10), 10)) return false;
-  return true;
+function isValidEmail(email: string): boolean {
+  return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -35,7 +22,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     registrationId,
     athleteName,
     athleteEmail,
-    athleteDocument,
     turmaLabel,
     authorizedPrice,
     memberStatus,
@@ -66,63 +52,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const cleanDoc = athleteDocument ? String(athleteDocument).replace(/\D/g, '') : '';
-    const nameParts = (athleteName || 'Atleta IntraMed').trim().split(/\s+/);
-    const firstName = nameParts[0] || 'Atleta';
-    const lastName = nameParts.slice(1).join(' ') || 'IntraMed';
+    const rawName = (athleteName || 'Atleta IntraMed').trim();
+    const nameParts = rawName.split(/\s+/);
+    const firstName = (nameParts[0] || 'Atleta').replace(/[^a-zA-ZÀ-ÿ\s]/g, '') || 'Atleta';
+    const lastName = (nameParts.slice(1).join(' ') || 'IntraMed').replace(/[^a-zA-ZÀ-ÿ\s]/g, '') || 'IntraMed';
 
-    const payload: Record<string, unknown> = {
-      transaction_amount: Number(authorizedPrice),
-      description: `Inscrição INTRAMED IX - ${turmaLabel ? turmaLabel + ' • ' : ''}${athleteName}`,
-      payment_method_id: 'pix',
-      external_reference: registrationId,
-      payer: {
-        email:
-          athleteEmail && athleteEmail.includes('@')
-            ? athleteEmail
-            : 'contato@atleticacangaceira.com',
-        first_name: firstName,
-        last_name: lastName,
-      },
+    const cleanEmail = (athleteEmail || '').trim().toLowerCase();
+    const safeEmail = isValidEmail(cleanEmail)
+      ? cleanEmail
+      : `atleta.${Date.now()}@intramed.com.br`;
+
+    const amount = Math.round(Number(authorizedPrice) * 100) / 100;
+
+    const buildPayload = (payerEmail: string) => {
+      const p: Record<string, unknown> = {
+        transaction_amount: amount,
+        description: `Inscricao INTRAMED IX - ${turmaLabel ? turmaLabel + ' - ' : ''}${firstName} ${lastName}`.slice(0, 200),
+        payment_method_id: 'pix',
+        external_reference: String(registrationId),
+        payer: {
+          email: payerEmail,
+          first_name: firstName,
+          last_name: lastName,
+        },
+      };
+
+      if (appBaseUrl && !appBaseUrl.includes('localhost') && appBaseUrl.startsWith('https://')) {
+        p.notification_url = `${appBaseUrl}/api/mercadopago/webhook`;
+      }
+      return p;
     };
 
-    // Validação estrita do CPF: só anexa se os dígitos forem matematicamente válidos.
-    // Evita erro 400 "Invalid user identification number" caso o participante digite matrícula universitária.
-    if (cleanDoc && cleanDoc.length === 11 && isValidCPF(cleanDoc)) {
-      (payload.payer as Record<string, unknown>).identification = {
-        type: 'CPF',
-        number: cleanDoc,
-      };
-    } else if (cleanDoc && cleanDoc.length === 14) {
-      (payload.payer as Record<string, unknown>).identification = {
-        type: 'CNPJ',
-        number: cleanDoc,
-      };
-    }
-
-    if (appBaseUrl && !appBaseUrl.includes('localhost') && appBaseUrl.startsWith('https://')) {
-      payload.notification_url = `${appBaseUrl}/api/mercadopago/webhook`;
-    }
-
-    const idempotencyKey = `pix_${registrationId}_${Date.now()}`;
-
-    const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
+    // Tentativa 1 com o e-mail informado pelo atleta
+    let mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${mpAccessToken}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': idempotencyKey,
+        'X-Idempotency-Key': `pix_${registrationId}_${Date.now()}_1`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(buildPayload(safeEmail)),
     });
 
-    const data = await mpResponse.json();
+    let data = await mpResponse.json();
+
+    // Se o Mercado Pago recusar por conflito de e-mail (ex: titular testando com o próprio e-mail da conta recebedora)
+    // ou restrição de dados do pagador, executa fallback imediato com e-mail institucional de checkout
+    if (!mpResponse.ok) {
+      console.warn('[MercadoPago Pix Retry] Primeira tentativa retornou erro, aplicando fallback seguro:', data);
+      const fallbackEmail = `inscricao.${Date.now()}@atleticacangaceira.com.br`;
+      mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${mpAccessToken}`,
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `pix_${registrationId}_${Date.now()}_2`,
+        },
+        body: JSON.stringify(buildPayload(fallbackEmail)),
+      });
+      data = await mpResponse.json();
+    }
 
     if (!mpResponse.ok) {
       console.error('[MercadoPago Pix Error]', data);
       return res.status(mpResponse.status).json({
-        error: 'Erro retornado pela API do Mercado Pago ao gerar Pix.',
-        details: data.message || data,
+        error: data.message || 'Erro retornado pela API do Mercado Pago ao gerar Pix.',
+        details: data,
       });
     }
 
