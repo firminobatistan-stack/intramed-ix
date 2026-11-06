@@ -13,7 +13,7 @@ import {
   Lock,
   Layers,
 } from 'lucide-react';
-import { BracketStructure, BracketMatchSlot } from '../../types/domain';
+import { BracketStructure, BracketMatchSlot, Match, MatchTeamSlot } from '../../types/domain';
 import { TeamCrest } from './TeamCrest';
 import { StatusBadge } from '../ui/StatusBadge';
 import { Button } from '../ui/Button';
@@ -45,11 +45,16 @@ export const BracketView: React.FC<BracketViewProps> = ({
     'all' | 'quarterfinals' | 'semifinals' | 'final'
   >('all');
 
-  const targetModalityId = modalityId || bracket?.modalityId;
+  const targetModalityId = modalityId || bracket?.categoryId || bracket?.modalityId;
   const officialBracket = targetModalityId ? officialBrackets[targetModalityId] : null;
 
   const modalityKnockoutMatches = targetModalityId
-    ? visibleMatches.filter((m) => m.modalityId === targetModalityId)
+    ? visibleMatches.filter(
+        (m) =>
+          (m as any).categoryId === targetModalityId ||
+          m.modalityId === targetModalityId ||
+          (m as any).tournamentModalityId === targetModalityId
+      )
     : [];
 
   const qfMatches = modalityKnockoutMatches.filter(
@@ -62,34 +67,142 @@ export const BracketView: React.FC<BracketViewProps> = ({
     (m) => m.phase === 'final'
   );
 
+  // Recupera as partidas dos slots originais
+  const qfMatchRaw =
+    qfMatches[0] ||
+    bracket?.quarterfinals?.[0]?.match ||
+    (officialBracket?.stages?.find((s) => s.phase === 'quarterfinals')?.matches?.[0] as unknown as Match) ||
+    null;
+
+  const sf1MatchRaw =
+    sfMatches.find((m) => m.id.includes('sf1') || m.phaseLabel?.includes('1')) ||
+    sfMatches[0] ||
+    bracket?.semifinals?.[0]?.match ||
+    (officialBracket?.stages?.find((s) => s.phase === 'semifinals')?.matches?.[0] as unknown as Match) ||
+    null;
+
+  const sf2MatchRaw =
+    sfMatches.find((m) => m.id.includes('sf2') || m.phaseLabel?.includes('2')) ||
+    sfMatches[1] ||
+    bracket?.semifinals?.[1]?.match ||
+    (officialBracket?.stages?.find((s) => s.phase === 'semifinals')?.matches?.[1] as unknown as Match) ||
+    null;
+
+  const finalMatchRaw =
+    finalMatches[0] ||
+    bracket?.final?.match ||
+    (officialBracket?.stages?.find((s) => s.phase === 'final')?.matches?.[0] as unknown as Match) ||
+    null;
+
+  // PROGRESSÃO AUTOMÁTICA
+  const getWinnerTeam = (m: Match | null): MatchTeamSlot | null => {
+    if (!m) return null;
+    if (m.homeTeam?.isWinner) return m.homeTeam;
+    if (m.awayTeam?.isWinner) return m.awayTeam;
+    if (m.status === 'finished') {
+      const hScore = Number(m.homeTeam?.score ?? 0);
+      const aScore = Number(m.awayTeam?.score ?? 0);
+      if (hScore > aScore) return { ...m.homeTeam, isWinner: true };
+      if (aScore > hScore) return { ...m.awayTeam, isWinner: true };
+    }
+    return null;
+  };
+
+  const qfWinner = getWinnerTeam(qfMatchRaw as Match);
+  const sf1Winner = getWinnerTeam(sf1MatchRaw as Match);
+  const sf2Winner = getWinnerTeam(sf2MatchRaw as Match);
+
+  // Semifinal 1: Cabeça 3 (homeTeam) × Vencedor do Confronto 1 (awayTeam)
+  const resolvedSf1Match: Match | null = sf1MatchRaw
+    ? {
+        ...sf1MatchRaw,
+        awayTeam: qfWinner
+          ? {
+              teamId: qfWinner.teamId,
+              teamName: qfWinner.teamName,
+              crestUrl: qfWinner.crestUrl,
+              score: sf1MatchRaw.awayTeam?.score ?? null,
+              isWinner: sf1MatchRaw.awayTeam?.isWinner,
+            }
+          : {
+              teamId: null,
+              teamName: sf1MatchRaw.awayTeam?.teamName || 'Vencedor das Quartas',
+              crestUrl: null,
+              score: null,
+            },
+      }
+    : null;
+
+  // Semifinal 2: Cabeça 4 (homeTeam) × Cabeça 5 (awayTeam)
+  const resolvedSf2Match: Match | null = sf2MatchRaw ? { ...sf2MatchRaw } : null;
+
+  // Final: Vencedor Semifinal 1 (homeTeam) × Vencedor Semifinal 2 (awayTeam)
+  const resolvedFinalMatch: Match | null = finalMatchRaw
+    ? {
+        ...finalMatchRaw,
+        homeTeam: sf1Winner
+          ? {
+              teamId: sf1Winner.teamId,
+              teamName: sf1Winner.teamName,
+              crestUrl: sf1Winner.crestUrl,
+              score: finalMatchRaw.homeTeam?.score ?? null,
+              isWinner: finalMatchRaw.homeTeam?.isWinner,
+            }
+          : {
+              teamId: null,
+              teamName: finalMatchRaw.homeTeam?.teamName || 'Vencedor Semifinal 1',
+              crestUrl: null,
+              score: null,
+            },
+        awayTeam: sf2Winner
+          ? {
+              teamId: sf2Winner.teamId,
+              teamName: sf2Winner.teamName,
+              crestUrl: sf2Winner.crestUrl,
+              score: finalMatchRaw.awayTeam?.score ?? null,
+              isWinner: finalMatchRaw.awayTeam?.isWinner,
+            }
+          : {
+              teamId: null,
+              teamName: finalMatchRaw.awayTeam?.teamName || 'Vencedor Semifinal 2',
+              crestUrl: null,
+              score: null,
+            },
+      }
+    : null;
+
   const dynamicQuarterfinals: BracketMatchSlot[] = [
     {
       id: 'dyn-qf-0',
       orderIndex: 0,
       phase: 'quarterfinals',
-      match: qfMatches[0] || bracket?.quarterfinals?.[0]?.match || null,
+      match: qfMatchRaw as Match,
     },
   ];
 
-  const dynamicSemifinals: BracketMatchSlot[] = [0, 1].map((idx) => ({
-    id: `dyn-sf-${idx}`,
-    orderIndex: idx,
-    phase: 'semifinals',
-    match: sfMatches[idx] || bracket?.semifinals?.[idx]?.match || null,
-  }));
+  const dynamicSemifinals: BracketMatchSlot[] = [
+    {
+      id: 'dyn-sf-0',
+      orderIndex: 0,
+      phase: 'semifinals',
+      match: resolvedSf1Match,
+    },
+    {
+      id: 'dyn-sf-1',
+      orderIndex: 1,
+      phase: 'semifinals',
+      match: resolvedSf2Match,
+    },
+  ];
 
   const dynamicFinal: BracketMatchSlot = {
     id: 'dyn-final-0',
     orderIndex: 0,
     phase: 'final',
-    match: finalMatches[0] || bracket?.final?.match || null,
+    match: resolvedFinalMatch,
   };
 
-  const hasAnyKnockoutMatch =
-    qfMatches.length > 0 ||
-    sfMatches.length > 0 ||
-    finalMatches.length > 0 ||
-    Boolean(officialBracket && officialBracket.stages && officialBracket.stages.length > 0);
+  const hasAnyKnockoutMatch = Boolean(qfMatchRaw || sf1MatchRaw || sf2MatchRaw || finalMatchRaw);
 
   const isBracketLive = launchConfig.bracketPublished && hasAnyKnockoutMatch;
 
@@ -312,6 +425,26 @@ export const BracketView: React.FC<BracketViewProps> = ({
             );
           })}
         </div>
+
+        {/* Informações de Agendamento: Data, Horário e Local */}
+        <div className="text-[10px] text-slate-400 font-medium flex items-center justify-between gap-1 mt-2.5 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-1 truncate">
+            <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+            <span>
+              {match.scheduledDate && match.scheduledTime
+                ? `${match.scheduledDate} às ${match.scheduledTime}`
+                : 'Data e horário a definir'}
+            </span>
+          </div>
+          {isFinal && (match.homeTeam?.isWinner || match.awayTeam?.isWinner) && (
+            <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shrink-0">
+              <Trophy className="w-3 h-3 text-amber-600" />
+              <span>
+                Campeão: {match.homeTeam?.isWinner ? match.homeTeam.teamName : match.awayTeam?.teamName}
+              </span>
+            </span>
+          )}
+        </div>
       </div>
     );
   };
@@ -485,10 +618,10 @@ export const BracketView: React.FC<BracketViewProps> = ({
                 <div className="p-3.5 rounded-2xl bg-slate-50 border border-dashed border-slate-300 text-xs text-slate-600 space-y-1.5 shadow-2xs">
                   <div className="flex items-center gap-1.5 font-bold text-slate-900 text-[11px] uppercase tracking-wide">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>3 Entradas Diretas na Semifinal</span>
+                    <span>Estrutura Oficial de 5 Equipes</span>
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Três atléticas entram diretamente nas semifinais através do sorteio equilibrado: duas duelam na <strong>Semifinal 1</strong> e a terceira enfrenta a vencedora das Quartas na <strong>Semifinal 2</strong>.
+                    Três equipes entram diretamente nas semifinais pelo regulamento oficial: a <strong>Cabeça de Chave 3</strong> aguarda o vencedor das Quartas na <strong>Semifinal 1</strong>, e as <strong>Cabeças 4 e 5</strong> duelam diretamente na <strong>Semifinal 2</strong>.
                   </p>
                 </div>
               </div>

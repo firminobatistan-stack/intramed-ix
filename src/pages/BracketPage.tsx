@@ -4,6 +4,7 @@ import {
   INITIAL_BRACKETS,
   TOURNAMENT_16_MODALITIES,
   OfficialTournamentModality,
+  CONFIGURED_MODALITY_IDS,
 } from '../data/officialData';
 import { BracketView } from '../components/sports/BracketView';
 import { SportIcon } from '../components/sports/SportIcon';
@@ -35,7 +36,7 @@ export const BracketPage: React.FC = () => {
     TOURNAMENT_16_MODALITIES.find((m) => m.id === selectedModId) ||
     TOURNAMENT_16_MODALITIES[0];
 
-  const currentBracket = INITIAL_BRACKETS[currentMod.sportSlug] || null;
+  const currentBracket = INITIAL_BRACKETS[currentMod.id] || INITIAL_BRACKETS[currentMod.sportSlug] || null;
 
   return (
     <div className="space-y-6">
@@ -109,6 +110,7 @@ export const BracketPage: React.FC = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-2">
         {filteredModalities.map((mod) => {
           const isSelected = selectedModId === mod.id;
+          const isConfigured = CONFIGURED_MODALITY_IDS.has(mod.id);
           return (
             <button
               key={mod.id}
@@ -128,15 +130,26 @@ export const BracketPage: React.FC = () => {
                 >
                   <SportIcon iconKey={mod.sportSlug} className="w-3.5 h-3.5" />
                 </div>
-                <span
-                  className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                    mod.weight === 2
-                      ? 'bg-amber-100 text-amber-900'
-                      : 'bg-slate-100 text-slate-700'
-                  }`}
-                >
-                  P{mod.weight}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span
+                    className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+                      isConfigured
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-slate-100 text-slate-400'
+                    }`}
+                  >
+                    {isConfigured ? 'Oficial' : 'Em breve'}
+                  </span>
+                  <span
+                    className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      mod.weight === 2
+                        ? 'bg-amber-100 text-amber-900'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    P{mod.weight}
+                  </span>
+                </div>
               </div>
               <span className="text-[11px] font-display font-extrabold text-slate-900 truncate block">
                 {mod.name}
@@ -156,6 +169,15 @@ export const BracketPage: React.FC = () => {
             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 border border-white/15">
               {currentMod.type === 'coletiva' ? 'Coletiva • Peso 2' : 'Individual • Peso 1'}
             </span>
+            {CONFIGURED_MODALITY_IDS.has(currentMod.id) ? (
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                Confrontos Homologados
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                Aguardando Sorteio
+              </span>
+            )}
           </div>
           <p className="text-xs text-white/80">
             Pontuação: <strong>1º Lugar ({currentMod.points1st} pts)</strong> • 2º ({currentMod.points2nd} pts) • 3º ({currentMod.points3rd} pts) • 4º ({currentMod.points4th} pts).
@@ -171,7 +193,7 @@ export const BracketPage: React.FC = () => {
       {/* Componente de Chaveamento Visual */}
       <BracketView
         bracket={currentBracket}
-        modalityId={currentMod.sportSlug}
+        modalityId={currentMod.id}
         modalityName={currentMod.name}
       />
 

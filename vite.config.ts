@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
               publicRegistrationEnabled: false,
               publicPaymentsEnabled: false,
               publicPricesVisible: false,
-              bracketPublished: false,
+              bracketPublished: true,
               publicProfilesVisible: false,
               announcementTitle: 'ACESSO EM BREVE',
               announcementMessage:

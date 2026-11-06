@@ -233,13 +233,13 @@ export const MatchCard: React.FC<MatchCardProps> = ({
       {/* 5. Rodapé Centralizado: Local + Subtítulo Azul + Botão Verde "See all >" */}
       <div className="mt-4 pt-3 border-t border-slate-100 text-center space-y-1">
         <p className="text-xs font-bold text-slate-600">
-          {match.venue || 'Ginásio Oficial • Medicina UEMA'}
+          {match.venue || 'Local a definir'}
         </p>
         <p className="text-[11px] font-semibold text-[#64748B]">
           {match.modalityName} •{' '}
           {match.scheduledDate
             ? `${match.scheduledDate}${match.scheduledTime ? ` às ${match.scheduledTime}` : ''}`
-            : 'Calendário Oficial INTRAMED IX'}
+            : 'Data e horário a definir'}
         </p>
 
         <div className="pt-2 flex flex-wrap items-center justify-center gap-3">

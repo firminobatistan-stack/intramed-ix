@@ -36,6 +36,7 @@ import {
   INITIAL_MATCHES,
   INITIAL_TEAMS,
   INITIAL_ATHLETES,
+  OFFICIAL_UNIVERSAL_BRACKETS,
 } from '../data/officialData';
 import {
   MODALITY_RULE_ENGINE,
@@ -280,7 +281,7 @@ export const DEFAULT_PUBLIC_LAUNCH_CONFIG: PublicLaunchConfig = {
   publicRegistrationEnabled: false,
   publicPaymentsEnabled: false,
   publicPricesVisible: false,
-  bracketPublished: false,
+  bracketPublished: true,
   publicProfilesVisible: false,
   announcementTitle: 'ACESSO EM BREVE',
   announcementMessage:
@@ -412,7 +413,17 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             isTestMode: Boolean(hasAdminSession && parsed.isTestMode),
             officialTeams: mergeTeamsWithDefaults(parsed.officialTeams, INITIAL_TEAMS),
             officialAthletes: parsed.officialAthletes || INITIAL_ATHLETES,
-            officialMatches: parsed.officialMatches || INITIAL_MATCHES,
+            officialMatches:
+              parsed.officialMatches && parsed.officialMatches.length > 0
+                ? (() => {
+                    const byId = new Map<string, Match>();
+                    for (const m of INITIAL_MATCHES) byId.set(m.id, m);
+                    for (const sm of parsed.officialMatches as Match[]) {
+                      if (sm && sm.id) byId.set(sm.id, sm);
+                    }
+                    return Array.from(byId.values());
+                  })()
+                : INITIAL_MATCHES,
             officialSheets: parsed.officialSheets || {},
             testTeams: mergeTeamsWithDefaults(parsed.testTeams, initialTest.teams),
             testAthletes:
@@ -429,7 +440,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             notifications: parsed.notifications || [],
             publicProfiles: parsed.publicProfiles || [],
             launchConfig: parsed.launchConfig || { ...DEFAULT_PUBLIC_LAUNCH_CONFIG },
-            officialBrackets: parsed.officialBrackets || {},
+            officialBrackets: {
+              ...OFFICIAL_UNIVERSAL_BRACKETS,
+              ...(parsed.officialBrackets || {}),
+            },
           };
         }
       }
@@ -454,7 +468,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       notifications: [],
       publicProfiles: [],
       launchConfig: { ...DEFAULT_PUBLIC_LAUNCH_CONFIG },
-      officialBrackets: {},
+      officialBrackets: { ...OFFICIAL_UNIVERSAL_BRACKETS },
     };
   });
 
