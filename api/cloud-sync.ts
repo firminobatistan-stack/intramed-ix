@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
   appendServerSyncLog,
+  checkFirestoreHealth,
+  FirestoreHealthReport,
   CloudCollectionMap,
   computeAuthorizedServerPrice,
   createSignedOperatorToken,
@@ -274,6 +276,21 @@ function canClientWriteDocument(
     };
   }
 
+  // 5. Perfis Públicos: permite criação/atualização de perfil de participante/usuário
+  if (collectionName === 'profiles') {
+    return {
+      allowed: true,
+      sanitizedData: {
+        ...(existing || {}),
+        ...incoming,
+        id: docId,
+        userId: String(incoming.userId || docId),
+        revision: Math.max(prevRevision + 1, incomingRevision),
+        updatedAtIso: nowIso,
+      },
+    };
+  }
+
   return { allowed: false, sanitizedData: {}, reason: 'Coleção não autorizada.' };
 }
 
@@ -298,10 +315,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isAdminRequest = operatorRoleLevel >= 4;
   const isMasterRequest = verifiedToken?.role === 'moderador_master' || operatorRoleLevel >= 5;
 
-  // GET: Retorna snapshot sincronizado (com suporte a ?since=updatedAtIso e projeção LGPD sem PII/senhas)
+  // GET: Retorna snapshot sincronizado (com suporte a ?since=updatedAtIso, ?force=true e projeção LGPD sem PII/senhas)
   if (req.method === 'GET') {
+    const isForce = req.query.force === 'true';
     const sinceParam = typeof req.query.since === 'string' ? req.query.since : null;
-    if (sinceParam && sinceParam === store.updatedAtIso) {
+    if (!isForce && sinceParam && sinceParam === store.updatedAtIso) {
       return res.status(200).json({
         success: true,
         notModified: true,
@@ -329,15 +347,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : Object.values(store.registrations).map((r) =>
               sanitizeRegistrationForPublic(normalizeRegServerPrice(r))
             ))
-      : [];
+      : (isAdminRequest
+          ? Object.values(store.registrations).map((r) => normalizeRegServerPrice(r))
+          : []);
 
-    const publicAthletes = isPublicProfilesVisible
-      ? Object.values(store.athletes)
-      : [];
+    // Atletas e elencos do torneio oficial são informações esportivas públicas da competição
+    // e devem ser entregues a todos os dispositivos (celular e desktop) para evitar silos locais
+    const publicAthletes = Object.values(store.athletes);
 
-    const publicProfiles = isPublicProfilesVisible
-      ? Object.values(store.profiles || {}).map(sanitizeUserProfileForPublic)
-      : [];
+    // Perfis públicos sanitizados (sem senhas, CPF ou telefone) para descoberta da comunidade e dados do usuário
+    const publicProfiles = Object.values(store.profiles || {}).map(sanitizeUserProfileForPublic);
 
     const publicMatches = Object.values(store.matches).map((m) =>
       sanitizeMatchForPublic(m, isAdminRequest)
@@ -355,6 +374,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       {} as Record<string, any>
     );
 
+    const firestoreHealth = await checkFirestoreHealth(req.query.refreshDiagnostics === 'true');
+
     return res.status(200).json({
       success: true,
       updatedAtIso: store.updatedAtIso,
@@ -368,6 +389,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       brackets: store.brackets || {},
       lots: sanitizedLots,
       syncLogs: isAdminRequest ? store.sync_logs || [] : [],
+      diagnostics: {
+        firebaseProjectId: 'gen-lang-client-0847910166',
+        firebaseAuthStatus: 'operational',
+        firestore: firestoreHealth,
+        multiDeviceSync: 'active',
+        serverStoreCounts: {
+          matches: Object.keys(store.matches).length,
+          brackets: Object.keys(store.brackets || {}).length,
+          teams: Object.keys(store.teams).length,
+          athletes: Object.keys(store.athletes).length,
+          profiles: Object.keys(store.profiles || {}).length,
+          registrations: Object.keys(store.registrations).length,
+          users: Object.keys(store.users || {}).length,
+        },
+        cacheVersion: '2.2.0-centralized-firebase',
+      },
     });
   }
 

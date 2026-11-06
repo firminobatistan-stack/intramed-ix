@@ -73,11 +73,115 @@ export const DEFAULT_LAUNCH_CONFIG: PublicLaunchConfig = {
   publicPaymentsEnabled: false,
   publicPricesVisible: false,
   bracketPublished: true,
-  publicProfilesVisible: false,
+  publicProfilesVisible: true,
   announcementTitle: 'ACESSO EM BREVE',
   announcementMessage:
     'Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.',
 };
+
+export const INITIAL_OFFICIAL_TEAMS: Array<{
+  id: string;
+  name: string;
+  shortName: string;
+  turmaLabel: string;
+  mascotLabel: string;
+  crestUrl: string;
+  theme: {
+    colorLabel: string;
+    primaryHex: string;
+    secondaryHex: string;
+    accentHex: string;
+    badgeBgClass: string;
+    badgeTextClass: string;
+    ringClass: string;
+  };
+}> = [
+  {
+    id: 'colossal',
+    name: 'Colossal',
+    shortName: 'T24',
+    turmaLabel: 'Turma 24',
+    mascotLabel: 'Crocodilo',
+    crestUrl: '/assets/teams/colossal.jpg',
+    theme: {
+      colorLabel: 'Colossal',
+      primaryHex: '#065F46',
+      secondaryHex: '#022C22',
+      accentHex: '#FACC15',
+      badgeBgClass: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/40',
+      badgeTextClass: 'text-emerald-700',
+      ringClass: 'ring-emerald-500',
+    },
+  },
+  {
+    id: 'soberana',
+    name: 'Soberana',
+    shortName: 'T25',
+    turmaLabel: 'Turma 25',
+    mascotLabel: 'Águia',
+    crestUrl: '/assets/teams/soberana.png',
+    theme: {
+      colorLabel: 'Soberana',
+      primaryHex: '#6B0F24',
+      secondaryHex: '#3B0612',
+      accentHex: '#F59E0B',
+      badgeBgClass: 'bg-[#4A0817] text-amber-300 border-amber-400/40',
+      badgeTextClass: 'text-[#6B0F24]',
+      ringClass: 'ring-[#6B0F24]',
+    },
+  },
+  {
+    id: 'sanguinaria',
+    name: 'Sanguinária',
+    shortName: 'T21',
+    turmaLabel: 'Turma 21',
+    mascotLabel: 'Dragão',
+    crestUrl: '/assets/teams/sanguinaria.jpg',
+    theme: {
+      colorLabel: 'Sanguinária',
+      primaryHex: '#DC2626',
+      secondaryHex: '#7F1D1D',
+      accentHex: '#FACC15',
+      badgeBgClass: 'bg-red-950/90 text-red-300 border-red-500/40',
+      badgeTextClass: 'text-red-600',
+      ringClass: 'ring-red-600',
+    },
+  },
+  {
+    id: 'predadora',
+    name: 'Predadora',
+    shortName: 'T22',
+    turmaLabel: 'Turma 22',
+    mascotLabel: 'Onça',
+    crestUrl: '/assets/teams/predadora.jpg',
+    theme: {
+      colorLabel: 'Predadora',
+      primaryHex: '#CA8A04',
+      secondaryHex: '#18181B',
+      accentHex: '#FACC15',
+      badgeBgClass: 'bg-amber-400 text-zinc-950 border-amber-500',
+      badgeTextClass: 'text-amber-600',
+      ringClass: 'ring-amber-400',
+    },
+  },
+  {
+    id: 'tormenta',
+    name: 'Tormenta',
+    shortName: 'T23',
+    turmaLabel: 'Turma 23',
+    mascotLabel: 'Leviatã',
+    crestUrl: '/assets/teams/tormenta.png',
+    theme: {
+      colorLabel: 'Tormenta',
+      primaryHex: '#0284C7',
+      secondaryHex: '#082F49',
+      accentHex: '#38BDF8',
+      badgeBgClass: 'bg-sky-950/90 text-sky-300 border-sky-400/40',
+      badgeTextClass: 'text-sky-600',
+      ringClass: 'ring-sky-400',
+    },
+  },
+];
 
 export interface CloudCollectionMap {
   registrations: Record<string, Record<string, unknown>>;
@@ -536,6 +640,13 @@ function seedOfficialMatchesAndBrackets(store: CloudCollectionMap) {
     }
   }
 
+  if (!store.teams) store.teams = {};
+  for (const t of INITIAL_OFFICIAL_TEAMS) {
+    if (!store.teams[t.id]) {
+      store.teams[t.id] = t as unknown as Record<string, unknown>;
+    }
+  }
+
   if (store.launch_config) {
     store.launch_config.bracketPublished = true;
   }
@@ -838,6 +949,72 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
   return store;
 }
 
+export interface FirestoreHealthReport {
+  projectId: string;
+  database: string;
+  status: 'connected' | 'not_provisioned' | 'error';
+  statusCode: number;
+  message: string;
+  lastCheckedIso: string;
+}
+
+let lastFirestoreHealthCache: FirestoreHealthReport | null = null;
+let lastFirestoreHealthTimestamp = 0;
+
+export async function checkFirestoreHealth(force = false): Promise<FirestoreHealthReport> {
+  const now = Date.now();
+  if (!force && lastFirestoreHealthCache && now - lastFirestoreHealthTimestamp < 20000) {
+    return lastFirestoreHealthCache;
+  }
+
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+    const res = await fetch(url, { method: 'GET' });
+    const data = await res.json().catch(() => ({}));
+
+    if (res.status === 200) {
+      lastFirestoreHealthCache = {
+        projectId: FIREBASE_PROJECT_ID,
+        database: '(default)',
+        status: 'connected',
+        statusCode: 200,
+        message: 'Conectado ao Cloud Firestore em modo nativo com sucesso.',
+        lastCheckedIso: new Date().toISOString(),
+      };
+    } else if (res.status === 404 && data?.error?.message?.includes('does not exist')) {
+      lastFirestoreHealthCache = {
+        projectId: FIREBASE_PROJECT_ID,
+        database: '(default)',
+        status: 'not_provisioned',
+        statusCode: 404,
+        message: `Base de dados (default) não criada no console Google Cloud. Ative em: https://console.cloud.google.com/datastore/setup?project=${FIREBASE_PROJECT_ID}`,
+        lastCheckedIso: new Date().toISOString(),
+      };
+    } else {
+      lastFirestoreHealthCache = {
+        projectId: FIREBASE_PROJECT_ID,
+        database: '(default)',
+        status: 'error',
+        statusCode: res.status,
+        message: data?.error?.message || `HTTP ${res.status}`,
+        lastCheckedIso: new Date().toISOString(),
+      };
+    }
+  } catch (err: any) {
+    lastFirestoreHealthCache = {
+      projectId: FIREBASE_PROJECT_ID,
+      database: '(default)',
+      status: 'error',
+      statusCode: 0,
+      message: err?.message || 'Falha de rede ao consultar o Firestore API.',
+      lastCheckedIso: new Date().toISOString(),
+    };
+  }
+
+  lastFirestoreHealthTimestamp = now;
+  return lastFirestoreHealthCache;
+}
+
 export async function MirrorDocumentToFirestoreRest(
   collectionName: string,
   docId: string,
@@ -854,11 +1031,23 @@ export async function MirrorDocumentToFirestoreRest(
       collectionName
     )}/${encodeURIComponent(docId)}`;
 
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields }),
-    }).catch(() => {});
+    }).catch(() => null);
+
+    if (res && res.status >= 400) {
+      appendServerSyncLog({
+        category: 'firestore_mirror',
+        message: `Mirror ${collectionName}/${docId} Firestore: HTTP ${res.status} (banco pendente de ativação no console)`,
+      });
+    } else if (res && res.ok) {
+      appendServerSyncLog({
+        category: 'firestore_mirror',
+        message: `Mirror ${collectionName}/${docId} gravado com sucesso no Cloud Firestore.`,
+      });
+    }
   } catch {
     // Non-blocking best effort mirror
   }

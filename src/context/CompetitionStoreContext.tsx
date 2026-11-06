@@ -60,6 +60,11 @@ import {
   flushOfflineQueue,
   getPendingQueueCount,
 } from '../utils/offlineSyncQueue';
+import {
+  initializeCacheManager,
+  clearLocalDataCaches,
+  CURRENT_APP_CACHE_VERSION,
+} from '../utils/cacheManager';
 
 interface NewEventPayload {
   type: MatchEvent['type'];
@@ -273,6 +278,10 @@ interface CompetitionStoreContextValue {
   officialBrackets: Record<string, UniversalModalityBracket>;
   saveOfficialBracket: (modalityId: string, bracket: UniversalModalityBracket) => Promise<{ ok: boolean; error?: string }>;
   syncStatus: 'synced' | 'syncing' | 'offline' | 'error';
+  forceServerResync: () => Promise<{ ok: boolean; error?: string; count?: number }>;
+  lastSyncedIso: string;
+  cacheVersion: string;
+  serverDiagnostics: any | null;
 }
 
 export const DEFAULT_PUBLIC_LAUNCH_CONFIG: PublicLaunchConfig = {
@@ -282,7 +291,7 @@ export const DEFAULT_PUBLIC_LAUNCH_CONFIG: PublicLaunchConfig = {
   publicPaymentsEnabled: false,
   publicPricesVisible: false,
   bracketPublished: true,
-  publicProfilesVisible: false,
+  publicProfilesVisible: true,
   announcementTitle: 'ACESSO EM BREVE',
   announcementMessage:
     'Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.',
@@ -495,6 +504,14 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
 
+  const [lastSyncedIso, setLastSyncedIso] = useState<string>(() => new Date().toISOString());
+  const [serverDiagnostics, setServerDiagnostics] = useState<any | null>(null);
+  const [activeSyncStatus, setActiveSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
+
+  useEffect(() => {
+    void initializeCacheManager();
+  }, []);
+
   const channelRef = useRef<BroadcastChannel | null>(null);
   const isApplyingRemoteUpdate = useRef(false);
   const lastCloudUpdatedAtRef = useRef<string>('');
@@ -517,6 +534,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       if (payload.updatedAtIso) {
         lastCloudUpdatedAtRef.current = payload.updatedAtIso;
       }
+
+      if (payload.diagnostics) {
+        setServerDiagnostics(payload.diagnostics);
+      }
+      setLastSyncedIso(new Date().toISOString());
+      setActiveSyncStatus('synced');
 
       // Dispara evento customizado para o RegistrationStoreContext aproveitar o mesmo payload sem fazer um 2º polling!
       if (Array.isArray(payload.registrations)) {
@@ -690,10 +713,79 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   const enqueueCloudSync = useCallback(
     (collectionName: string, docId: string, data: unknown) => {
+      // 1. Enfileira na fila offline e descarrega via REST na API /api/cloud-sync (fonte central unificada)
       enqueueOfflineMutation(collectionName as any, docId, data);
+
+      // 2. Tenta espelhamento direto no Cloud Firestore SDK caso banco nativo esteja ativo
+      try {
+        const cleanData = JSON.parse(JSON.stringify(data));
+        void setDoc(doc(db, collectionName, docId), cleanData, { merge: true }).catch(() => {});
+      } catch {
+        // Silencioso em caso de offline
+      }
     },
     []
   );
+
+  const forceServerResync = useCallback(async (): Promise<{ ok: boolean; error?: string; count?: number }> => {
+    try {
+      setActiveSyncStatus('syncing');
+      lastCloudUpdatedAtRef.current = '';
+      const headers: Record<string, string> = {};
+      const opToken = getStoredOperatorToken();
+      if (opToken) {
+        headers['Authorization'] = `Bearer ${opToken}`;
+      }
+      const res = await fetch('/api/cloud-sync?force=true&refreshDiagnostics=true', {
+        headers,
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const payload = await res.json();
+      if (!payload || !payload.success) throw new Error(payload?.error || 'Resposta inválida do servidor');
+
+      if (payload.diagnostics) {
+        setServerDiagnostics(payload.diagnostics);
+      }
+
+      if (Array.isArray(payload.registrations)) {
+        window.dispatchEvent(
+          new CustomEvent('intramed-cloud-registrations', {
+            detail: payload.registrations,
+          })
+        );
+      }
+
+      setState((prev) => {
+        isApplyingRemoteUpdate.current = true;
+        return {
+          ...prev,
+          officialAthletes: Array.isArray(payload.athletes) ? payload.athletes : prev.officialAthletes,
+          officialTeams: Array.isArray(payload.teams) && payload.teams.length > 0 ? payload.teams : prev.officialTeams,
+          officialMatches: Array.isArray(payload.matches) && payload.matches.length > 0 ? payload.matches : prev.officialMatches,
+          officialSheets: Array.isArray(payload.match_sheets)
+            ? payload.match_sheets.reduce((acc: Record<string, MatchSheet>, s: MatchSheet) => {
+                if (s && s.matchId) acc[s.matchId] = s;
+                return acc;
+              }, {})
+            : prev.officialSheets,
+          publicProfiles: Array.isArray(payload.profiles) ? payload.profiles : prev.publicProfiles,
+          launchConfig: payload.launchConfig ? { ...prev.launchConfig, ...payload.launchConfig, bracketPublished: true } : prev.launchConfig,
+          officialBrackets: payload.brackets && Object.keys(payload.brackets).length > 0
+            ? { ...OFFICIAL_UNIVERSAL_BRACKETS, ...prev.officialBrackets, ...payload.brackets }
+            : prev.officialBrackets,
+        };
+      });
+
+      lastCloudUpdatedAtRef.current = payload.updatedAtIso || new Date().toISOString();
+      setLastSyncedIso(new Date().toISOString());
+      setActiveSyncStatus('synced');
+      return { ok: true, count: Array.isArray(payload.matches) ? payload.matches.length : 0 };
+    } catch (err: any) {
+      setActiveSyncStatus('error');
+      return { ok: false, error: err?.message || 'Falha ao sincronizar com servidor' };
+    }
+  }, []);
 
   const isUserAdmin = (user: UserProfile | null): boolean => {
     if (!user) return false;
@@ -3862,9 +3954,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   const syncStatus: 'synced' | 'syncing' | 'offline' | 'error' = useMemo(() => {
     if (!isOnline) return 'offline';
-    if (state.pendingSyncCount > 0) return 'syncing';
+    if (activeSyncStatus === 'syncing' || state.pendingSyncCount > 0) return 'syncing';
+    if (activeSyncStatus === 'error') return 'error';
     return 'synced';
-  }, [isOnline, state.pendingSyncCount]);
+  }, [isOnline, activeSyncStatus, state.pendingSyncCount]);
 
   // Item 22 da Auditoria: Context value memoizado com `useMemo` para evitar re-renders desnecessários
   const contextValue = useMemo<CompetitionStoreContextValue>(
@@ -3942,6 +4035,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       officialBrackets: state.officialBrackets || {},
       saveOfficialBracket,
       syncStatus,
+      forceServerResync,
+      lastSyncedIso,
+      cacheVersion: CURRENT_APP_CACHE_VERSION,
+      serverDiagnostics,
     }),
     [
       state.launchConfig,
@@ -4017,6 +4114,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updateUserProfile,
       changeUserPassword,
       syncStatus,
+      forceServerResync,
+      lastSyncedIso,
+      serverDiagnostics,
     ]
   );
 
