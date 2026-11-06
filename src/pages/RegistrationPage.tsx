@@ -19,6 +19,8 @@ import {
   Instagram,
   Trophy,
   Check,
+  Clock,
+  Sparkles,
 } from 'lucide-react';
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
@@ -80,6 +82,7 @@ export const RegistrationPage: React.FC = () => {
     visibleTeams,
     favoriteAthleteIds,
     toggleFavoriteAthlete,
+    launchConfig,
   } = useCompetitionStore();
   const isAdmin = canOperateOfficialData();
 
@@ -615,16 +618,34 @@ export const RegistrationPage: React.FC = () => {
             <span className="text-[11px] font-bold uppercase tracking-wider text-white/70 block">
               {activeLot?.name || '1º Lote'}
             </span>
-            <div className="flex items-baseline justify-center gap-1">
-              <span className="text-xs font-bold">R$</span>
-              <span className="text-2xl font-display font-extrabold text-brand-yellow">
-                {activeLot?.priceMember.toFixed(2)}
-              </span>
-              <span className="text-xs text-white/80">(Sócio)</span>
-            </div>
-            <span className="text-[11px] text-white/70 block">
-              Não sócio: R$ {activeLot?.priceNonMember.toFixed(2)}
-            </span>
+            {launchConfig?.publicPricesVisible !== false || isAdmin ? (
+              <>
+                <div className="flex items-baseline justify-center gap-1">
+                  <span className="text-xs font-bold">R$</span>
+                  <span className="text-2xl font-display font-extrabold text-brand-yellow">
+                    {activeLot?.priceMember.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-white/80">(Sócio)</span>
+                </div>
+                <span className="text-[11px] text-white/70 block">
+                  Não sócio: R$ {activeLot?.priceNonMember.toFixed(2)}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-center gap-1.5 py-1">
+                  <span className="text-xl font-display font-extrabold text-brand-yellow/80 filter blur-[4px] select-none">
+                    R$ ••,••
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-yellow text-slate-900 shadow-sm">
+                    Em Breve
+                  </span>
+                </div>
+                <span className="text-[11px] text-white/70 block filter blur-[3px] select-none">
+                  Não sócio: R$ ••,••
+                </span>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -655,18 +676,20 @@ export const RegistrationPage: React.FC = () => {
             >
               Meu Passaporte ({myRegistrations.length})
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('comunidade')}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-display font-bold transition-all ${
-                activeTab === 'comunidade'
-                  ? 'bg-brand-blue text-white shadow-sm'
-                  : 'text-brand-text-secondary hover:text-brand-text-primary'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Comunidade ({visibleAthletes.length})</span>
-            </button>
+            {(launchConfig?.publicProfilesVisible || isAdmin) && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('comunidade')}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-display font-bold transition-all ${
+                  activeTab === 'comunidade'
+                    ? 'bg-brand-blue text-white shadow-sm'
+                    : 'text-brand-text-secondary hover:text-brand-text-primary'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Comunidade</span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -694,9 +717,51 @@ export const RegistrationPage: React.FC = () => {
         </div>
 
         {/* ============================================================ */}
-        {/* ABA 1: FORMULÁRIO DE NOVA INSCRIÇÃO + CONTA DE ACESSO        */}
+        {/* ABA 1: FORMULÁRIO DE NOVA INSCRIÇÃO OU AVISO DE EM BREVE     */}
         {/* ============================================================ */}
         {activeTab === 'nova_inscricao' && (
+          launchConfig?.publicRegistrationEnabled === false ? (
+            <div className="rounded-3xl bg-white border border-brand-surface-border shadow-card p-8 sm:p-12 text-center max-w-2xl mx-auto space-y-6">
+              <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto shadow-sm">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <div>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/15 text-amber-800 text-xs font-bold uppercase tracking-wider mb-2">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Divulgação Oficial</span>
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-display font-black text-slate-900 tracking-tight">
+                  INSCRIÇÕES EM BREVE
+                </h2>
+              </div>
+              <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-lg mx-auto">
+                Estamos preparando a abertura oficial das inscrições do IntraMed.
+                <br />
+                Em breve, você poderá realizar seu cadastro e acompanhar todas as etapas diretamente pelo aplicativo.
+              </p>
+              <p className="text-xs sm:text-sm font-bold text-[#0B218A]">
+                Até lá, acompanhe as novidades por aqui.
+              </p>
+              <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => navigate('/chaveamento')}
+                  className="w-full sm:w-auto font-bold justify-center"
+                >
+                  Visualizar Chaveamento
+                </Button>
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={() => navigate('/competicoes')}
+                  className="w-full sm:w-auto justify-center"
+                >
+                  16 Modalidades Esportivas
+                </Button>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <form
               onSubmit={handleRegisterSubmit}
@@ -1085,6 +1150,7 @@ export const RegistrationPage: React.FC = () => {
               </div>
             </aside>
           </div>
+          )
         )}
 
         {/* ============================================================ */}

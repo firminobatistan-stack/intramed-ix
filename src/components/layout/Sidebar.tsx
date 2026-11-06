@@ -79,8 +79,73 @@ const PRIMARY_ITEMS: SidebarItem[] = [
 export const Sidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, canOperateOfficialData } = useCompetitionStore();
+  const { currentUser, canOperateOfficialData, launchConfig } = useCompetitionStore();
   const isAdmin = canOperateOfficialData();
+
+  // Itens dinâmicos baseados no modo de lançamento e privilégios
+  const navItems: SidebarItem[] = [
+    {
+      to: '/',
+      label: 'Início',
+      icon: Home,
+    },
+    {
+      to: '/chaveamento',
+      label: 'Chaveamento Oficial',
+      icon: GitBranch,
+      matchPrefix: '/chaveamento',
+    },
+    {
+      to: '/inscricao',
+      label: launchConfig.publicRegistrationEnabled ? 'Inscrições & Lotes' : 'Inscrições (Em Breve)',
+      icon: CreditCard,
+      matchPrefix: '/inscricao',
+    },
+    {
+      to: '/competicoes',
+      label: 'Competições & Esportes',
+      icon: Trophy,
+      matchPrefix: '/competicoes',
+    },
+    {
+      to: '/jogos',
+      label: 'Calendário de Jogos',
+      icon: Calendar,
+      matchPrefix: '/jogos',
+    },
+    {
+      to: '/favoritos',
+      label: 'Favoritos',
+      icon: Heart,
+      matchPrefix: '/favoritos',
+    },
+    ...(launchConfig.publicProfilesVisible || isAdmin
+      ? [
+          {
+            to: '/comunidade',
+            label: 'Comunidade & Perfis',
+            icon: Users,
+            matchPrefix: '/comunidade',
+          },
+        ]
+      : []),
+    {
+      to: '/notificacoes',
+      label: 'Central de Alertas',
+      icon: Bell,
+      matchPrefix: '/notificacoes',
+    },
+    ...(currentUser || launchConfig.publicLoginEnabled || isAdmin
+      ? [
+          {
+            to: '/perfil',
+            label: 'Perfil',
+            icon: User,
+            matchPrefix: '/perfil',
+          },
+        ]
+      : []),
+  ];
 
   return (
     <aside
@@ -103,7 +168,7 @@ export const Sidebar: React.FC = () => {
             Navegação Oficial
           </p>
           <nav className="space-y-1">
-            {PRIMARY_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const Icon = item.icon;
               const isActive =
                 item.to === '/'
@@ -260,7 +325,11 @@ export const Sidebar: React.FC = () => {
           <span className="flex items-center gap-2 truncate">
             <LogIn className="w-4 h-4 shrink-0" />
             <span className="truncate">
-              {currentUser ? currentUser.name : 'Entrar'}
+              {currentUser
+                ? currentUser.name
+                : launchConfig.publicLoginEnabled
+                ? 'Entrar'
+                : 'Acesso (Em Breve)'}
             </span>
           </span>
           <span className="w-2 h-2 rounded-full bg-brand-blue-dark shrink-0" aria-hidden="true" />

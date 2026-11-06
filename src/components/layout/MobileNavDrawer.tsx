@@ -35,7 +35,7 @@ interface MobileNavDrawerProps {
 export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, setCurrentUser, canOperateOfficialData, notifications } =
+  const { currentUser, setCurrentUser, canOperateOfficialData, notifications, launchConfig } =
     useCompetitionStore();
   const { hasCompletedRegistration } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
@@ -178,10 +178,10 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
             >
               <span className="flex items-center gap-2">
                 <LogIn className="w-4 h-4" />
-                <span>Entrar no IntraMed</span>
+                <span>{launchConfig.publicLoginEnabled ? 'Entrar no IntraMed' : 'Acesso Participantes'}</span>
               </span>
               <span className="text-[10px] uppercase font-bold text-brand-blue-dark/80">
-                Acessar
+                {launchConfig.publicLoginEnabled ? 'Acessar' : 'Em Breve'}
               </span>
             </button>
           )}
@@ -208,7 +208,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
               <span>Início</span>
             </button>
 
-            {/* Inscrições & Pagamento (destaque chamativo antes de se inscrever, discreto depois) */}
+            {/* Inscrições & Pagamento */}
             <button
               type="button"
               onClick={() => handleNav('/inscricao')}
@@ -222,12 +222,18 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
             >
               <span className="flex items-center gap-3">
                 <CreditCard className="w-4 h-4 shrink-0" />
-                <span>{hasCompletedRegistration ? 'Minha Inscrição & Ingresso' : 'Inscrições & Pagamento'}</span>
+                <span>
+                  {hasCompletedRegistration
+                    ? 'Minha Inscrição & Ingresso'
+                    : launchConfig.publicRegistrationEnabled
+                    ? 'Inscrições & Pagamento'
+                    : 'Inscrições (Em Breve)'}
+                </span>
               </span>
               {!hasCompletedRegistration ? (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-yellow text-brand-blue-dark text-[9px] font-black uppercase">
                   <Sparkles className="w-2.5 h-2.5" />
-                  Lote 1
+                  {launchConfig.publicRegistrationEnabled ? 'Lote 1' : 'Em Breve'}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold uppercase border border-emerald-500/30">
@@ -262,7 +268,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
               }`}
             >
               <GitBranch className="w-4 h-4 shrink-0 text-brand-yellow" />
-              <span>Chaveamento 5 Equipes</span>
+              <span>Chaveamento Oficial</span>
             </button>
 
             <button
@@ -370,31 +376,35 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => handleNav('/comunidade')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                location.pathname.startsWith('/comunidade')
-                  ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <Users className="w-4 h-4 shrink-0 text-cyan-300" />
-              <span>Comunidade & Perfis</span>
-            </button>
+            {(launchConfig.publicProfilesVisible || isAdmin) && (
+              <button
+                type="button"
+                onClick={() => handleNav('/comunidade')}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  location.pathname.startsWith('/comunidade')
+                    ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Users className="w-4 h-4 shrink-0 text-cyan-300" />
+                <span>Comunidade & Perfis</span>
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => handleNav('/perfil')}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                location.pathname === '/perfil'
-                  ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <User className="w-4 h-4 shrink-0" />
-              <span>Perfil do Atleta</span>
-            </button>
+            {(currentUser || launchConfig.publicLoginEnabled || isAdmin) && (
+              <button
+                type="button"
+                onClick={() => handleNav('/perfil')}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  location.pathname === '/perfil'
+                    ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <User className="w-4 h-4 shrink-0" />
+                <span>{currentUser ? 'Meu Perfil' : 'Perfil do Atleta'}</span>
+              </button>
+            )}
           </div>
 
           {/* 4. ADMINISTRAÇÃO & COMISSÃO (Somente se autenticado com bicoduro) */}

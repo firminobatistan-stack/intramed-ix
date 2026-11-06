@@ -22,24 +22,57 @@ export default defineConfig(({ mode }) => {
             match_sheets: {},
             users: {},
             profiles: {},
+            brackets: {},
             masterPassword: 'campeao2027',
             masterMustChange: true,
+            launch_config: {
+              publicLaunchMode: true,
+              publicLoginEnabled: false,
+              publicRegistrationEnabled: false,
+              publicPaymentsEnabled: false,
+              publicPricesVisible: false,
+              bracketPublished: false,
+              publicProfilesVisible: false,
+              announcementTitle: 'ACESSO EM BREVE',
+              announcementMessage:
+                'Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.',
+            },
           };
 
           server.middlewares.use(async (req, res, next) => {
+            if (req.url?.startsWith('/api/mercadopago/')) {
+              if (
+                devCloudStore.launch_config.publicPaymentsEnabled === false &&
+                (req.url.includes('create-pix') || req.url.includes('create-preference'))
+              ) {
+                res.setHeader('Content-Type', 'application/json');
+                res.statusCode = 403;
+                return res.end(
+                  JSON.stringify({
+                    ok: false,
+                    error:
+                      'A área de pagamentos do IntraMed ainda está sendo preparada. Em breve, você poderá realizar sua inscrição e efetuar o pagamento diretamente pela plataforma.',
+                  })
+                );
+              }
+            }
+
             if (req.url?.startsWith('/api/cloud-sync')) {
               res.setHeader('Content-Type', 'application/json');
               if (req.method === 'GET') {
+                const isProfilesVisible = Boolean(devCloudStore.launch_config.publicProfilesVisible);
                 return res.end(
                   JSON.stringify({
                     success: true,
                     updatedAtIso: new Date().toISOString(),
-                    registrations: Object.values(devCloudStore.registrations),
-                    athletes: Object.values(devCloudStore.athletes),
+                    launchConfig: devCloudStore.launch_config,
+                    registrations: isProfilesVisible ? Object.values(devCloudStore.registrations) : [],
+                    athletes: isProfilesVisible ? Object.values(devCloudStore.athletes) : [],
                     teams: Object.values(devCloudStore.teams),
                     matches: Object.values(devCloudStore.matches),
                     match_sheets: Object.values(devCloudStore.match_sheets),
-                    profiles: Object.values(devCloudStore.profiles),
+                    profiles: isProfilesVisible ? Object.values(devCloudStore.profiles) : [],
+                    brackets: devCloudStore.brackets || {},
                   })
                 );
               }
@@ -159,6 +192,16 @@ export default defineConfig(({ mode }) => {
                       );
                     }
                     if (body.action === 'register_user') {
+                      if (devCloudStore.launch_config.publicRegistrationEnabled === false) {
+                        res.statusCode = 403;
+                        return res.end(
+                          JSON.stringify({
+                            ok: false,
+                            error:
+                              'As inscrições e o cadastro de participantes estão temporariamente indisponíveis. Em breve o IntraMed será aberto oficialmente!',
+                          })
+                        );
+                      }
                       const emailIn = String(body.email || '').trim().toLowerCase();
                       const nameIn = String(body.name || '').trim();
                       const passIn = String(body.password || '').trim();
@@ -209,6 +252,16 @@ export default defineConfig(({ mode }) => {
                     if (body.action === 'user_login') {
                       const idIn = String(body.email || body.identifier || '').trim().toLowerCase();
                       const passIn = String(body.password || '').trim();
+                      if (devCloudStore.launch_config.publicLoginEnabled === false && idIn !== 'cangaceira@uema.com') {
+                        res.statusCode = 403;
+                        return res.end(
+                          JSON.stringify({
+                            ok: false,
+                            error:
+                              'O login público de participantes está em preparação e será liberado em breve. Acompanhe as informações do evento por aqui!',
+                          })
+                        );
+                      }
                       if (idIn === 'cangaceira@uema.com') {
                         const curPass = devCloudStore.masterPassword || 'campeao2027';
                         if (passIn === curPass) {
@@ -305,8 +358,42 @@ export default defineConfig(({ mode }) => {
                       return res.end(JSON.stringify({ ok: false, error: 'ID inválido.' }));
                     }
                     if (body.action === 'list_public_profiles') {
+                      if (devCloudStore.launch_config.publicProfilesVisible === false) {
+                        return res.end(
+                          JSON.stringify({
+                            ok: true,
+                            profiles: [],
+                            total: 0,
+                            message: 'A lista de participantes e perfis está temporariamente oculta durante a fase de divulgação.',
+                          })
+                        );
+                      }
                       const allP = Object.values(devCloudStore.profiles);
                       return res.end(JSON.stringify({ ok: true, profiles: allP, total: allP.length }));
+                    }
+                    if (body.action === 'update_launch_config') {
+                      devCloudStore.launch_config = {
+                        ...devCloudStore.launch_config,
+                        ...(body.launchConfig || {}),
+                      };
+                      return res.end(
+                        JSON.stringify({
+                          ok: true,
+                          launchConfig: devCloudStore.launch_config,
+                        })
+                      );
+                    }
+                    if (body.action === 'save_bracket') {
+                      const mId = String(body.modalityId || body.bracket?.modalityId || '');
+                      if (mId && body.bracket) {
+                        devCloudStore.brackets[mId] = body.bracket;
+                      }
+                      return res.end(
+                        JSON.stringify({
+                          ok: true,
+                          bracket: body.bracket,
+                        })
+                      );
                     }
                     if (body.action === 'athlete_login') {
                       const idIn = String(body.identifier || '').trim().toLowerCase();

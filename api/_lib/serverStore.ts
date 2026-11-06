@@ -1,8 +1,9 @@
 import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
-const CLOUD_STATE_FILE = path.join('/tmp', 'intramed_ix_cloud_sync_v2.json');
+const CLOUD_STATE_FILE = path.join(os.tmpdir(), 'intramed_ix_cloud_sync_v2.json');
 
 export interface SyncDiagnosticLogEntry {
   id: string;
@@ -34,6 +35,31 @@ export interface AdminActionAuditLog {
   details?: string;
 }
 
+export interface PublicLaunchConfig {
+  publicLaunchMode: boolean;
+  publicLoginEnabled: boolean;
+  publicRegistrationEnabled: boolean;
+  publicPaymentsEnabled: boolean;
+  publicPricesVisible: boolean;
+  bracketPublished: boolean;
+  publicProfilesVisible: boolean;
+  announcementTitle?: string;
+  announcementMessage?: string;
+}
+
+export const DEFAULT_LAUNCH_CONFIG: PublicLaunchConfig = {
+  publicLaunchMode: true,
+  publicLoginEnabled: false,
+  publicRegistrationEnabled: false,
+  publicPaymentsEnabled: false,
+  publicPricesVisible: false,
+  bracketPublished: false,
+  publicProfilesVisible: false,
+  announcementTitle: 'ACESSO EM BREVE',
+  announcementMessage:
+    'Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.',
+};
+
 export interface CloudCollectionMap {
   registrations: Record<string, Record<string, unknown>>;
   athletes: Record<string, Record<string, unknown>>;
@@ -46,6 +72,8 @@ export interface CloudCollectionMap {
   admin_users?: Record<string, Record<string, unknown>>;
   admin_audit_logs?: AdminActionAuditLog[];
   sync_logs?: SyncDiagnosticLogEntry[];
+  launch_config?: PublicLaunchConfig;
+  brackets?: Record<string, Record<string, unknown>>;
   hydratedFromFirestoreAtIso?: string;
   updatedAtIso: string;
 }
@@ -361,6 +389,8 @@ export function getCloudStore(): CloudCollectionMap {
           profiles: parsed.profiles || {},
           admin_users: parsed.admin_users || {},
           admin_audit_logs: parsed.admin_audit_logs || [],
+          launch_config: parsed.launch_config || { ...DEFAULT_LAUNCH_CONFIG },
+          brackets: parsed.brackets || {},
           updatedAtIso: parsed.updatedAtIso || new Date().toISOString(),
         };
         ensureMasterAccountProvisioned(global.__INTRAMED_CLOUD_STORE_V2__);
@@ -382,6 +412,8 @@ export function getCloudStore(): CloudCollectionMap {
     profiles: {},
     admin_users: {},
     admin_audit_logs: [],
+    launch_config: { ...DEFAULT_LAUNCH_CONFIG },
+    brackets: {},
     updatedAtIso: new Date().toISOString(),
   };
   ensureMasterAccountProvisioned(global.__INTRAMED_CLOUD_STORE_V2__);

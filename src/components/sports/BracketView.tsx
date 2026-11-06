@@ -1,9 +1,22 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GitBranch, Trophy, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import {
+  GitBranch,
+  Trophy,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Clock,
+  Shield,
+  Sparkles,
+  ArrowRight,
+  Lock,
+  Layers,
+} from 'lucide-react';
 import { BracketStructure, BracketMatchSlot } from '../../types/domain';
 import { TeamCrest } from './TeamCrest';
 import { StatusBadge } from '../ui/StatusBadge';
+import { Button } from '../ui/Button';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 
 interface BracketViewProps {
@@ -14,7 +27,8 @@ interface BracketViewProps {
 
 /**
  * Componente de Chaveamento Oficial (Quartas de final → Semifinais → Final).
- * Com controles de Zoom interativo e sincronização em tempo real com partidas criadas no Painel Admin.
+ * Com suporte a modo de lançamento público (CHAVEAMENTO EM BREVE),
+ * controles de Zoom interativo e sincronização em tempo real.
  */
 export const BracketView: React.FC<BracketViewProps> = ({
   bracket,
@@ -22,13 +36,18 @@ export const BracketView: React.FC<BracketViewProps> = ({
   modalityName,
 }) => {
   const navigate = useNavigate();
-  const { visibleMatches } = useCompetitionStore();
+  const { visibleMatches, launchConfig, officialBrackets, canOperateOfficialData } =
+    useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
+
   const [zoomPercent, setZoomPercent] = useState<number>(100);
   const [mobileStageFilter, setMobileStageFilter] = useState<
     'all' | 'quarterfinals' | 'semifinals' | 'final'
   >('all');
 
   const targetModalityId = modalityId || bracket?.modalityId;
+  const officialBracket = targetModalityId ? officialBrackets[targetModalityId] : null;
+
   const modalityKnockoutMatches = targetModalityId
     ? visibleMatches.filter((m) => m.modalityId === targetModalityId)
     : [];
@@ -43,10 +62,6 @@ export const BracketView: React.FC<BracketViewProps> = ({
     (m) => m.phase === 'final'
   );
 
-  // Formato oficial de 5 atléticas do INTRAMED IX:
-  // - 1 confronto de Quartas de Final (A x B)
-  // - Semifinal 1 (C x D) e Semifinal 2 (Vencedor QF x E)
-  // - Final (Vencedor SF1 x Vencedor SF2)
   const dynamicQuarterfinals: BracketMatchSlot[] = [
     {
       id: 'dyn-qf-0',
@@ -74,7 +89,109 @@ export const BracketView: React.FC<BracketViewProps> = ({
     qfMatches.length > 0 ||
     sfMatches.length > 0 ||
     finalMatches.length > 0 ||
-    Boolean(bracket && bracket.isConfigured);
+    Boolean(officialBracket && officialBracket.stages && officialBracket.stages.length > 0);
+
+  const isBracketLive = launchConfig.bracketPublished && hasAnyKnockoutMatch;
+
+  // ESTADO 1: CHAVEAMENTO EM BREVE (Modo de Pré-Lançamento ou Confrontos Não Publicados)
+  if (!isBracketLive) {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-3xl bg-gradient-to-br from-[#0B218A] via-[#102a9e] to-[#1E3A8A] text-white p-6 sm:p-10 shadow-elevated border border-white/15 relative overflow-hidden text-center sm:text-left">
+          <img
+            src="/assets/atletica/face-monocor.png"
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none select-none absolute -right-6 -bottom-10 w-56 h-56 object-contain opacity-10"
+          />
+
+          <div className="relative z-10 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 text-xs font-black tracking-wider uppercase mb-4">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Fase de Divulgação Oficial</span>
+            </div>
+
+            <h3 className="text-2xl sm:text-3xl font-black font-display tracking-tight text-white mb-3">
+              CHAVEAMENTO EM BREVE
+            </h3>
+
+            <p className="text-sm sm:text-base text-white/85 leading-relaxed mb-6">
+              O chaveamento oficial será disponibilizado nesta página assim que a organização finalizar a publicação dos confrontos.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/10 border border-white/15 text-xs text-brand-yellow font-semibold">
+                <Sparkles className="w-4 h-4" />
+                <span>16 Modalidades Esportivas • 5 Atléticas em Disputa</span>
+              </div>
+
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/admin')}
+                  className="bg-white text-brand-blue-dark font-bold hover:bg-white/90 border-transparent text-xs"
+                >
+                  <Lock className="w-3.5 h-3.5 mr-1 text-brand-yellow-dark" />
+                  <span>Painel Admin: Publicar Chaveamento</span>
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Card Informativo com Estrutura e Atléticas Confirmadas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 font-display font-extrabold text-sm text-[#0B218A]">
+              <Shield className="w-4 h-4 text-brand-yellow-dark" />
+              <span>Atléticas Oficiais Confirmadas</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Todas as 5 atléticas do curso de Medicina da UEMA já estão homologadas para o torneio:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-bold text-slate-800">
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-600" />
+                <span>A.A.A. Sanguinária</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+                <span>A.A.A. Predadora</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                <span>A.A.A. Tormenta</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span>A.A.A. Colossal</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-2 sm:col-span-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
+                <span>Calouros Medicina UEMA</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 font-display font-extrabold text-sm text-[#0B218A]">
+              <Layers className="w-4 h-4 text-brand-yellow-dark" />
+              <span>Regulamento de Chaveamento para 5 Equipes</span>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              O modelo esportivo oficial do INTRAMED IX conta com:
+            </p>
+            <ul className="text-xs text-slate-700 space-y-1.5 list-disc pl-4">
+              <li><strong>1 Partida de Quartas de Final:</strong> confronto preliminar entre duas atléticas sorteadas.</li>
+              <li><strong>3 Entradas Diretas em Semifinais:</strong> três atléticas beneficiadas por sorteio técnico.</li>
+              <li><strong>Grande Final:</strong> decisão do título geral da modalidade valendo pontuação máxima.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const renderEmptySlotCard = (phaseLabel: string, index: number, isFinal = false) => (
     <div

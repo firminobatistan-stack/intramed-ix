@@ -18,6 +18,9 @@ import {
   Instagram,
   ArrowLeft,
   Users,
+  Clock,
+  ArrowRight,
+  Lock,
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -42,12 +45,101 @@ export const ProfilePage: React.FC = () => {
     changeUserPassword,
     visibleAthletes,
     getTeamById,
+    launchConfig,
   } = useCompetitionStore();
 
   const isAdmin = canOperateOfficialData();
 
   // Determina se está visualizando o próprio perfil ou o perfil de outro membro
   const isViewingSelf = !userId || (currentUser && (userId === currentUser.id || userId === currentUser.email));
+
+  // Se o lançamento público proibir perfis de outros participantes e o visitante não for admin
+  if (!isViewingSelf && !launchConfig.publicProfilesVisible && !isAdmin) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center">
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xl p-8 sm:p-12">
+          <div className="w-16 h-16 rounded-2xl bg-amber-100 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <Clock className="w-8 h-8" />
+          </div>
+
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/80 text-amber-700 text-xs font-black tracking-wider uppercase mb-3">
+            <Lock className="w-3.5 h-3.5" />
+            Divulgação Inicial • INTRAMED IX
+          </span>
+
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-3">
+            ACESSO EM BREVE
+          </h1>
+
+          <p className="text-slate-600 text-sm sm:text-base max-w-lg mx-auto leading-relaxed mb-8">
+            Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button
+              variant="primary"
+              onClick={() => navigate('/chaveamento')}
+              className="w-full sm:w-auto font-bold px-6 py-3"
+            >
+              <span>Ver Chaveamento Oficial</span>
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/')}
+              className="w-full sm:w-auto font-semibold px-6 py-3"
+            >
+              <span>Voltar ao Início</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Se o usuário não está autenticado e tenta acessar /perfil durante o modo de divulgação pública
+  if (isViewingSelf && !currentUser && !launchConfig.publicLoginEnabled && !isAdmin) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center">
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xl p-8 sm:p-12">
+          <div className="w-16 h-16 rounded-2xl bg-amber-100 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <Clock className="w-8 h-8" />
+          </div>
+
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/80 text-amber-700 text-xs font-black tracking-wider uppercase mb-3">
+            <Lock className="w-3.5 h-3.5" />
+            Área de Participantes
+          </span>
+
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-3">
+            ACESSO EM BREVE
+          </h1>
+
+          <p className="text-slate-600 text-sm sm:text-base max-w-lg mx-auto leading-relaxed mb-8">
+            Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button
+              variant="primary"
+              onClick={() => navigate('/chaveamento')}
+              className="w-full sm:w-auto font-bold px-6 py-3"
+            >
+              <span>Ver Chaveamento Oficial</span>
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/')}
+              className="w-full sm:w-auto font-semibold px-6 py-3"
+            >
+              <span>Voltar ao Início</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const targetProfile = useMemo(() => {
     if (userId) {

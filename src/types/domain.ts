@@ -449,6 +449,82 @@ export interface BracketMatchSlot {
   match: Match | null;
 }
 
+export interface PublicLaunchConfig {
+  publicLaunchMode: boolean;
+  publicLoginEnabled: boolean;
+  publicRegistrationEnabled: boolean;
+  publicPaymentsEnabled: boolean;
+  publicPricesVisible: boolean;
+  bracketPublished: boolean;
+  publicProfilesVisible: boolean;
+  announcementTitle?: string;
+  announcementMessage?: string;
+}
+
+export type CompetitionPhaseType =
+  | 'group_stage'
+  | 'round_of_16'
+  | 'quarterfinals'
+  | 'semifinals'
+  | 'third_place'
+  | 'final';
+
+export type TournamentFormat =
+  | 'single_elimination' // Eliminatória simples / mata-mata
+  | 'group_stage' // Fase de grupos
+  | 'groups_to_knockout' // Grupos com classificação para mata-mata
+  | 'round_robin'; // Pontos corridos
+
+export interface BracketParticipantSource {
+  type: 'team' | 'winner_of' | 'loser_of' | 'group_rank' | 'bye';
+  sourceMatchId?: string | null;
+  groupName?: string | null;
+  rankPosition?: number | null;
+  label?: string | null;
+}
+
+export interface UniversalBracketMatch {
+  id: string;
+  modalityId: string;
+  category?: string | null;
+  phase: CompetitionPhaseType;
+  phaseLabel: string;
+  group?: string | null;
+  orderIndex: number;
+  scheduledDate?: string | null;
+  scheduledTime?: string | null;
+  venue?: string | null;
+  status: MatchStatus;
+  homeTeam: MatchTeamSlot;
+  awayTeam: MatchTeamSlot;
+  homeSource?: BracketParticipantSource | null;
+  awaySource?: BracketParticipantSource | null;
+  winnerTeamId?: string | null;
+  nextMatchId?: string | null;
+  nextMatchTarget?: 'home' | 'away' | null;
+  loserNextMatchId?: string | null;
+}
+
+export interface UniversalBracketStage {
+  id: string;
+  phase: CompetitionPhaseType;
+  label: string;
+  group?: string | null;
+  matches: UniversalBracketMatch[];
+}
+
+export interface UniversalModalityBracket {
+  modalityId: string;
+  modalityName: string;
+  format: TournamentFormat;
+  formatLabel: string;
+  category?: string | null;
+  isPublished: boolean;
+  publishedAtIso?: string | null;
+  stages: UniversalBracketStage[];
+  notes?: string | null;
+}
+
 export interface BracketStructure {
   modalityId: ModalitySlug;
   categoryId?: string | null;

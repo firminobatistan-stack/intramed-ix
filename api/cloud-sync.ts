@@ -4,6 +4,7 @@ import {
   CloudCollectionMap,
   computeAuthorizedServerPrice,
   createSignedOperatorToken,
+  DEFAULT_LAUNCH_CONFIG,
   ensureCloudStoreHydrated,
   extractBearerOrHeaderToken,
   getCloudStore,
@@ -14,9 +15,11 @@ import {
   markRegistrationPaidOnServer,
   MASTER_MODERATOR_EMAIL,
   MirrorDocumentToFirestoreRest,
+  OFFICIAL_SERVER_LOTS,
   parseJsonSafe,
   parseSafeBody,
   protectMasterAccount,
+  PublicLaunchConfig,
   sanitizeMatchForPublic,
   sanitizeRegistrationForPublic,
   sanitizeUserProfileForPublic,
@@ -35,6 +38,7 @@ const ALLOWED_COLLECTIONS = new Set([
   'match_sheets',
   'profiles',
   'users',
+  'brackets',
 ]);
 
 function canClientWriteDocument(
@@ -310,25 +314,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return { ...reg, authorizedPrice: expected };
     };
 
-    const publicRegistrations = isAdminRequest
-      ? Object.values(store.registrations).map((r) => normalizeRegServerPrice(r))
-      : Object.values(store.registrations).map((r) =>
-          sanitizeRegistrationForPublic(normalizeRegServerPrice(r))
-        );
+    const launchConfig: PublicLaunchConfig = store.launch_config || DEFAULT_LAUNCH_CONFIG;
+    const isPublicProfilesVisible = Boolean(launchConfig.publicProfilesVisible || isAdminRequest);
+    const isPublicPricesVisible = Boolean(launchConfig.publicPricesVisible || isAdminRequest);
+
+    const publicRegistrations = isPublicProfilesVisible
+      ? (isAdminRequest
+          ? Object.values(store.registrations).map((r) => normalizeRegServerPrice(r))
+          : Object.values(store.registrations).map((r) =>
+              sanitizeRegistrationForPublic(normalizeRegServerPrice(r))
+            ))
+      : [];
+
+    const publicAthletes = isPublicProfilesVisible
+      ? Object.values(store.athletes)
+      : [];
+
+    const publicProfiles = isPublicProfilesVisible
+      ? Object.values(store.profiles || {}).map(sanitizeUserProfileForPublic)
+      : [];
 
     const publicMatches = Object.values(store.matches).map((m) =>
       sanitizeMatchForPublic(m, isAdminRequest)
     );
 
+    const sanitizedLots = Object.entries(OFFICIAL_SERVER_LOTS).reduce(
+      (acc, [lotKey, lotVal]) => {
+        acc[lotKey] = {
+          ...lotVal,
+          priceMember: isPublicPricesVisible ? lotVal.priceMember : null,
+          priceNonMember: isPublicPricesVisible ? lotVal.priceNonMember : null,
+        };
+        return acc;
+      },
+      {} as Record<string, any>
+    );
+
     return res.status(200).json({
       success: true,
       updatedAtIso: store.updatedAtIso,
+      launchConfig,
       registrations: publicRegistrations,
-      athletes: Object.values(store.athletes),
+      athletes: publicAthletes,
       teams: Object.values(store.teams),
       matches: publicMatches,
       match_sheets: Object.values(store.match_sheets),
-      profiles: Object.values(store.profiles || {}).map(sanitizeUserProfileForPublic),
+      profiles: publicProfiles,
+      brackets: store.brackets || {},
+      lots: sanitizedLots,
       syncLogs: isAdminRequest ? store.sync_logs || [] : [],
     });
   }
@@ -516,6 +549,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // AÇÃO 2C-1: Cadastro Real de Usuário e Perfil Social (/api/cloud-sync -> register_user)
     if (action === 'register_user') {
+      const launchCfg = store.launch_config || DEFAULT_LAUNCH_CONFIG;
+      if (launchCfg.publicRegistrationEnabled === false) {
+        return res.status(403).json({
+          ok: false,
+          error: 'As inscrições e o cadastro de participantes estão temporariamente indisponíveis. Em breve o IntraMed será aberto oficialmente!',
+        });
+      }
+
       const nameInput = String(body.name || '').trim();
       const emailInput = String(body.email || '').trim().toLowerCase();
       const passwordInput = String(body.password || '').trim();
@@ -629,6 +670,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (!identifierInput || !passwordInput) {
         return res.status(400).json({ ok: false, error: 'E-mail e senha são obrigatórios.' });
+      }
+
+      const launchCfg = store.launch_config || DEFAULT_LAUNCH_CONFIG;
+      const adminUsers = store.admin_users || {};
+      const isAdminAccount = Boolean(adminUsers[identifierInput] || isMasterAccount(identifierInput));
+
+      if (launchCfg.publicLoginEnabled === false && !isAdminAccount) {
+        return res.status(403).json({
+          ok: false,
+          error: 'O login público de participantes está em preparação e será liberado em breve. Acompanhe as informações do evento por aqui!',
+        });
       }
 
       if (!store.users) store.users = {};
@@ -867,6 +919,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // AÇÃO 2C-5: Listagem e Pesquisa de Perfis Públicos (/api/cloud-sync -> list_public_profiles)
     if (action === 'list_public_profiles') {
+      const launchCfg = store.launch_config || DEFAULT_LAUNCH_CONFIG;
+      if (launchCfg.publicProfilesVisible === false && !isAdminRequest) {
+        return res.status(200).json({
+          ok: true,
+          profiles: [],
+          total: 0,
+          message: 'A lista de participantes e perfis está temporariamente oculta durante a fase de divulgação.',
+        });
+      }
+
       const query = String(body.query || '').trim().toLowerCase();
       const filterTurma = String(body.turma || '').trim();
       const filterTeam = String(body.teamId || '').trim();
@@ -892,6 +954,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ok: true,
         profiles: filtered,
         total: filtered.length,
+      });
+    }
+
+    // AÇÃO 2C-6: Atualização Centralizada do Modo de Lançamento Público (Restrito à Comissão / Master)
+    if (action === 'update_launch_config') {
+      if (!isAdminRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas a Comissão Organizadora pode alterar os parâmetros de lançamento público.',
+        });
+      }
+
+      const newConfig = body.launchConfig || {};
+      store.launch_config = {
+        ...(store.launch_config || DEFAULT_LAUNCH_CONFIG),
+        ...newConfig,
+      };
+      saveCloudStore(store);
+      void MirrorDocumentToFirestoreRest('system_config', 'launch_config', store.launch_config as any);
+
+      return res.status(200).json({
+        ok: true,
+        message: 'Configurações de lançamento público atualizadas com sucesso.',
+        launchConfig: store.launch_config,
+      });
+    }
+
+    // AÇÃO 2C-7: Salvamento / Importação de Chaveamento Oficial (Restrito à Comissão)
+    if (action === 'save_bracket' || action === 'import_bracket') {
+      if (!isAdminRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas a Comissão Organizadora pode cadastrar ou importar chaveamentos oficiais.',
+        });
+      }
+
+      const bracketData = body.bracket;
+      const modalityId = String(body.modalityId || bracketData?.modalityId || '').trim();
+
+      if (!modalityId || !bracketData) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Dados do chaveamento e identificador da modalidade são obrigatórios.',
+        });
+      }
+
+      if (!store.brackets) store.brackets = {};
+      store.brackets[modalityId] = bracketData;
+      saveCloudStore(store);
+      void MirrorDocumentToFirestoreRest('brackets', modalityId, bracketData);
+
+      return res.status(200).json({
+        ok: true,
+        message: 'Chaveamento oficial salvo com sucesso!',
+        bracket: bracketData,
       });
     }
 

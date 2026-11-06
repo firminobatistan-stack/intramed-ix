@@ -14,6 +14,7 @@ import {
   CreditCard,
   ArrowRight,
   CheckCircle2,
+  GitBranch,
 } from 'lucide-react';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
@@ -50,6 +51,7 @@ export const HomePage: React.FC = () => {
     isTestMode,
     setTestMode,
     canOperateOfficialData,
+    launchConfig,
   } = useCompetitionStore();
   const { hasCompletedRegistration, myRegistrations } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
@@ -171,28 +173,60 @@ export const HomePage: React.FC = () => {
           <div className="space-y-1.5 z-10 text-center md:text-left">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-brand-yellow text-[11px] font-display font-extrabold uppercase tracking-wider shadow-sm">
               <Sparkles className="w-3.5 h-3.5" />
-              1º Lote Oficial Disponível
+              {launchConfig?.publicRegistrationEnabled !== false
+                ? '1º Lote Oficial Disponível'
+                : 'Fase de Divulgação • Em Breve'}
             </div>
             <h2 className="text-xl sm:text-2xl font-display font-black tracking-tight text-slate-950">
-              Inscrições Abertas • INTRAMED IX
+              {launchConfig?.publicRegistrationEnabled !== false
+                ? 'Inscrições Abertas • INTRAMED IX'
+                : 'Inscrições Em Breve • INTRAMED IX'}
             </h2>
             <p className="text-xs sm:text-sm font-medium text-slate-800 max-w-xl">
-              Passaporte único com acesso a todas as 16 modalidades (Pix ou Cartão). Sócios Cangaceira:{' '}
-              <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 55,00</strong> • Não Sócios:{' '}
-              <strong className="font-extrabold text-slate-950">R$ 65,00</strong>.
+              {launchConfig?.publicPricesVisible !== false || isAdmin ? (
+                <>
+                  Passaporte único com acesso a todas as 16 modalidades (Pix ou Cartão). Sócios Cangaceira:{' '}
+                  <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 55,00</strong> • Não Sócios:{' '}
+                  <strong className="font-extrabold text-slate-950">R$ 65,00</strong>.
+                </>
+              ) : (
+                <>
+                  Passaporte oficial com acesso a todas as 16 modalidades.{' '}
+                  <span className="inline-flex items-center gap-1.5 align-middle">
+                    <span className="filter blur-[5px] select-none opacity-60 font-extrabold text-slate-950">
+                      R$ 55,00 • R$ 65,00
+                    </span>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-950/10 text-slate-900 border border-slate-900/20">
+                      Valores em Breve
+                    </span>
+                  </span>
+                </>
+              )}
             </p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 z-10 w-full sm:w-auto">
-            <button
-              type="button"
-              onClick={() => navigate('/inscricao')}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-sm shadow-xl hover:scale-105 transition-all"
-            >
-              <CreditCard className="w-4 h-4 text-brand-yellow" />
-              <span>Fazer Inscrição</span>
-              <ArrowRight className="w-4 h-4 text-brand-yellow" />
-            </button>
+            {launchConfig?.publicRegistrationEnabled !== false ? (
+              <button
+                type="button"
+                onClick={() => navigate('/inscricao')}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-sm shadow-xl hover:scale-105 transition-all"
+              >
+                <CreditCard className="w-4 h-4 text-brand-yellow" />
+                <span>Fazer Inscrição</span>
+                <ArrowRight className="w-4 h-4 text-brand-yellow" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => navigate('/chaveamento')}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-sm shadow-xl hover:scale-105 transition-all"
+              >
+                <GitBranch className="w-4 h-4 text-brand-yellow" />
+                <span>Ver Chaveamento Oficial</span>
+                <ArrowRight className="w-4 h-4 text-brand-yellow" />
+              </button>
+            )}
 
             {isAdmin && (
               <button

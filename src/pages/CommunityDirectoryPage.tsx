@@ -11,6 +11,9 @@ import {
   UserCheck,
   Sparkles,
   ExternalLink,
+  Clock,
+  ArrowRight,
+  Lock,
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -20,13 +23,65 @@ import { TURMAS_MEDICINA } from '../data/registrationData';
 
 export const CommunityDirectoryPage: React.FC = () => {
   const navigate = useNavigate();
-  const { publicProfiles, visibleAthletes, visibleTeams, currentUser } =
-    useCompetitionStore();
+  const {
+    publicProfiles,
+    visibleAthletes,
+    visibleTeams,
+    currentUser,
+    canOperateOfficialData,
+    launchConfig,
+  } = useCompetitionStore();
+
+  const isAdmin = canOperateOfficialData();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTurma, setSelectedTurma] = useState<string>('todas');
   const [selectedTeam, setSelectedTeam] = useState<string>('todas');
   const [onlyAthletes, setOnlyAthletes] = useState(false);
+
+  // Se o modo de lançamento público estiver com perfis ocultos e o visitante não for admin
+  if (!launchConfig.publicProfilesVisible && !isAdmin) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-12">
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xl overflow-hidden p-8 sm:p-12 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-amber-100 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <Clock className="w-8 h-8" />
+          </div>
+
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200/80 text-amber-700 text-xs font-black tracking-wider uppercase mb-3">
+            <Lock className="w-3.5 h-3.5" />
+            Divulgação Inicial • INTRAMED IX
+          </span>
+
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mb-3">
+            ACESSO EM BREVE
+          </h1>
+
+          <p className="text-slate-600 text-sm sm:text-base max-w-xl mx-auto leading-relaxed mb-8">
+            Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button
+              variant="primary"
+              onClick={() => navigate('/chaveamento')}
+              className="w-full sm:w-auto font-bold px-6 py-3"
+            >
+              <span>Ver Chaveamento Oficial</span>
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/')}
+              className="w-full sm:w-auto font-semibold px-6 py-3"
+            >
+              <span>Voltar ao Início</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Combina perfis públicos com a lista de atletas oficiais para máxima cobertura
   const combinedMembers = useMemo(() => {

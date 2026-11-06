@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -34,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   const location = useLocation();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  const { notifications, currentUser, canOperateOfficialData, syncStatus } =
+  const { notifications, currentUser, canOperateOfficialData, syncStatus, launchConfig } =
     useCompetitionStore();
   const unreadCount = notifications.filter((n) => !n.isRead).length;
   const isAdmin = canOperateOfficialData();
@@ -55,28 +55,29 @@ export const Header: React.FC<HeaderProps> = ({
     showBack ||
     (location.pathname.startsWith('/competicoes/') &&
       location.pathname !== '/competicoes') ||
-    location.pathname === '/chaveamento' ||
     location.pathname === '/admin' ||
     location.pathname.startsWith('/equipe') ||
     location.pathname.startsWith('/atleta');
 
-  const topMenuTabs = [
-    { id: 'livetv', label: 'Ao Vivo', path: '/placar' },
-    { id: 'matches', label: 'Partidas', path: '/' },
-    { id: 'leagues', label: 'Modalidades', path: '/competicoes' },
-    { id: 'teams', label: 'Períodos', path: '/equipe' },
-    { id: 'athletes', label: 'Atletas', path: '/atleta' },
-    { id: 'comunidade', label: 'Comunidade', path: '/comunidade' },
-  ];
+  const topMenuTabs = useMemo(() => {
+    const tabs = [
+      { id: 'matches', label: 'Início', path: '/' },
+      { id: 'chaveamento', label: 'Chaveamento', path: '/chaveamento' },
+      { id: 'leagues', label: 'Modalidades', path: '/competicoes' },
+      { id: 'teams', label: 'Equipes', path: '/equipe' },
+      { id: 'livetv', label: 'Match Center', path: '/placar' },
+    ];
+    if (launchConfig?.publicProfilesVisible || isAdmin) {
+      tabs.push({ id: 'athletes', label: 'Atletas', path: '/atleta' });
+      tabs.push({ id: 'comunidade', label: 'Comunidade', path: '/comunidade' });
+    }
+    return tabs;
+  }, [launchConfig?.publicProfilesVisible, isAdmin]);
 
   const getActiveTopTab = () => {
     if (location.pathname.startsWith('/placar')) return 'livetv';
-    if (
-      location.pathname.startsWith('/competicoes') ||
-      location.pathname.startsWith('/chaveamento')
-    ) {
-      return 'leagues';
-    }
+    if (location.pathname.startsWith('/chaveamento')) return 'chaveamento';
+    if (location.pathname.startsWith('/competicoes')) return 'leagues';
     if (location.pathname.startsWith('/equipe')) return 'teams';
     if (location.pathname.startsWith('/atleta')) return 'athletes';
     if (
@@ -224,7 +225,7 @@ export const Header: React.FC<HeaderProps> = ({
             aria-label="Menu principal do topo"
             className="flex items-center justify-between sm:justify-start sm:gap-8 overflow-x-auto no-scrollbar pt-1"
           >
-            {topMenuTabs.map((tab) => {
+            {topMenuTabs.map((tab: { id: string; label: string; path: string }) => {
               const isActive = activeTopTab === tab.id;
               return (
                 <button

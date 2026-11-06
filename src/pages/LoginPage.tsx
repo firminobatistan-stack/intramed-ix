@@ -14,6 +14,8 @@ import {
   AlertCircle,
   Users,
   ShieldCheck,
+  Clock,
+  Sparkles,
 } from 'lucide-react';
 import { BrandMark } from '../components/layout/BrandMark';
 import { Input } from '../components/ui/Input';
@@ -39,6 +41,7 @@ export const LoginPage: React.FC = () => {
     currentUser,
     setCurrentUser,
     upsertParticipantAthlete,
+    launchConfig,
   } = useCompetitionStore();
 
   const { registrations } = useRegistrationStore();
@@ -85,6 +88,13 @@ export const LoginPage: React.FC = () => {
 
     const q = identifier.trim().toLowerCase();
     const pass = loginPassword.trim();
+
+    if (launchConfig?.publicLoginEnabled === false && q !== 'cangaceira@uema.com') {
+      setErrorMessage(
+        'ACESSO EM BREVE: O login público de participantes está em preparação e será liberado em breve. Acompanhe as informações do evento por aqui!'
+      );
+      return;
+    }
 
     if (!q) {
       setErrorMessage('Informe seu e-mail, nome de usuário ou documento.');
@@ -230,6 +240,13 @@ export const LoginPage: React.FC = () => {
     const email = registerEmail.trim().toLowerCase();
     const pass = registerPassword.trim();
     const confirmPass = registerConfirmPassword.trim();
+
+    if (launchConfig?.publicRegistrationEnabled === false) {
+      setErrorMessage(
+        'CADASTRO EM BREVE: As inscrições e o cadastro de participantes estão temporariamente indisponíveis. Em breve o IntraMed será aberto oficialmente!'
+      );
+      return;
+    }
 
     if (!name || name.length < 2) {
       setErrorMessage('Informe seu nome completo (mínimo 2 caracteres).');
@@ -517,7 +534,46 @@ export const LoginPage: React.FC = () => {
 
           {/* ABA 1: LOGIN UNIFICADO */}
           {loginMode === 'login' && (
-            <form onSubmit={handleUserSubmit} className="space-y-4">
+            launchConfig?.publicLoginEnabled === false ? (
+              <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 text-center space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 border border-amber-500/20 flex items-center justify-center mx-auto">
+                  <Clock className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase tracking-wider mb-2">
+                    Divulgação Inicial
+                  </span>
+                  <h3 className="text-base font-display font-black text-slate-900 tracking-tight">
+                    ACESSO EM BREVE
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
+                  Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma.
+                </p>
+                <p className="text-xs font-bold text-[#0B218A]">
+                  Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.
+                </p>
+                <div className="pt-2 flex flex-col gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => navigate('/chaveamento')}
+                    className="w-full text-xs font-bold justify-center"
+                  >
+                    Acompanhar Chaveamento
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLoginMode('admin')}
+                    className="w-full text-xs text-slate-600 hover:text-slate-900 justify-center"
+                  >
+                    Acesso da Comissão / Moderação
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleUserSubmit} className="space-y-4">
               <Input
                 label="E-mail, Usuário ou Documento"
                 type="text"
@@ -567,11 +623,51 @@ export const LoginPage: React.FC = () => {
                 </button>
               </div>
             </form>
+            )
           )}
 
           {/* ABA 2: CRIAR CONTA */}
           {loginMode === 'register' && (
-            <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+            launchConfig?.publicRegistrationEnabled === false ? (
+              <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 text-center space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 border border-amber-500/20 flex items-center justify-center mx-auto">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase tracking-wider mb-2">
+                    Lançamento Oficial
+                  </span>
+                  <h3 className="text-base font-display font-black text-slate-900 tracking-tight">
+                    ACESSO EM BREVE
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
+                  Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma.
+                </p>
+                <p className="text-xs font-bold text-[#0B218A]">
+                  Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.
+                </p>
+                <div className="pt-2 flex flex-col gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => navigate('/chaveamento')}
+                    className="w-full text-xs font-bold justify-center"
+                  >
+                    Ver Chaveamento Oficial
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setLoginMode('admin')}
+                    className="w-full text-xs text-slate-600 hover:text-slate-900 justify-center"
+                  >
+                    Acesso da Comissão / Moderação
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
               <Input
                 label="Nome Completo"
                 type="text"
@@ -648,6 +744,7 @@ export const LoginPage: React.FC = () => {
                 {isSubmitting ? 'Cadastrando...' : 'Cadastrar e Criar Perfil'}
               </Button>
             </form>
+            )
           )}
 
           {/* ABA 3: COMISSÃO / MASTER */}

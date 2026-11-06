@@ -48,6 +48,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const store = await ensureCloudStoreHydrated();
+  const launchConfig = store.launch_config || { publicPaymentsEnabled: false };
+  if (launchConfig.publicPaymentsEnabled === false) {
+    return res.status(403).json({
+      ok: false,
+      error: 'A área de pagamentos do IntraMed ainda está sendo preparada. Em breve, você poderá realizar sua inscrição e efetuar o pagamento diretamente pela plataforma.',
+    });
+  }
   const storedReg = store.registrations[String(registrationId)];
 
   // Status de sócio e pagamento validados contra o registro armazenado no servidor

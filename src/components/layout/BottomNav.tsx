@@ -8,6 +8,7 @@ import {
   Menu,
 } from 'lucide-react';
 import { useRegistrationStore } from '../../context/RegistrationStoreContext';
+import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 
 interface BottomNavProps {
   onOpenMenu?: () => void;
@@ -19,12 +20,13 @@ interface BottomNavProps {
  *   1. Início (Home)
  *   2. Inscrição (com destaque ANTES de se inscrever, e discreto DEPOIS)
  *   3. Ao Vivo (Match Center & Placar)
- *   4. Chaves (Chaveamento 5 Equipes)
+ *   4. Chaves (Chaveamento Oficial)
  *   5. Menu (Abre o Drawer completo com esportes, equipes, perfil, favoritos e admin)
  */
 export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
   const location = useLocation();
   const { hasCompletedRegistration } = useRegistrationStore();
+  const { launchConfig } = useCompetitionStore();
 
   const triggerHaptic = () => {
     try {
@@ -45,9 +47,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
     },
     {
       to: '/inscricao',
-      label: hasCompletedRegistration ? 'Ingresso' : 'Inscrição',
+      label: !launchConfig.publicRegistrationEnabled
+        ? 'Inscrição'
+        : hasCompletedRegistration
+        ? 'Ingresso'
+        : 'Inscrição',
       icon: CreditCard,
-      highlight: !hasCompletedRegistration,
+      highlight: !hasCompletedRegistration && launchConfig.publicRegistrationEnabled,
     },
     {
       to: '/placar',

@@ -23,6 +23,8 @@ import {
   TournamentPhaseType,
   UserProfile,
   PublicUserProfile,
+  PublicLaunchConfig,
+  UniversalModalityBracket,
   TurmaMedicina,
   RegistrationPaymentStatus,
   MemberStatus,
@@ -265,8 +267,25 @@ interface CompetitionStoreContextValue {
   getPublicProfileById: (id: string) => PublicUserProfile | undefined;
   updateUserProfile: (profileData: Partial<PublicUserProfile>) => Promise<{ ok: boolean; error?: string }>;
   changeUserPassword: (currentPassword: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
+  launchConfig: PublicLaunchConfig;
+  updateLaunchConfig: (newConfig: Partial<PublicLaunchConfig>) => Promise<{ ok: boolean; error?: string }>;
+  officialBrackets: Record<string, UniversalModalityBracket>;
+  saveOfficialBracket: (modalityId: string, bracket: UniversalModalityBracket) => Promise<{ ok: boolean; error?: string }>;
   syncStatus: 'synced' | 'syncing' | 'offline' | 'error';
 }
+
+export const DEFAULT_PUBLIC_LAUNCH_CONFIG: PublicLaunchConfig = {
+  publicLaunchMode: true,
+  publicLoginEnabled: false,
+  publicRegistrationEnabled: false,
+  publicPaymentsEnabled: false,
+  publicPricesVisible: false,
+  bracketPublished: false,
+  publicProfilesVisible: false,
+  announcementTitle: 'ACESSO EM BREVE',
+  announcementMessage:
+    'Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.',
+};
 
 const STORAGE_KEY_STATE = 'intramed_ix_live_engine_v3';
 const BROADCAST_CHANNEL_NAME = 'intramed_ix_live_sync_channel';
@@ -326,6 +345,8 @@ interface PersistedEngineState {
   favoriteAthleteIds: string[];
   notifications: AppNotificationItem[];
   publicProfiles: PublicUserProfile[];
+  launchConfig?: PublicLaunchConfig;
+  officialBrackets?: Record<string, UniversalModalityBracket>;
 }
 
 const CompetitionStoreContext = createContext<CompetitionStoreContextValue | null>(
@@ -407,6 +428,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             favoriteAthleteIds: parsed.favoriteAthleteIds || [],
             notifications: parsed.notifications || [],
             publicProfiles: parsed.publicProfiles || [],
+            launchConfig: parsed.launchConfig || { ...DEFAULT_PUBLIC_LAUNCH_CONFIG },
+            officialBrackets: parsed.officialBrackets || {},
           };
         }
       }
@@ -430,6 +453,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       favoriteAthleteIds: [],
       notifications: [],
       publicProfiles: [],
+      launchConfig: { ...DEFAULT_PUBLIC_LAUNCH_CONFIG },
+      officialBrackets: {},
     };
   });
 
@@ -597,8 +622,20 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         }
 
         let nextProfiles = prev.publicProfiles || [];
-        if (Array.isArray(payload.profiles) && payload.profiles.length > 0) {
+        if (Array.isArray(payload.profiles)) {
           nextProfiles = payload.profiles as PublicUserProfile[];
+          changed = true;
+        }
+
+        let nextLaunchConfig = prev.launchConfig || DEFAULT_PUBLIC_LAUNCH_CONFIG;
+        if (payload.launchConfig && typeof payload.launchConfig === 'object') {
+          nextLaunchConfig = payload.launchConfig as PublicLaunchConfig;
+          changed = true;
+        }
+
+        let nextBrackets = prev.officialBrackets || {};
+        if (payload.brackets && typeof payload.brackets === 'object') {
+          nextBrackets = payload.brackets;
           changed = true;
         }
 
@@ -612,6 +649,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           officialMatches: nextMatches,
           officialSheets: nextSheets,
           publicProfiles: nextProfiles,
+          launchConfig: nextLaunchConfig,
+          officialBrackets: nextBrackets,
         };
       });
     } catch {
@@ -3715,6 +3754,82 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [state.currentUser]
   );
 
+  const updateLaunchConfig = useCallback(
+    async (newConfig: Partial<PublicLaunchConfig>): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['x-intramed-token'] = token;
+        }
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            action: 'update_launch_config',
+            launchConfig: newConfig,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) {
+          return { ok: false, error: data?.error || 'Erro ao atualizar configurações no servidor.' };
+        }
+        setState((prev) => ({
+          ...prev,
+          launchConfig: {
+            ...(prev.launchConfig || DEFAULT_PUBLIC_LAUNCH_CONFIG),
+            ...newConfig,
+          },
+        }));
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'Falha de comunicação com o servidor.' };
+      }
+    },
+    []
+  );
+
+  const saveOfficialBracket = useCallback(
+    async (
+      modalityId: string,
+      bracket: UniversalModalityBracket
+    ): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['x-intramed-token'] = token;
+        }
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            action: 'save_bracket',
+            modalityId,
+            bracket,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) {
+          return { ok: false, error: data?.error || 'Erro ao salvar chaveamento no servidor.' };
+        }
+        setState((prev) => ({
+          ...prev,
+          officialBrackets: {
+            ...(prev.officialBrackets || {}),
+            [modalityId]: bracket,
+          },
+        }));
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'Falha de comunicação com o servidor.' };
+      }
+    },
+    []
+  );
+
   const syncStatus: 'synced' | 'syncing' | 'offline' | 'error' = useMemo(() => {
     if (!isOnline) return 'offline';
     if (state.pendingSyncCount > 0) return 'syncing';
@@ -3792,9 +3907,17 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       getPublicProfileById,
       updateUserProfile,
       changeUserPassword,
+      launchConfig: state.launchConfig || DEFAULT_PUBLIC_LAUNCH_CONFIG,
+      updateLaunchConfig,
+      officialBrackets: state.officialBrackets || {},
+      saveOfficialBracket,
       syncStatus,
     }),
     [
+      state.launchConfig,
+      updateLaunchConfig,
+      state.officialBrackets,
+      saveOfficialBracket,
       state.isTestMode,
       setTestMode,
       resetTestEnvironment,

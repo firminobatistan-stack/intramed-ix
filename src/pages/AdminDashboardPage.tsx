@@ -24,19 +24,26 @@ import {
   RefreshCw,
   Activity,
   ArrowUpRight,
+  Rocket,
+  GitBranch,
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock,
+  UploadCloud,
 } from 'lucide-react';
 import { useCompetitionStore, getStoredOperatorToken } from '../context/CompetitionStoreContext';
 import { flushOfflineQueue, getPendingQueueItems, QueuedSyncItem } from '../utils/offlineSyncQueue';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { MODALITY_RULE_ENGINE, formatSecondsToClock } from '../data/sportRulesConfig';
-import { ModalitySlug, TournamentPhaseType } from '../types/domain';
+import { ModalitySlug, TournamentPhaseType, PublicLaunchConfig, UniversalModalityBracket } from '../types/domain';
 import { SportIcon } from '../components/sports/SportIcon';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Button } from '../components/ui/Button';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Tabs, TabItem } from '../components/ui/Tabs';
 
-type AdminTab = 'partidas' | 'cadastros' | 'usuarios' | 'regras' | 'auditoria';
+type AdminTab = 'partidas' | 'cadastros' | 'usuarios' | 'regras' | 'auditoria' | 'lancamento';
 
 const ADMIN_TABS: TabItem[] = [
   {
@@ -53,6 +60,11 @@ const ADMIN_TABS: TabItem[] = [
     id: 'usuarios',
     label: 'Gestão de Usuários & RBAC',
     icon: <ShieldCheck className="w-4 h-4" />,
+  },
+  {
+    id: 'lancamento',
+    label: 'Lançamento & Chaveamento',
+    icon: <Rocket className="w-4 h-4" />,
   },
   {
     id: 'regras',
@@ -89,6 +101,10 @@ export const AdminDashboardPage: React.FC = () => {
     registerAthlete,
     createOfficialMatch,
     updateMatchTablePassword,
+    launchConfig,
+    updateLaunchConfig,
+    officialBrackets,
+    saveOfficialBracket,
   } = useCompetitionStore();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('partidas');
@@ -97,6 +113,12 @@ export const AdminDashboardPage: React.FC = () => {
     type: 'ok' | 'err';
     text: string;
   } | null>(null);
+
+  // Estado do formulário de Lançamento & Chaveamento
+  const [bracketModality, setBracketModality] = useState<ModalitySlug>('futsal');
+  const [bracketJsonInput, setBracketJsonInput] = useState('');
+  const [isUpdatingLaunchConfig, setIsUpdatingLaunchConfig] = useState(false);
+  const [isSavingBracket, setIsSavingBracket] = useState(false);
 
   // Estado do formulário 1: Cadastrar Equipe / Período
   const [teamName, setTeamName] = useState('');
@@ -349,6 +371,44 @@ export const AdminDashboardPage: React.FC = () => {
   const showNotice = (type: 'ok' | 'err', text: string) => {
     setFeedbackBanner({ type, text });
     setTimeout(() => setFeedbackBanner(null), 4000);
+  };
+
+  const handleToggleLaunchFlag = async (flag: keyof PublicLaunchConfig) => {
+    setIsUpdatingLaunchConfig(true);
+    const nextVal = !launchConfig[flag];
+    const updatePayload = { [flag]: nextVal };
+    const res = await updateLaunchConfig(updatePayload);
+    setIsUpdatingLaunchConfig(false);
+    if (res.ok) {
+      showNotice('ok', `Configuração atualizada: ${flag} = ${nextVal ? 'Ativado' : 'Desativado'}`);
+    } else {
+      showNotice('err', res.error || 'Erro ao atualizar configuração de lançamento.');
+    }
+  };
+
+  const handleSaveOfficialBracket = async () => {
+    if (!bracketJsonInput.trim()) {
+      showNotice('err', 'Cole a estrutura JSON do chaveamento antes de salvar.');
+      return;
+    }
+
+    try {
+      setIsSavingBracket(true);
+      const parsed = JSON.parse(bracketJsonInput) as UniversalModalityBracket;
+      const targetModId = parsed.modalityId || bracketModality;
+      parsed.modalityId = targetModId;
+      const res = await saveOfficialBracket(targetModId, parsed);
+      setIsSavingBracket(false);
+      if (res.ok) {
+        showNotice('ok', `Chaveamento oficial salvo com sucesso!`);
+        setBracketJsonInput('');
+      } else {
+        showNotice('err', res.error || 'Erro ao salvar chaveamento no servidor.');
+      }
+    } catch {
+      setIsSavingBracket(false);
+      showNotice('err', 'JSON de chaveamento inválido. Verifique a sintaxe.');
+    }
   };
 
   const handleCreateTeam = (e: React.FormEvent) => {
@@ -1526,6 +1586,309 @@ export const AdminDashboardPage: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ABA: LANÇAMENTO PÚBLICO & GESTÃO DO CHAVEAMENTO OFICIAL */}
+      {activeTab === 'lancamento' && (
+        <div className="space-y-6">
+          {/* Hero Banner de Governança */}
+          <div className="rounded-3xl bg-gradient-to-r from-[#0B218A] to-[#1E3A8A] text-white p-6 shadow-card">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-yellow/20 text-brand-yellow border border-brand-yellow/30 text-xs font-bold">
+                  <Rocket className="w-4 h-4" />
+                  <span>Governança de Divulgação • INTRAMED IX</span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-display font-black tracking-tight">
+                  Controle do Modo de Lançamento & Chaveamento
+                </h3>
+                <p className="text-xs sm:text-sm text-white/80 max-w-2xl leading-relaxed">
+                  Gerencie centralizadamente os bloqueios de segurança da divulgação pública (login, inscrições, pagamentos Pix e perfis) e a publicação do chaveamento oficial das 16 modalidades.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Grid de 7 Controles do Modo de Lançamento */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* 1. Modo de Lançamento Central */}
+            <div className="bg-white rounded-2xl border border-brand-surface-border p-5 shadow-card flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase text-slate-400">Modo Central</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      launchConfig.publicLaunchMode
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                        : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                    }`}
+                  >
+                    {launchConfig.publicLaunchMode ? 'Pré-Lançamento Ativo' : 'Lançamento Aberto'}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Modo de Divulgação Pública</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Quando ativo, indica aos visitantes que o site está em fase de apresentação inicial, preparando as inscrições.
+                </p>
+              </div>
+              <Button
+                variant={launchConfig.publicLaunchMode ? 'outline' : 'primary'}
+                size="sm"
+                disabled={isUpdatingLaunchConfig}
+                onClick={() => handleToggleLaunchFlag('publicLaunchMode')}
+                className="w-full justify-center"
+              >
+                {launchConfig.publicLaunchMode ? 'Desativar Modo de Divulgação' : 'Ativar Modo de Divulgação'}
+              </Button>
+            </div>
+
+            {/* 2. Login Público */}
+            <div className="bg-white rounded-2xl border border-brand-surface-border p-5 shadow-card flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase text-slate-400">Autenticação</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      launchConfig.publicLoginEnabled
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                        : 'bg-red-100 text-red-900 border border-red-300'
+                    }`}
+                  >
+                    {launchConfig.publicLoginEnabled ? 'Liberado' : 'Bloqueado (Em Breve)'}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Login Público de Participantes</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Bloqueia logins de usuários comuns e exibe tela de "ACESSO EM BREVE". O login administrativo permanece ativo.
+                </p>
+              </div>
+              <Button
+                variant={launchConfig.publicLoginEnabled ? 'outline' : 'primary'}
+                size="sm"
+                disabled={isUpdatingLaunchConfig}
+                onClick={() => handleToggleLaunchFlag('publicLoginEnabled')}
+                className="w-full justify-center"
+              >
+                {launchConfig.publicLoginEnabled ? 'Bloquear Login Público' : 'Liberar Login Público'}
+              </Button>
+            </div>
+
+            {/* 3. Inscrições & Cadastros */}
+            <div className="bg-white rounded-2xl border border-brand-surface-border p-5 shadow-card flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase text-slate-400">Inscrições</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      launchConfig.publicRegistrationEnabled
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                        : 'bg-red-100 text-red-900 border border-red-300'
+                    }`}
+                  >
+                    {launchConfig.publicRegistrationEnabled ? 'Abertas' : 'Bloqueadas (Em Breve)'}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Cadastro & Inscrições</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Impede novos cadastros de atletas e inscrições, exibindo mensagem oficial de "INSCRIÇÕES EM BREVE".
+                </p>
+              </div>
+              <Button
+                variant={launchConfig.publicRegistrationEnabled ? 'outline' : 'primary'}
+                size="sm"
+                disabled={isUpdatingLaunchConfig}
+                onClick={() => handleToggleLaunchFlag('publicRegistrationEnabled')}
+                className="w-full justify-center"
+              >
+                {launchConfig.publicRegistrationEnabled ? 'Bloquear Inscrições' : 'Liberar Inscrições'}
+              </Button>
+            </div>
+
+            {/* 4. Pagamentos Pix & Checkout */}
+            <div className="bg-white rounded-2xl border border-brand-surface-border p-5 shadow-card flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase text-slate-400">Financeiro</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      launchConfig.publicPaymentsEnabled
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                        : 'bg-red-100 text-red-900 border border-red-300'
+                    }`}
+                  >
+                    {launchConfig.publicPaymentsEnabled ? 'Habilitados' : 'Bloqueados (Em Breve)'}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Pagamentos Pix & Mercado Pago</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Interrompe geração de QR Code Pix, copia-e-cola e links do Mercado Pago retornando HTTP 403 no backend.
+                </p>
+              </div>
+              <Button
+                variant={launchConfig.publicPaymentsEnabled ? 'outline' : 'primary'}
+                size="sm"
+                disabled={isUpdatingLaunchConfig}
+                onClick={() => handleToggleLaunchFlag('publicPaymentsEnabled')}
+                className="w-full justify-center"
+              >
+                {launchConfig.publicPaymentsEnabled ? 'Bloquear Pagamentos Pix' : 'Liberar Pagamentos Pix'}
+              </Button>
+            </div>
+
+            {/* 5. Preços Visíveis */}
+            <div className="bg-white rounded-2xl border border-brand-surface-border p-5 shadow-card flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase text-slate-400">Valores dos Lotes</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      launchConfig.publicPricesVisible
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                        : 'bg-amber-100 text-amber-900 border border-amber-300'
+                    }`}
+                  >
+                    {launchConfig.publicPricesVisible ? 'Preços Visíveis' : 'Desfocados (Em Breve)'}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Ocultação Visual de Preços</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Aplica desfoque visual (blur) nos valores dos lotes e omite os valores reais das respostas públicas de API.
+                </p>
+              </div>
+              <Button
+                variant={launchConfig.publicPricesVisible ? 'outline' : 'primary'}
+                size="sm"
+                disabled={isUpdatingLaunchConfig}
+                onClick={() => handleToggleLaunchFlag('publicPricesVisible')}
+                className="w-full justify-center"
+              >
+                {launchConfig.publicPricesVisible ? 'Ocultar / Desfocar Preços' : 'Exibir Preços Reais'}
+              </Button>
+            </div>
+
+            {/* 6. Chaveamento Publicado */}
+            <div className="bg-white rounded-2xl border border-brand-surface-border p-5 shadow-card flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase text-slate-400">Chaveamento</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      launchConfig.bracketPublished
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                        : 'bg-amber-100 text-amber-900 border border-amber-300'
+                    }`}
+                  >
+                    {launchConfig.bracketPublished ? 'Chave Publicada' : 'Chaveamento Em Breve'}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Publicação do Chaveamento</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Quando falso, a página /chaveamento exibe "CHAVEAMENTO EM BREVE" sem inventar confrontos fictícios.
+                </p>
+              </div>
+              <Button
+                variant={launchConfig.bracketPublished ? 'outline' : 'primary'}
+                size="sm"
+                disabled={isUpdatingLaunchConfig}
+                onClick={() => handleToggleLaunchFlag('bracketPublished')}
+                className="w-full justify-center"
+              >
+                {launchConfig.bracketPublished ? 'Ocultar Chaveamento' : 'Publicar Chaveamento Oficial'}
+              </Button>
+            </div>
+
+            {/* 7. Perfis Públicos Ocultos */}
+            <div className="bg-white rounded-2xl border border-brand-surface-border p-5 shadow-card flex flex-col justify-between space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase text-slate-400">Privacidade</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      launchConfig.publicProfilesVisible
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                        : 'bg-red-100 text-red-900 border border-red-300'
+                    }`}
+                  >
+                    {launchConfig.publicProfilesVisible ? 'Perfis Visíveis' : 'Perfis Ocultos'}
+                  </span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">Ocultação Total de Participantes</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Oculta o diretório /comunidade, listas de atletas e dados pessoais de visitantes, mantendo todas as contas salvas intactas.
+                </p>
+              </div>
+              <Button
+                variant={launchConfig.publicProfilesVisible ? 'outline' : 'primary'}
+                size="sm"
+                disabled={isUpdatingLaunchConfig}
+                onClick={() => handleToggleLaunchFlag('publicProfilesVisible')}
+                className="w-full justify-center"
+              >
+                {launchConfig.publicProfilesVisible ? 'Ocultar Perfis do Público' : 'Tornar Perfis Públicos'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Seção de Importação / Publicação do Chaveamento Oficial */}
+          <div className="bg-white rounded-3xl border border-brand-surface-border p-6 shadow-card space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-surface-border pb-4">
+              <div>
+                <h4 className="text-base font-display font-bold text-slate-900 flex items-center gap-2">
+                  <GitBranch className="w-5 h-5 text-brand-blue" />
+                  <span>Editor & Importador de Chaveamento Oficial</span>
+                </h4>
+                <p className="text-xs text-slate-500 mt-1">
+                  Insira ou edite os confrontos oficiais por modalidade (formato universal com suporte a fase de grupos e mata-mata).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={bracketModality}
+                  onChange={(e) => setBracketModality(e.target.value as ModalitySlug)}
+                  className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-800"
+                >
+                  {OFFICIAL_MODALITIES.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Estrutura JSON do Chaveamento ({bracketModality})
+              </label>
+              <textarea
+                value={bracketJsonInput}
+                onChange={(e) => setBracketJsonInput(e.target.value)}
+                placeholder={`{\n  "modalityId": "${bracketModality}",\n  "modalityName": "Futsal Masculino",\n  "format": "knockout_5_teams",\n  "isPublished": true,\n  "stages": [\n    {\n      "phase": "quarterfinals",\n      "title": "Quartas de Final",\n      "matches": [\n        {\n          "id": "qf_1",\n          "phase": "quarterfinals",\n          "homeParticipant": { "teamId": "sanguinaria", "teamName": "A.A.A. Sanguinária" },\n          "awayParticipant": { "teamId": "calouros", "teamName": "Calouros Medicina" },\n          "status": "scheduled"\n        }\n      ]\n    }\n  ]\n}`}
+                rows={10}
+                className="w-full font-mono text-xs p-3.5 rounded-2xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-blue bg-slate-50 text-slate-800"
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+              <span className="text-xs text-slate-500">
+                Status na Nuvem: <strong>{officialBrackets[bracketModality] ? 'Cadastrado' : 'Aguardando publicação'}</strong>
+              </span>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Button
+                  variant="primary"
+                  disabled={isSavingBracket}
+                  onClick={handleSaveOfficialBracket}
+                  className="w-full sm:w-auto font-bold"
+                >
+                  <UploadCloud className="w-4 h-4 mr-2" />
+                  <span>{isSavingBracket ? 'Salvando...' : 'Salvar Chaveamento'}</span>
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
