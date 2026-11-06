@@ -2,10 +2,25 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import {
-  OFFICIAL_TOURNAMENT_MATCHES,
-  OFFICIAL_UNIVERSAL_BRACKETS,
-} from '../../src/data/officialBracketsData';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let OFFICIAL_TOURNAMENT_MATCHES: Array<Record<string, unknown>> = [];
+let OFFICIAL_UNIVERSAL_BRACKETS: Record<string, Record<string, unknown>> = {};
+
+try {
+  const jsonPath = path.join(__dirname, 'officialBracketsData.json');
+  if (fs.existsSync(jsonPath)) {
+    const raw = fs.readFileSync(jsonPath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    OFFICIAL_TOURNAMENT_MATCHES = parsed.matches || [];
+    OFFICIAL_UNIVERSAL_BRACKETS = parsed.brackets || {};
+  }
+} catch {
+  // Non-blocking best-effort
+}
 
 const CLOUD_STATE_FILE = path.join(os.tmpdir(), 'intramed_ix_cloud_sync_v2.json');
 
