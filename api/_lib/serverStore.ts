@@ -434,6 +434,7 @@ export function verifyMasterAdminPassword(input: string): boolean {
 
 export const FIREBASE_WEB_API_KEY =
   process.env.VITE_FIREBASE_API_KEY || 'AIzaSyC0JteZ0ph3UI1kdmu7m8DqpnGRLh9oS0g';
+export const FIREBASE_API_KEY = FIREBASE_WEB_API_KEY;
 
 export interface FirebaseAuthUserRecord {
   localId: string;
