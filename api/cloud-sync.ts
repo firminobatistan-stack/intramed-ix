@@ -485,13 +485,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const storedHash = String(matchedReg.accountPasswordHash || '');
-      if (storedHash) {
-        if (!passwordInput || hashSecretPin(passwordInput) !== storedHash) {
-          return res.status(401).json({
-            ok: false,
-            error: 'Senha incorreta para esta conta.',
-          });
-        }
+      if (!storedHash) {
+        return res.status(401).json({
+          ok: false,
+          error: 'Esta inscrição ainda não possui senha configurada. Crie uma senha no cadastro ou contate a organização.',
+        });
+      }
+
+      const inputPinHash = hashSecretPin(passwordInput);
+      const inputPassHash = hashPassword(passwordInput);
+      const isAthletePassValid =
+        passwordInput && (inputPinHash === storedHash || inputPassHash === storedHash);
+
+      if (!isAthletePassValid) {
+        return res.status(401).json({
+          ok: false,
+          error: 'Senha incorreta para esta conta.',
+        });
       }
 
       return res.status(200).json({
@@ -518,26 +528,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const user = adminUsers[emailInput];
 
       if (!user) {
-        // Suporte legado: se for a senha mestra geral de emergência
-        if (verifyMasterAdminPassword(passwordInput)) {
-          const legacyToken = createSignedOperatorToken({
-            role: 'moderador',
-            officialName: 'Comissão Organizadora',
-            email: emailInput,
-          });
-          return res.status(200).json({
-            ok: true,
-            token: legacyToken,
-            role: 'moderador',
-            user: {
-              email: emailInput,
-              name: 'Comissão Organizadora',
-              role: 'moderador',
-              organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
-              mustChangePassword: false,
-            },
-          });
-        }
         return res.status(401).json({
           ok: false,
           error: 'Usuário administrativo não encontrado.',
@@ -552,9 +542,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const inputHash = hashPassword(passwordInput);
-      const isPasswordValid =
-        inputHash === user.passwordHash ||
-        (isMasterAccount(user.email as string) && verifyMasterAdminPassword(passwordInput));
+      const isInitialPassValid =
+        Boolean(user.mustChangePassword) &&
+        (passwordInput === (process.env.INTRAMED_MASTER_INITIAL_PASSWORD || 'campeao2027') ||
+          inputHash === user.passwordHash);
+
+      const isPasswordValid = inputHash === user.passwordHash || isInitialPassValid;
 
       if (!isPasswordValid) {
         return res.status(401).json({
@@ -594,15 +587,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // AÇÃO 2E: Alteração de Senha (Primeiro Acesso Obrigatório ou Troca Periódica)
     if (action === 'change_admin_password') {
-      if (!verifiedToken?.email) {
-        return res.status(401).json({
+      const emailInput = String(body.email || verifiedToken?.email || MASTER_MODERATOR_EMAIL).trim().toLowerCase();
+      const currentPassword = String(body.currentPassword || '').trim();
+      const newPassword = String(body.newPassword || '').trim();
+      const confirmPassword = String(body.confirmPassword || '').trim();
+
+      const adminUsers = store.admin_users || {};
+      const user = adminUsers[emailInput];
+
+      if (!user) {
+        return res.status(404).json({
           ok: false,
-          error: 'Sessão inválida ou expirada para troca de senha.',
+          error: 'Usuário administrativo não localizado no servidor.',
         });
       }
 
-      const newPassword = String(body.newPassword || '').trim();
-      const confirmPassword = String(body.confirmPassword || '').trim();
+      // Se não há token assinado na sessão, exige validação explícita da senha atual / inicial
+      if (!verifiedToken?.email) {
+        if (!currentPassword) {
+          return res.status(401).json({
+            ok: false,
+            error: 'Informe a senha atual ou inicial para autorizar a redefinição.',
+          });
+        }
+        const inputHash = hashPassword(currentPassword);
+        const isInitial =
+          Boolean(user.mustChangePassword) &&
+          (currentPassword === (process.env.INTRAMED_MASTER_INITIAL_PASSWORD || 'campeao2027') ||
+            inputHash === user.passwordHash);
+
+        if (inputHash !== user.passwordHash && !isInitial) {
+          return res.status(401).json({
+            ok: false,
+            error: 'Senha atual incorreta.',
+          });
+        }
+      }
 
       if (!newPassword || newPassword.length < 6) {
         return res.status(400).json({
@@ -615,17 +635,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({
           ok: false,
           error: 'A confirmação de senha não confere.',
-        });
-      }
-
-      const emailKey = verifiedToken.email.toLowerCase();
-      const adminUsers = store.admin_users || {};
-      const user = adminUsers[emailKey];
-
-      if (!user) {
-        return res.status(404).json({
-          ok: false,
-          error: 'Usuário não localizado no servidor.',
         });
       }
 
@@ -648,6 +657,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       saveCloudStore(store);
+      void MirrorDocumentToFirestoreRest('admin_users', emailInput, user);
+      void MirrorDocumentToFirestoreRest('admin_users', 'usr_master_cangaceira', user);
 
       // Emite novo token desbloqueado
       const newToken = createSignedOperatorToken({

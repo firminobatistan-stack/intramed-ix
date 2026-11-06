@@ -20,8 +20,10 @@ export const FirstAccessPage: React.FC = () => {
     }
   }, [currentUser, navigate]);
 
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -34,8 +36,14 @@ export const FirstAccessPage: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
+    const cleanCurrent = currentPassword.trim();
     const cleanNew = newPassword.trim();
     const cleanConfirm = confirmPassword.trim();
+
+    if (!token && !cleanCurrent) {
+      setErrorMessage('Informe a senha atual ou inicial (ex: campeao2027) para autorizar a redefinição.');
+      return;
+    }
 
     if (!cleanNew || cleanNew.length < 6) {
       setErrorMessage('A nova senha deve possuir no mínimo 6 caracteres.');
@@ -47,23 +55,21 @@ export const FirstAccessPage: React.FC = () => {
       return;
     }
 
-    if (!token) {
-      setErrorMessage('Sessão expirada. Faça login novamente para prosseguir.');
-      setTimeout(() => navigate('/login'), 2000);
-      return;
-    }
-
     setIsSubmitting(true);
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        headers['x-intramed-token'] = token;
+      }
+
       const res = await fetch('/api/cloud-sync', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-intramed-token': token,
-        },
+        headers,
         body: JSON.stringify({
           action: 'change_admin_password',
+          email: 'cangaceira@uema.com',
+          currentPassword: cleanCurrent || undefined,
           newPassword: cleanNew,
           confirmPassword: cleanConfirm,
         }),
@@ -83,6 +89,7 @@ export const FirstAccessPage: React.FC = () => {
 
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('intramed_admin_session', 'true');
+        localStorage.setItem('intramed_admin_session', 'true');
       }
 
       const masterUserObj = {
@@ -157,6 +164,30 @@ export const FirstAccessPage: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Senha Inicial / Atual (Ex: campeao2027)
+              </label>
+              <div className="relative">
+                <Input
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Digite a senha autorizada"
+                  required={!token}
+                  leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Nova Senha Pessoal

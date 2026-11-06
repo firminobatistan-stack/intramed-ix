@@ -279,7 +279,10 @@ function generateRandomMatchPin(modalityId: string): string {
 export function getStoredOperatorToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return sessionStorage.getItem(OPERATOR_TOKEN_SESSION_KEY);
+    return (
+      sessionStorage.getItem(OPERATOR_TOKEN_SESSION_KEY) ||
+      localStorage.getItem(OPERATOR_TOKEN_SESSION_KEY)
+    );
   } catch {
     return null;
   }
@@ -290,8 +293,10 @@ export function setStoredOperatorToken(token: string | null): void {
   try {
     if (token) {
       sessionStorage.setItem(OPERATOR_TOKEN_SESSION_KEY, token);
+      localStorage.setItem(OPERATOR_TOKEN_SESSION_KEY, token);
     } else {
       sessionStorage.removeItem(OPERATOR_TOKEN_SESSION_KEY);
+      localStorage.removeItem(OPERATOR_TOKEN_SESSION_KEY);
     }
   } catch {
     // Ignore storage errors
@@ -357,7 +362,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           const hasAdminSession =
             typeof window !== 'undefined' &&
             (sessionStorage.getItem('intramed_admin_session') === 'true' ||
-              sessionStorage.getItem('intramed_admin_session') === 'restricted_first_access');
+              sessionStorage.getItem('intramed_admin_session') === 'restricted_first_access' ||
+              localStorage.getItem('intramed_admin_session') === 'true' ||
+              localStorage.getItem('intramed_admin_session') === 'restricted_first_access');
 
           let resolvedUser: UserProfile | null = null;
           if (parsed.currentUser && parsed.currentUser.role === 'atleta') {

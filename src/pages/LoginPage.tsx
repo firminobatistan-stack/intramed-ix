@@ -195,23 +195,22 @@ export const LoginPage: React.FC = () => {
         navigate(returnTo || `/atleta/${ath.id}`, { replace: true });
         return;
       }
-      if (res.status === 401) {
-        setErrorMessage('Senha incorreta para esta conta.');
+      if (res && !res.ok) {
+        setErrorMessage(data?.error || 'Senha ou identificador incorreto.');
         return;
       }
     } catch {
-      // Continua para verificação local
+      // Falha de rede; tenta validação local com credencial salva no dispositivo
     }
 
-    // 2. Fallback local (inscrições salvas no dispositivo)
+    // 2. Fallback local estrito (somente se a credencial com hash existir neste dispositivo)
     const cleanDocQuery = q.replace(/\D/g, '');
     const matchedReg = registrations.find(
       (r) =>
         r.athleteEmail.trim().toLowerCase() === q ||
         (r.accountUsername && r.accountUsername.trim().toLowerCase() === q) ||
         (cleanDocQuery.length >= 4 &&
-          r.athleteDocument.replace(/\D/g, '') === cleanDocQuery) ||
-        r.athleteName.trim().toLowerCase() === q
+          r.athleteDocument.replace(/\D/g, '') === cleanDocQuery)
     );
 
     if (matchedReg) {
@@ -227,66 +226,42 @@ export const LoginPage: React.FC = () => {
               : undefined) ||
             savedCreds[matchedReg.athleteEmail.toLowerCase()];
           const inputDigest = computeClientCredentialDigest(pass);
-          if (credEntry && credEntry.passDigest && credEntry.passDigest !== inputDigest) {
-            setErrorMessage('Senha incorreta para esta conta.');
+          if (credEntry && credEntry.passDigest && credEntry.passDigest === inputDigest) {
+            const ath = upsertParticipantAthlete({
+              id: matchedReg.linkedAthleteId || `ath-${matchedReg.id}`,
+              name: matchedReg.athleteName,
+              email: matchedReg.athleteEmail,
+              teamId: matchedReg.teamId,
+              turma: matchedReg.turma,
+              turmaLabel: matchedReg.turmaLabel,
+              jerseyNumber: matchedReg.jerseyNumber ?? null,
+              position: matchedReg.position || 'Atleta',
+              bio: matchedReg.bio ?? null,
+              instagramHandle: matchedReg.instagramHandle ?? null,
+              avatarUrl: matchedReg.avatarUrl ?? null,
+              modalityIds:
+                matchedReg.selectedModalities && matchedReg.selectedModalities.length > 0
+                  ? matchedReg.selectedModalities
+                  : OFFICIAL_MODALITIES.map((m) => m.id),
+              registrationId: matchedReg.id,
+              paymentStatus: matchedReg.paymentStatus,
+              memberStatus: matchedReg.memberStatus,
+              autoLogin: true,
+            });
+            navigate(returnTo || `/atleta/${ath.id}`, { replace: true });
             return;
           }
         }
       } catch {
-        // Silencioso
+        // Falha no JSON local
       }
 
-      const ath = upsertParticipantAthlete({
-        id: matchedReg.linkedAthleteId || `ath-${matchedReg.id}`,
-        name: matchedReg.athleteName,
-        email: matchedReg.athleteEmail,
-        teamId: matchedReg.teamId,
-        turma: matchedReg.turma,
-        turmaLabel: matchedReg.turmaLabel,
-        jerseyNumber: matchedReg.jerseyNumber ?? null,
-        position: matchedReg.position || 'Atleta',
-        bio: matchedReg.bio ?? null,
-        instagramHandle: matchedReg.instagramHandle ?? null,
-        avatarUrl: matchedReg.avatarUrl ?? null,
-        modalityIds:
-          matchedReg.selectedModalities && matchedReg.selectedModalities.length > 0
-            ? matchedReg.selectedModalities
-            : OFFICIAL_MODALITIES.map((m) => m.id),
-        registrationId: matchedReg.id,
-        paymentStatus: matchedReg.paymentStatus,
-        memberStatus: matchedReg.memberStatus,
-        autoLogin: true,
-      });
-      navigate(returnTo || `/atleta/${ath.id}`, { replace: true });
-      return;
-    }
-
-    const matchedAth = visibleAthletes.find(
-      (a) =>
-        (a.email && a.email.trim().toLowerCase() === q) ||
-        (a.accountUsername && a.accountUsername.trim().toLowerCase() === q) ||
-        a.name.trim().toLowerCase() === q
-    );
-
-    if (matchedAth) {
-      const team = getTeamById(matchedAth.teamId);
-      setCurrentUser({
-        id: `usr-${matchedAth.id}`,
-        name: matchedAth.name,
-        email: matchedAth.email || `${matchedAth.id}@medicina.uema.br`,
-        avatarUrl: matchedAth.avatarUrl,
-        teamId: matchedAth.teamId,
-        teamName: team?.name || matchedAth.turmaLabel || 'Equipe',
-        modalityIds: matchedAth.modalityIds,
-        role: 'atleta',
-        linkedAthleteId: matchedAth.id,
-      });
-      navigate(returnTo || `/atleta/${matchedAth.id}`, { replace: true });
+      setErrorMessage('Senha incorreta para esta conta.');
       return;
     }
 
     setErrorMessage(
-      'Conta não encontrada. Verifique seu usuário/e-mail ou crie sua conta na inscrição.'
+      'Conta não encontrada ou senha inválida. Verifique seus dados ou cadastre-se na inscrição.'
     );
   };
 

@@ -198,7 +198,7 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
         </div>
 
         <form onSubmit={handleUnlock} className="space-y-4 pt-1 text-left">
-          {isMatchSheetRoute && (
+          {isMatchSheetRoute ? (
             <Input
               label="Seu Nome (Mesário / Árbitro de Mesa)"
               type="text"
@@ -206,6 +206,16 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
               onChange={(e) => setOfficialName(e.target.value)}
               placeholder="Ex: João Pedro (Mesário)"
               leftIcon={<UserCheck className="w-4 h-4 text-slate-400" />}
+            />
+          ) : (
+            <Input
+              label="E-mail da Conta Administrativa *"
+              type="email"
+              value={adminEmail || 'cangaceira@uema.com'}
+              onChange={(e) => setAdminEmail(e.target.value)}
+              placeholder="cangaceira@uema.com"
+              leftIcon={<UserCheck className="w-4 h-4 text-slate-400" />}
+              required
             />
           )}
 

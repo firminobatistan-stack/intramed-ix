@@ -235,7 +235,56 @@ async function runMasterAuthTestSuite() {
   assert(listUsers.data.auditLogs.length > 0, 'Eventos registrados no log');
   console.log(`✅ Teste 9 passou: Trilha de auditoria registrou ${listUsers.data.auditLogs.length} operações administrativas`);
 
-  console.log('\n🎉 TODOS OS 9 CENÁRIOS DO MODERADOR MASTER & RBAC PASSARAM COM SUCESSO!\n');
+  // Teste 10: Preservação de Estado entre Cold Starts (Não reverte para primeiro acesso)
+  console.log('\n--- Teste 10: Preservação de Estado entre Cold Starts ---');
+  ensureMasterAccountProvisioned(store);
+  const masterAfterColdStart = store.admin_users[masterKey];
+  assert.strictEqual(masterAfterColdStart.mustChangePassword, false, 'mustChangePassword deve continuar false');
+  console.log('✅ Teste 10 passou: Cold starts mantêm a nova senha definida e não revertem para primeiro acesso');
+
+  // Teste 11: Segurança de Usuários Normais (Atletas) - Nenhuma senha inválida é aceita
+  console.log('\n--- Teste 11: Segurança de Usuários Normais (Atletas) ---');
+  store.registrations['reg_test_athlete_1'] = {
+    id: 'reg_test_athlete_1',
+    athleteEmail: 'atleta.teste@uema.br',
+    athleteName: 'Atleta Teste',
+    accountUsername: 'atletateste',
+    accountPasswordHash: 'hash_invalido_de_teste',
+    paymentStatus: 'pago',
+    memberStatus: 'aprovado',
+  };
+  const wrongAthleteLogin = await runHandler('POST', {
+    action: 'athlete_login',
+    identifier: 'atleta.teste@uema.br',
+    password: 'senha_completamente_errada',
+  });
+  assert.strictEqual(wrongAthleteLogin.status, 401);
+  assert.strictEqual(wrongAthleteLogin.data.ok, false);
+  console.log('✅ Teste 11 passou: Usuários normais com senha incorreta são estritamente bloqueados com HTTP 401');
+
+  // Teste 12: Redefinição Direta no PC sem Token Prévio usando Senha Atual
+  console.log('\n--- Teste 12: Redefinição no PC sem Token Prévio ---');
+  const directChangeFail = await runHandler('POST', {
+    action: 'change_admin_password',
+    email: 'cangaceira@uema.com',
+    currentPassword: 'senha_atual_errada',
+    newPassword: 'outraSenhaNova2027',
+    confirmPassword: 'outraSenhaNova2027',
+  });
+  assert.strictEqual(directChangeFail.status, 401);
+
+  const directChangeOk = await runHandler('POST', {
+    action: 'change_admin_password',
+    email: 'cangaceira@uema.com',
+    currentPassword: 'novaSenhaSegura2026',
+    newPassword: 'outraSenhaNova2027',
+    confirmPassword: 'outraSenhaNova2027',
+  });
+  assert.strictEqual(directChangeOk.status, 200);
+  assert.strictEqual(directChangeOk.data.ok, true);
+  console.log('✅ Teste 12 passou: Redefinição no PC com validação de senha atual concluída com sucesso');
+
+  console.log('\n🎉 TODOS OS 12 CENÁRIOS DE SEGURANÇA E RBAC PASSARAM COM SUCESSO!\n');
 }
 
 runMasterAuthTestSuite().catch((err) => {

@@ -178,14 +178,10 @@ export function computeCardFee(basePrice: number): number {
   return Math.round(basePrice * CARD_FEE_RATE * 100) / 100;
 }
 
-// Segredo de assinatura HMAC no servidor (usa variável de ambiente ou deriva do token do MP)
+// Segredo fixo de assinatura HMAC no servidor para manter integridade determinística entre instâncias serverless
+const SERVER_SIGNING_SALT = 'intramed-ix-cangaceira-auth-salt-v2-2026';
 function getServerSigningSecret(): string {
-  return (
-    process.env.INTRAMED_AUTH_SECRET ||
-    process.env.MERCADOPAGO_WEBHOOK_SECRET ||
-    process.env.MERCADOPAGO_ACCESS_TOKEN ||
-    'intramed-ix-cangaceira-server-secret-2026'
-  );
+  return (process.env.INTRAMED_AUTH_SECRET || SERVER_SIGNING_SALT).trim();
 }
 
 function getMasterAdminPassword(): string {
@@ -304,7 +300,7 @@ export function ensureMasterAccountProvisioned(store: CloudCollectionMap): void 
     store.admin_audit_logs = [];
   }
   const emailKey = MASTER_MODERATOR_EMAIL.toLowerCase();
-  const existingMaster = store.admin_users[emailKey];
+  const existingMaster = store.admin_users[emailKey] || store.admin_users['usr_master_cangaceira'];
 
   if (!existingMaster) {
     const initialPass = process.env.INTRAMED_MASTER_INITIAL_PASSWORD || 'campeao2027';
@@ -330,11 +326,14 @@ export function ensureMasterAccountProvisioned(store: CloudCollectionMap): void 
       timestampIso: nowIso,
       details: 'Conta Moderador Master provisionada com primeiro acesso obrigatório',
     });
+    void MirrorDocumentToFirestoreRest('admin_users', emailKey, store.admin_users[emailKey]);
+    void MirrorDocumentToFirestoreRest('admin_users', 'usr_master_cangaceira', store.admin_users[emailKey]);
   } else {
-    // Blindagem de cargo permanente
+    // Blindagem de cargo permanente sem sobrescrever a nova senha ou status de troca
     existingMaster.role = 'moderador_master';
     existingMaster.isActive = true;
     existingMaster.organization = 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira';
+    store.admin_users[emailKey] = existingMaster;
   }
 }
 
@@ -518,8 +517,8 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
 
   store.hydratedFromFirestoreAtIso = new Date().toISOString();
   const collectionsToHydrate: Array<
-    'registrations' | 'athletes' | 'teams' | 'matches' | 'match_sheets'
-  > = ['registrations', 'athletes', 'teams', 'matches', 'match_sheets'];
+    'registrations' | 'athletes' | 'teams' | 'matches' | 'match_sheets' | 'admin_users'
+  > = ['registrations', 'athletes', 'teams', 'matches', 'match_sheets', 'admin_users'];
 
   try {
     await Promise.all(
@@ -548,12 +547,23 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
               .split('/')
               .pop() ||
             '';
-          if (docId && !store[colName][docId]) {
-            store[colName][docId] = { ...parsedDoc, id: docId };
+          if (docId) {
+            if (colName === 'admin_users') {
+              if (!store.admin_users) store.admin_users = {};
+              const normalizedEmail = String(parsedDoc.email || docId).trim().toLowerCase();
+              const adminUserObj = { ...parsedDoc, id: docId, email: normalizedEmail };
+              store.admin_users[normalizedEmail] = adminUserObj;
+              if (docId && docId !== normalizedEmail) {
+                store.admin_users[docId] = adminUserObj;
+              }
+            } else if (!store[colName][docId]) {
+              store[colName][docId] = { ...parsedDoc, id: docId };
+            }
           }
         }
       })
     );
+    ensureMasterAccountProvisioned(store);
     saveCloudStore(store);
   } catch {
     // Non-blocking best-effort hydration
