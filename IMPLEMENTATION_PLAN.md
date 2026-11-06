@@ -91,7 +91,10 @@
 - ✓ [Teste 7] Blindagem permanente da conta Master contra rebaixamento e desativação (HTTP 403)
 - ✓ [Teste 8] Atribuição de cargos restrita ao Moderador Master e unicidade do Master (HTTP 400/403)
 - ✓ [Teste 9] Registro estruturado de todas as ações na trilha de auditoria
-- **Resultado:** 9/9 cenários aprovados com sucesso.
+- ✓ [Teste 10] Preservação de credenciais e senha redefinida pós-cold-start (sem regressão para primeiro acesso)
+- ✓ [Teste 11] Blindagem estrita de contas de atletas comuns (rejeição de senha errada com HTTP 401)
+- ✓ [Teste 12] Redefinição direta no Desktop/PC com validação da senha atual/inicial
+- **Resultado:** 12/12 cenários aprovados com sucesso.
 
 ### Bateria 2: Testes de Sincronização e Regras Esportivas/Financeiras (`scripts/test-sync-scenarios.mjs`)
 - ✓ [Cenário 1] Pagamento aprovado atualiza inscrição para "pago" e grava ID oficial do gateway
@@ -108,4 +111,43 @@
 
 ### Bateria 3: Compilação de Produção (`npm run build`)
 - ✓ TypeScript check (`tsc -b`): 0 erros.
-- ✓ Vite build: Chunks otimizados e bundle gerado com sucesso em 10.84s.
+- ✓ Vite build: Chunks otimizados e bundle gerado com sucesso em 10.05s.
+
+---
+
+## 7. Auditoria de Causa Raiz e Resolução Definitiva da Vulnerabilidade P0
+
+### A. Diagnóstico da Causa Raiz
+1. **Volatilidade Serverless (Causa do Esquecimento da Senha):**
+   - O backend em Vercel Functions mantinha `admin_users` em memória (`global`) e no disco temporário `/tmp`.
+   - A função `ensureCloudStoreHydrated()` não continha `admin_users` na lista de coleções hidratadas do Cloud Firestore REST API.
+   - Assim, a cada reinicialização ou cold-start do container, a senha redefinida era perdida e o provisionamento recriava a conta com a flag `mustChangePassword: true`.
+2. **Divergência Desktop vs. Mobile (Causa da Falha no Computador):**
+   - A página `FirstAccessPage.tsx` exigia obrigatoriamente um token de sessão presente no `sessionStorage`.
+   - No celular, quando o fluxo vinha direto do login sem fechar a aba, o token estava na memória. No computador, acessos em novas abas ou recargas perdiam o token de sessão, retornando "Sessão expirada".
+   - Não havia suporte para validação da senha atual/inicial no endpoint `change_admin_password` sem token pré-existente.
+3. **Loop de Redirecionamento:**
+   - O `AdminRouteGuard.tsx` redirecionava compulsoriamente para `/primeiro-acesso` caso `currentUser.mustChangePassword` permanecesse verdadeiro devido à ausência de persistência na nuvem.
+4. **Vulnerabilidade em Contas Comuns (Atletas):**
+   - No endpoint `athlete_login`, cadastros legados que não possuíam `accountPasswordHash` não geravam bloqueio formal.
+   - No frontend `LoginPage.tsx`, havia um bloco de fallback local que logava o atleta apenas buscando seu nome caso a requisição sofresse timeout.
+
+### B. Correções Estruturais Implementadas
+1. **Persistência Criptográfica e Hidratação Durável:**
+   - A coleção `admin_users` foi incluída em `collectionsToHydrate` no `api/_lib/serverStore.ts`.
+   - Ao executar `change_admin_password`, a credencial com hash HMAC-SHA256 e o status `mustChangePassword: false` são imediatamente gravados via Firestore REST API (`MirrorDocumentToFirestoreRest`).
+2. **Unificação dos Fluxos Desktop e Mobile:**
+   - O `FirstAccessPage.tsx` agora inclui campo explícito de senha atual/inicial (`currentPassword`).
+   - O backend em `api/cloud-sync.ts` aceita a redefinição via token válido OU via conferência segura da senha atual/inicial, funcionando identicamente em computadores, celulares e qualquer navegador.
+   - Sessões e tokens são preservados simultaneamente em `sessionStorage` e `localStorage`.
+3. **Eliminação do Bypass em Contas Comuns:**
+   - Removido completamente o fallback insecure de login de atleta em `LoginPage.tsx`.
+   - O `athlete_login` no backend agora rejeita estritamente senhas incorretas com HTTP 401 e bloqueia qualquer login sem hash prévio configurado.
+
+### C. Critério de Aceite Atendido
+- [x] Senha incorreta efetivamente rejeitada com HTTP 401.
+- [x] Nova senha persistida duravelmente no Cloud Firestore.
+- [x] Primeiro acesso desativado permanentemente após a redefinição.
+- [x] Fluxos Desktop e Mobile unificados e consistentes.
+- [x] Segurança aplicada e testada para administradores e atletas normais.
+
