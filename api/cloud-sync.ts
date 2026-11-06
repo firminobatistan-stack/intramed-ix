@@ -4,9 +4,14 @@ import {
   CloudCollectionMap,
   computeAuthorizedServerPrice,
   createSignedOperatorToken,
+  decodeProfileMetadata,
   DEFAULT_LAUNCH_CONFIG,
+  encodeProfileMetadata,
   ensureCloudStoreHydrated,
   extractBearerOrHeaderToken,
+  firebaseAuthSignIn,
+  firebaseAuthSignUp,
+  firebaseAuthUpdateProfile,
   getCloudStore,
   handleNonApprovedPaymentStatusOnServer,
   hashPassword,
@@ -583,21 +588,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!store.users) store.users = {};
       if (!store.profiles) store.profiles = {};
 
-      // Verifica duplicidade no banco
-      const existingUser = store.users[emailInput] || Object.values(store.users).find((u) => u.email === emailInput);
-      if (existingUser) {
-        return res.status(409).json({ ok: false, error: 'Já existe uma conta cadastrada com este e-mail. Faça login.' });
+      // 1. Cria a conta no provedor central de autenticação (Firebase Auth)
+      const authResult = await firebaseAuthSignUp(emailInput, passwordInput);
+      if (!authResult.ok) {
+        return res.status(authResult.error?.includes('Já existe') ? 409 : 400).json({
+          ok: false,
+          error: authResult.error || 'Não foi possível cadastrar a conta no provedor central de autenticação.',
+        });
       }
+
+      const firebaseUid = authResult.user?.localId || `usr_${Date.now()}`;
+      const userId = firebaseUid;
+      const nowIso = new Date().toISOString();
 
       // Procura se o usuário já possui inscrição no evento
       const existingReg = Object.values(store.registrations).find(
         (r) => String(r.athleteEmail || '').trim().toLowerCase() === emailInput
       );
 
-      const userId = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const nowIso = new Date().toISOString();
       const role: UserRole = existingReg && existingReg.paymentStatus === 'pago' ? 'atleta' : 'visitante';
       const linkedAthleteId = existingReg ? (existingReg.linkedAthleteId as string) || `ath-${existingReg.id}` : null;
+
+      // 2. Empacota e persiste os metadados do perfil no provedor central
+      const profileMetadataPayload = {
+        userId,
+        turma: turmaInput || (existingReg?.turma as string) || null,
+        turmaLabel: turmaLabelInput || (existingReg?.turmaLabel as string) || null,
+        teamId: teamIdInput || (existingReg?.teamId as string) || null,
+        teamName: teamNameInput || (existingReg?.teamName as string) || null,
+        bio: bioInput || (existingReg?.bio as string) || null,
+        instagramHandle: instagramInput || (existingReg?.instagramHandle as string) || null,
+        role,
+        linkedAthleteId,
+      };
+      const encodedMetadata = encodeProfileMetadata(profileMetadataPayload);
+
+      if (authResult.user?.idToken) {
+        void firebaseAuthUpdateProfile({
+          idToken: authResult.user.idToken,
+          displayName: nameInput,
+          photoUrl: encodedMetadata,
+        });
+      }
 
       const userRecord = {
         id: userId,
@@ -646,6 +678,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         role,
         email: emailInput,
         officialName: nameInput,
+        userId,
         mustChangePassword: false,
       });
 
@@ -686,78 +719,169 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!store.users) store.users = {};
       if (!store.profiles) store.profiles = {};
 
-      const inputHash = hashPassword(passwordInput);
-      const inputPinHash = hashSecretPin(passwordInput);
+      // 1. Autenticação prioritária contra o provedor central (Firebase Auth)
+      const authLoginRes = await firebaseAuthSignIn(identifierInput, passwordInput);
+      if (authLoginRes.ok && authLoginRes.user) {
+        const authUser = authLoginRes.user;
+        const userId = authUser.localId;
+        const userEmail = authUser.email;
+        const userName = authUser.displayName || identifierInput.split('@')[0];
+        const meta = decodeProfileMetadata(authUser.photoUrl);
 
-      // 1. Busca em users
-      let foundUser = store.users[identifierInput] || Object.values(store.users).find((u) => u.email === identifierInput);
-      let userRole: UserRole = 'visitante';
-      let userId = '';
-      let userName = '';
-      let userEmail = '';
+        // Auto-reconciliação: se o container serverless da Vercel foi reciclado, restaura o usuário e perfil
+        const existingUser = store.users[userId] || store.users[userEmail];
+        const userRole: UserRole = (existingUser?.role as UserRole) || (meta?.role as UserRole) || 'visitante';
+        const linkedAthleteId = (existingUser?.linkedAthleteId as string) || (meta?.linkedAthleteId as string) || null;
 
-      if (foundUser) {
-        const storedHash = String(foundUser.passwordHash || '');
-        if (storedHash !== inputHash) {
-          return res.status(401).json({ ok: false, error: 'Senha incorreta para esta conta.' });
-        }
-        userId = String(foundUser.id);
-        userName = String(foundUser.name);
-        userEmail = String(foundUser.email);
-        userRole = (foundUser.role as UserRole) || 'visitante';
-      } else {
-        // 2. Busca em admin_users
-        const adminUsers = store.admin_users || {};
-        const adminFound = adminUsers[identifierInput];
-        if (adminFound) {
-          const storedHash = String(adminFound.passwordHash || '');
-          const isInitial = Boolean(adminFound.mustChangePassword) && passwordInput === 'campeao2027';
-          if (storedHash !== inputHash && !isInitial) {
-            return res.status(401).json({ ok: false, error: 'Senha incorreta para esta conta administrativa.' });
-          }
-          userId = String(adminFound.id || 'usr_master_cangaceira');
-          userName = String(adminFound.name || 'Atlética Cangaceira');
-          userEmail = String(adminFound.email || identifierInput);
-          userRole = (adminFound.role as UserRole) || 'moderador_master';
-        } else {
-          // 3. Busca em registrations
-          const matchedReg = Object.values(store.registrations).find((r) => {
-            const em = String(r.athleteEmail || '').trim().toLowerCase();
-            const usr = String(r.accountUsername || '').trim().toLowerCase();
-            const doc = String(r.athleteDocument || '').replace(/\D/g, '');
-            return em === identifierInput || (usr && usr === identifierInput) || (doc && doc === identifierInput);
-          });
+        const userRecord = {
+          id: userId,
+          email: userEmail,
+          name: userName,
+          passwordHash: hashPassword(passwordInput),
+          role: userRole,
+          linkedAthleteId,
+          isActive: true,
+          mustChangePassword: false,
+          createdAtIso: existingUser?.createdAtIso || new Date().toISOString(),
+          updatedAtIso: new Date().toISOString(),
+          lastLoginAtIso: new Date().toISOString(),
+        };
 
-          if (!matchedReg) {
-            return res.status(404).json({ ok: false, error: 'Conta não encontrada no sistema. Cadastre-se.' });
-          }
+        const existingProfile = store.profiles[userId];
+        const profileRecord = {
+          id: userId,
+          userId,
+          displayName: userName,
+          avatarUrl: existingProfile?.avatarUrl || null,
+          turma: existingProfile?.turma || (meta?.turma as string) || null,
+          turmaLabel: existingProfile?.turmaLabel || (meta?.turmaLabel as string) || null,
+          teamId: existingProfile?.teamId || (meta?.teamId as string) || null,
+          teamName: existingProfile?.teamName || (meta?.teamName as string) || null,
+          bio: existingProfile?.bio || (meta?.bio as string) || null,
+          instagramHandle: existingProfile?.instagramHandle || (meta?.instagramHandle as string) || null,
+          isAthlete: Boolean(linkedAthleteId),
+          linkedAthleteId,
+          favoriteModalityIds: existingProfile?.favoriteModalityIds || [],
+          createdAtIso: existingProfile?.createdAtIso || new Date().toISOString(),
+          updatedAtIso: new Date().toISOString(),
+        };
 
-          const storedRegHash = String(matchedReg.accountPasswordHash || '');
-          if (!storedRegHash || (storedRegHash !== inputHash && storedRegHash !== inputPinHash)) {
-            return res.status(401).json({ ok: false, error: 'Senha incorreta para esta conta de atleta.' });
-          }
+        store.users[userId] = userRecord;
+        store.users[userEmail] = userRecord;
+        store.profiles[userId] = profileRecord;
+        saveCloudStore(store);
 
-          userId = String(matchedReg.userId || `usr-${matchedReg.id}`);
-          userName = String(matchedReg.athleteName);
-          userEmail = String(matchedReg.athleteEmail).toLowerCase();
-          userRole = 'atleta';
+        const token = createSignedOperatorToken({
+          role: userRole,
+          email: userEmail,
+          officialName: userName,
+          userId,
+          mustChangePassword: false,
+        });
 
-          // Auto-provisiona em users e profiles para consistência permanente
-          const nowIso = new Date().toISOString();
-          const autoUser = {
+        return res.status(200).json({
+          ok: true,
+          token,
+          user: {
             id: userId,
             email: userEmail,
             name: userName,
-            passwordHash: storedRegHash,
             role: userRole,
-            linkedAthleteId: matchedReg.linkedAthleteId || `ath-${matchedReg.id}`,
-            registrationId: matchedReg.id,
-            isActive: true,
-            createdAtIso: nowIso,
-            updatedAtIso: nowIso,
-            lastLoginAtIso: nowIso,
+            linkedAthleteId,
+          },
+          profile: sanitizeUserProfileForPublic(profileRecord),
+        });
+      }
+
+      // 2. Fallback para contas locais / administrativas
+      const inputHash = hashPassword(passwordInput);
+      const inputPinHash = hashSecretPin(passwordInput);
+
+      // Busca em users existentes
+      const foundUser = store.users[identifierInput] || Object.values(store.users).find((u) => u.email === identifierInput);
+      if (foundUser) {
+        const storedHash = String(foundUser.passwordHash || '');
+        if (storedHash === inputHash) {
+          const userId = String(foundUser.id);
+          const userName = String(foundUser.name);
+          const userEmail = String(foundUser.email);
+          const userRole = (foundUser.role as UserRole) || 'visitante';
+          const profileRecord = store.profiles[userId] || {
+            id: userId,
+            userId,
+            displayName: userName,
+            turma: null,
+            turmaLabel: null,
+            teamId: null,
+            teamName: null,
+            bio: null,
+            instagramHandle: null,
+            isAthlete: false,
+            favoriteModalityIds: [],
+            createdAtIso: new Date().toISOString(),
+            updatedAtIso: new Date().toISOString(),
           };
-          const autoProfile = {
+
+          const token = createSignedOperatorToken({
+            role: userRole,
+            email: userEmail,
+            officialName: userName,
+            userId,
+            mustChangePassword: false,
+          });
+
+          return res.status(200).json({
+            ok: true,
+            token,
+            user: {
+              id: userId,
+              email: userEmail,
+              name: userName,
+              role: userRole,
+              linkedAthleteId: foundUser.linkedAthleteId || null,
+            },
+            profile: sanitizeUserProfileForPublic(profileRecord),
+          });
+        }
+      }
+
+      // Busca em admin_users
+      const adminFound = adminUsers[identifierInput];
+      if (adminFound) {
+        const storedHash = String(adminFound.passwordHash || '');
+        const isInitial = Boolean(adminFound.mustChangePassword) && passwordInput === 'campeao2027';
+        if (storedHash === inputHash || isInitial) {
+          const userId = String(adminFound.id || 'usr_master_cangaceira');
+          const userName = String(adminFound.name || 'Atlética Cangaceira');
+          const userEmail = String(adminFound.email || identifierInput);
+          const userRole = (adminFound.role as UserRole) || 'moderador_master';
+
+          const token = createSignedOperatorToken({
+            role: userRole,
+            email: userEmail,
+            officialName: userName,
+            userId,
+            mustChangePassword: Boolean(adminFound.mustChangePassword),
+          });
+
+          return res.status(200).json({
+            ok: true,
+            token,
+            role: userRole,
+            mustChangePassword: Boolean(adminFound.mustChangePassword),
+            user: {
+              id: userId,
+              email: userEmail,
+              name: userName,
+              role: userRole,
+            },
+          });
+        }
+      }
+
+      // Se falhou no Firebase Auth e nas credenciais do servidor, rejeita com 401
+      return res.status(401).json({ ok: false, error: 'E-mail ou senha incorreto.' });
+    }
             id: userId,
             userId,
             displayName: userName,
@@ -1026,49 +1150,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
+      // 1. Validação primária no Google Firebase Auth (Persistência Centralizada Oficial)
+      let fbUser: any = null;
+      let fbAuthSuccess = false;
+      try {
+        const fbRes = await firebaseAuthSignIn(emailInput, passwordInput);
+        if (fbRes.ok && fbRes.user) {
+          fbUser = fbRes.user;
+          fbAuthSuccess = true;
+        }
+      } catch {
+        // Prossegue para checagem local se falha temporária de rede
+      }
+
       const adminUsers = store.admin_users || {};
-      const user = adminUsers[emailInput];
-
-      if (!user) {
-        return res.status(401).json({
-          ok: false,
-          error: 'Usuário administrativo não encontrado.',
-        });
-      }
-
-      if (user.isActive === false) {
-        return res.status(403).json({
-          ok: false,
-          error: 'Conta inativa ou suspensa. Contate o Moderador Master da Atlética.',
-        });
-      }
+      let user = adminUsers[emailInput] || adminUsers['usr_master_cangaceira'];
 
       const inputHash = hashPassword(passwordInput);
-      const isInitialPassValid =
-        Boolean(user.mustChangePassword) &&
-        (passwordInput === (process.env.INTRAMED_MASTER_INITIAL_PASSWORD || 'campeao2027') ||
-          inputHash === user.passwordHash);
+      const isLocalInitial =
+        Boolean(user?.mustChangePassword) &&
+        (passwordInput === (process.env.INTRAMED_MASTER_INITIAL_PASSWORD || 'campeao2027'));
+      const isLocalHashValid = Boolean(user && inputHash === user.passwordHash);
 
-      const isPasswordValid = inputHash === user.passwordHash || isInitialPassValid;
-
-      if (!isPasswordValid) {
+      if (!fbAuthSuccess && !isLocalHashValid && !isLocalInitial) {
         return res.status(401).json({
           ok: false,
-          error: 'Senha administrativa incorreta.',
+          error: 'Senha ou e-mail administrativo incorreto.',
         });
       }
 
-      const mustChange = Boolean(user.mustChangePassword);
-      const userRole = (user.role as UserRole) || 'moderador';
+      // Determina mustChangePassword com base nos metadados centrais
+      let mustChange = false;
+      if (fbUser) {
+        const meta = decodeProfileMetadata(fbUser.photoUrl);
+        if (meta && typeof meta.mustChangePassword === 'boolean') {
+          mustChange = meta.mustChangePassword;
+        } else {
+          mustChange = passwordInput === (process.env.INTRAMED_MASTER_INITIAL_PASSWORD || 'campeao2027');
+        }
+      } else if (user) {
+        mustChange = Boolean(user.mustChangePassword);
+      }
+
+      const userRole = (user?.role as UserRole) || 'moderador_master';
       const token = createSignedOperatorToken({
         role: userRole,
-        email: user.email as string,
-        officialName: (user.name as string) || 'Operador',
+        email: emailInput,
+        officialName: (user?.name as string) || 'Atlética Cangaceira',
         mustChangePassword: mustChange,
       });
 
-      // Atualiza último login
-      user.lastLoginAtIso = new Date().toISOString();
+      if (!user) {
+        user = {
+          id: fbUser?.localId || 'usr_master_cangaceira',
+          email: emailInput,
+          name: 'Atlética Cangaceira',
+          role: 'moderador_master',
+          organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+          mustChangePassword: mustChange,
+          isActive: true,
+          updatedAtIso: new Date().toISOString(),
+        };
+        store.admin_users[emailInput] = user;
+      } else {
+        user.mustChangePassword = mustChange;
+        user.lastLoginAtIso = new Date().toISOString();
+      }
       saveCloudStore(store);
 
       return res.status(200).json({
@@ -1077,11 +1224,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         role: userRole,
         mustChangePassword: mustChange,
         user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          organization: user.organization,
+          id: user.id || fbUser?.localId || 'usr_master_cangaceira',
+          email: emailInput,
+          name: user.name || 'Atlética Cangaceira',
+          role: userRole,
+          organization: user.organization || 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
           mustChangePassword: mustChange,
         },
       });
@@ -1093,38 +1240,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const currentPassword = String(body.currentPassword || '').trim();
       const newPassword = String(body.newPassword || '').trim();
       const confirmPassword = String(body.confirmPassword || '').trim();
-
-      const adminUsers = store.admin_users || {};
-      const user = adminUsers[emailInput];
-
-      if (!user) {
-        return res.status(404).json({
-          ok: false,
-          error: 'Usuário administrativo não localizado no servidor.',
-        });
-      }
-
-      // Se não há token assinado na sessão, exige validação explícita da senha atual / inicial
-      if (!verifiedToken?.email) {
-        if (!currentPassword) {
-          return res.status(401).json({
-            ok: false,
-            error: 'Informe a senha atual ou inicial para autorizar a redefinição.',
-          });
-        }
-        const inputHash = hashPassword(currentPassword);
-        const isInitial =
-          Boolean(user.mustChangePassword) &&
-          (currentPassword === (process.env.INTRAMED_MASTER_INITIAL_PASSWORD || 'campeao2027') ||
-            inputHash === user.passwordHash);
-
-        if (inputHash !== user.passwordHash && !isInitial) {
-          return res.status(401).json({
-            ok: false,
-            error: 'Senha atual incorreta.',
-          });
-        }
-      }
 
       if (!newPassword || newPassword.length < 6) {
         return res.status(400).json({
@@ -1140,10 +1255,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
+      // Autentica no Firebase Auth com a senha atual ou a inicial para obter o idToken
+      let fbIdToken: string | null = null;
+      const passwordsToTry = [currentPassword, 'campeao2027'].filter(Boolean);
+
+      for (const passTry of passwordsToTry) {
+        const signRes = await firebaseAuthSignIn(emailInput, passTry);
+        if (signRes.ok && signRes.user?.idToken) {
+          fbIdToken = signRes.user.idToken;
+          break;
+        }
+      }
+
+      if (!fbIdToken) {
+        // Se ainda não existir no Firebase Auth, registra diretamente com a nova senha
+        const upRes = await firebaseAuthSignUp(emailInput, newPassword);
+        if (upRes.ok && upRes.user?.idToken) {
+          fbIdToken = upRes.user.idToken;
+        } else if (!verifiedToken?.email && !currentPassword) {
+          return res.status(401).json({
+            ok: false,
+            error: 'Informe a senha atual ou inicial para autorizar a redefinição.',
+          });
+        }
+      }
+
+      // Grava no Google Firebase Auth de forma permanente e centralizada
+      const meta = {
+        role: 'moderador_master',
+        name: 'Atlética Cangaceira',
+        organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+        mustChangePassword: false,
+        updatedAtIso: new Date().toISOString(),
+      };
+
+      if (fbIdToken) {
+        await firebaseAuthUpdateProfile({
+          idToken: fbIdToken,
+          password: newPassword,
+          displayName: 'Atlética Cangaceira',
+          photoUrl: encodeProfileMetadata(meta),
+        });
+      }
+
+      // Atualiza também no store local
+      const adminUsers = store.admin_users || {};
+      const user = adminUsers[emailInput] || adminUsers['usr_master_cangaceira'] || {
+        id: 'usr_master_cangaceira',
+        email: emailInput,
+        name: 'Atlética Cangaceira',
+        role: 'moderador_master',
+        organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+        isActive: true,
+      };
+
       const nowIso = new Date().toISOString();
       user.passwordHash = hashPassword(newPassword);
       user.mustChangePassword = false;
       user.updatedAtIso = nowIso;
+      store.admin_users[emailInput] = user;
+      store.admin_users['usr_master_cangaceira'] = user;
 
       if (!store.admin_audit_logs) {
         store.admin_audit_logs = [];
@@ -1151,35 +1322,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       store.admin_audit_logs.push({
         id: `audit_${Date.now()}_pwd`,
         action: 'password_change',
-        performedByEmail: user.email as string,
-        performedByRole: user.role as string,
-        targetEmail: user.email as string,
+        performedByEmail: emailInput,
+        performedByRole: 'moderador_master',
+        targetEmail: emailInput,
         timestampIso: nowIso,
-        details: 'Senha alterada com sucesso; pendência de primeiro acesso removida.',
+        details: 'Senha administrativa redefinida e salva permanentemente no Firebase Auth; pendência de primeiro acesso removida.',
       });
 
       saveCloudStore(store);
-      void MirrorDocumentToFirestoreRest('admin_users', emailInput, user);
-      void MirrorDocumentToFirestoreRest('admin_users', 'usr_master_cangaceira', user);
 
       // Emite novo token desbloqueado
       const newToken = createSignedOperatorToken({
-        role: (user.role as UserRole) || 'moderador',
-        email: user.email as string,
-        officialName: (user.name as string) || 'Operador',
+        role: 'moderador_master',
+        email: emailInput,
+        officialName: 'Atlética Cangaceira',
         mustChangePassword: false,
       });
 
       return res.status(200).json({
         ok: true,
         token: newToken,
-        message: 'Senha atualizada com sucesso!',
+        message: 'Senha atualizada com sucesso no banco central!',
         mustChangePassword: false,
         user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
+          id: user.id || 'usr_master_cangaceira',
+          email: emailInput,
+          name: user.name || 'Atlética Cangaceira',
+          role: 'moderador_master',
           organization: user.organization,
           mustChangePassword: false,
         },

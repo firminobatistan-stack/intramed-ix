@@ -309,6 +309,141 @@ export function verifyMasterAdminPassword(input: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
+export const FIREBASE_WEB_API_KEY =
+  process.env.VITE_FIREBASE_API_KEY || 'AIzaSyC0JteZ0ph3UI1kdmu7m8DqpnGRLh9oS0g';
+
+export interface FirebaseAuthUserRecord {
+  localId: string;
+  email: string;
+  displayName?: string;
+  photoUrl?: string;
+  idToken?: string;
+}
+
+export function encodeProfileMetadata(meta: Record<string, unknown>): string {
+  try {
+    return 'data:application/json;base64,' + Buffer.from(JSON.stringify(meta)).toString('base64');
+  } catch {
+    return '';
+  }
+}
+
+export function decodeProfileMetadata(photoUrl?: string | null): Record<string, unknown> | null {
+  if (!photoUrl || !photoUrl.startsWith('data:application/json;base64,')) {
+    return null;
+  }
+  try {
+    const rawB64 = photoUrl.replace('data:application/json;base64,', '');
+    return JSON.parse(Buffer.from(rawB64, 'base64').toString('utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+export async function firebaseAuthSignUp(
+  email: string,
+  pass: string
+): Promise<{ ok: boolean; user?: FirebaseAuthUserRecord; error?: string }> {
+  try {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_WEB_API_KEY}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass, returnSecureToken: true }),
+    });
+    const data = (await res.json()) as any;
+    if (!res.ok || data.error) {
+      const msg = data.error?.message || 'Erro ao registrar no Firebase Auth';
+      if (msg === 'EMAIL_EXISTS') {
+        return { ok: false, error: 'Já existe uma conta cadastrada com este e-mail.' };
+      }
+      return { ok: false, error: msg };
+    }
+    return {
+      ok: true,
+      user: {
+        localId: data.localId,
+        email: data.email,
+        idToken: data.idToken,
+      },
+    };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Falha de rede ao conectar com Firebase Auth' };
+  }
+}
+
+export async function firebaseAuthSignIn(
+  email: string,
+  pass: string
+): Promise<{ ok: boolean; user?: FirebaseAuthUserRecord; error?: string }> {
+  try {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass, returnSecureToken: true }),
+    });
+    const data = (await res.json()) as any;
+    if (!res.ok || data.error) {
+      const msg = data.error?.message || 'Falha na autenticação';
+      if (
+        msg === 'EMAIL_NOT_FOUND' ||
+        msg === 'INVALID_PASSWORD' ||
+        msg === 'INVALID_LOGIN_CREDENTIALS'
+      ) {
+        return { ok: false, error: 'E-mail ou senha incorreto.' };
+      }
+      return { ok: false, error: msg };
+    }
+    return {
+      ok: true,
+      user: {
+        localId: data.localId,
+        email: data.email,
+        displayName: data.displayName,
+        photoUrl: data.profilePicture,
+        idToken: data.idToken,
+      },
+    };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Falha de rede ao conectar com Firebase Auth' };
+  }
+}
+
+export async function firebaseAuthUpdateProfile(params: {
+  idToken: string;
+  displayName?: string;
+  photoUrl?: string;
+  password?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:update?key=${FIREBASE_WEB_API_KEY}`;
+    const body: Record<string, unknown> = {
+      idToken: params.idToken,
+      returnSecureToken: true,
+    };
+    if (params.displayName) body.displayName = params.displayName;
+    if (params.photoUrl) body.photoUrl = params.photoUrl;
+    if (params.password) body.password = params.password;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json()) as any;
+    if (!res.ok || data.error) {
+      return {
+        ok: false,
+        error: data.error?.message || 'Erro ao atualizar perfil no Firebase Auth',
+      };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Falha de rede com Firebase Auth' };
+  }
+}
+
 export function isMasterAccount(email?: string | null): boolean {
   if (!email) return false;
   return email.trim().toLowerCase() === MASTER_MODERATOR_EMAIL.toLowerCase();

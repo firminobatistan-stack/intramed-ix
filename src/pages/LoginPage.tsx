@@ -178,54 +178,7 @@ export const LoginPage: React.FC = () => {
         return;
       }
     } catch {
-      // Fallback estrito de credencial salva localmente
-      const cleanDocQuery = q.replace(/\D/g, '');
-      const matchedReg = registrations.find(
-        (r) =>
-          r.athleteEmail.trim().toLowerCase() === q ||
-          (r.accountUsername && r.accountUsername.trim().toLowerCase() === q) ||
-          (cleanDocQuery.length >= 4 &&
-            r.athleteDocument.replace(/\D/g, '') === cleanDocQuery)
-      );
-
-      if (matchedReg) {
-        try {
-          const savedCredsRaw = localStorage.getItem('intramed_athlete_credentials_v2');
-          if (savedCredsRaw) {
-            const savedCreds = JSON.parse(savedCredsRaw);
-            const credEntry =
-              savedCreds[q] ||
-              (matchedReg.accountUsername ? savedCreds[matchedReg.accountUsername.toLowerCase()] : undefined) ||
-              savedCreds[matchedReg.athleteEmail.toLowerCase()];
-            const inputDigest = computeClientCredentialDigest(pass);
-            if (credEntry && credEntry.passDigest === inputDigest) {
-              const ath = upsertParticipantAthlete({
-                id: matchedReg.linkedAthleteId || `ath-${matchedReg.id}`,
-                name: matchedReg.athleteName,
-                email: matchedReg.athleteEmail,
-                teamId: matchedReg.teamId,
-                turma: matchedReg.turma,
-                turmaLabel: matchedReg.turmaLabel,
-                jerseyNumber: matchedReg.jerseyNumber ?? null,
-                position: matchedReg.position || 'Atleta',
-                bio: matchedReg.bio ?? null,
-                instagramHandle: matchedReg.instagramHandle ?? null,
-                avatarUrl: matchedReg.avatarUrl ?? null,
-                modalityIds: OFFICIAL_MODALITIES.map((m) => m.id),
-                registrationId: matchedReg.id,
-                paymentStatus: matchedReg.paymentStatus,
-                memberStatus: matchedReg.memberStatus,
-                autoLogin: true,
-              });
-              navigate(returnTo || `/atleta/${ath.id}`, { replace: true });
-              return;
-            }
-          }
-        } catch {
-          // Ignora
-        }
-      }
-      setErrorMessage('Falha ao autenticar. Verifique sua conexão e tente novamente.');
+      setErrorMessage('Falha ao conectar com o servidor de autenticação central. Verifique sua conexão e tente novamente.');
       setIsSubmitting(false);
     }
   };

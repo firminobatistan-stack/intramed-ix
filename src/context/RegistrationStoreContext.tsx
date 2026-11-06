@@ -217,7 +217,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Fallback
     }
-    return INITIAL_DEMO_REGISTRATIONS;
+    return [];
   });
 
   const [auditLogs, setAuditLogs] = useState<FinancialAuditLog[]>(() => {
@@ -232,7 +232,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch {
       // Fallback
     }
-    return INITIAL_FINANCIAL_AUDIT_LOGS;
+    return [];
   });
 
   const syncedRegSignaturesRef = useRef<Map<string, string>>(new Map());
@@ -528,25 +528,25 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       broadcastState(nextRegs, nextLogs);
 
       pushRegistrationToCloud(newRegistration, payload.accountPassword?.trim());
-      try {
-        localStorage.removeItem('intramed_athlete_credentials_v1');
-        if (payload.accountPassword?.trim()) {
-          const digest = computeClientCredentialDigest(payload.accountPassword);
-          const savedCredsRaw = localStorage.getItem(LOCAL_ATHLETE_CREDENTIALS_KEY);
-          const savedCreds: Record<string, { regId: string; passDigest: string }> =
-            savedCredsRaw ? JSON.parse(savedCredsRaw) : {};
-          savedCreds[resolvedUsername] = {
-            regId: newRegistration.id,
-            passDigest: digest,
-          };
-          savedCreds[newRegistration.athleteEmail.toLowerCase()] = {
-            regId: newRegistration.id,
-            passDigest: digest,
-          };
-          localStorage.setItem(LOCAL_ATHLETE_CREDENTIALS_KEY, JSON.stringify(savedCreds));
-        }
-      } catch {
-        // Silencioso
+
+      // Provisiona o usuário no Google Firebase Auth central caso senha seja informada
+      if (payload.accountPassword?.trim()) {
+        fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'register_user',
+            email: newRegistration.athleteEmail,
+            name: newRegistration.athleteName,
+            password: payload.accountPassword.trim(),
+            username: resolvedUsername,
+            teamId: newRegistration.teamId,
+            teamName: newRegistration.teamName,
+            turma: newRegistration.turma,
+            turmaLabel: newRegistration.turmaLabel,
+            linkedAthleteId: newRegistration.linkedAthleteId || newRegistration.id,
+          }),
+        }).catch(() => {});
       }
 
       try {

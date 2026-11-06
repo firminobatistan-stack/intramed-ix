@@ -81,7 +81,7 @@ export default defineConfig(({ mode }) => {
                 req.on('data', (chunk) => {
                   bodyStr += chunk;
                 });
-                req.on('end', () => {
+                req.on('end', async () => {
                   try {
                     const body = JSON.parse(bodyStr || '{}');
                     if (body.action === 'verify_operator_pin') {
@@ -135,34 +135,79 @@ export default defineConfig(({ mode }) => {
                       const emailIn = String(body.email || '').trim().toLowerCase();
                       const passIn = String(body.password || '').trim();
                       const masterEmail = 'cangaceira@uema.com';
-                      if (emailIn === masterEmail) {
-                        const currentMasterPass = devCloudStore.masterPassword || 'campeao2027';
-                        const mustChange = devCloudStore.masterMustChange !== false && currentMasterPass === 'campeao2027';
-                        if (passIn === currentMasterPass) {
-                          return res.end(
-                            JSON.stringify({
-                              ok: true,
-                              token: 'dev_signed_master_token_' + Date.now(),
-                              role: 'moderador_master',
-                              mustChangePassword: mustChange,
-                              user: {
-                                id: 'usr_master_cangaceira',
-                                email: masterEmail,
-                                name: 'Atlética Cangaceira',
-                                role: 'moderador_master',
-                                organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
-                                mustChangePassword: mustChange,
-                              },
-                            })
-                          );
-                        } else {
-                          res.statusCode = 401;
-                          return res.end(JSON.stringify({ ok: false, error: 'Senha administrativa incorreta.' }));
-                        }
+
+                      if (!emailIn || !passIn) {
+                        res.statusCode = 400;
+                        return res.end(JSON.stringify({ ok: false, error: 'E-mail e senha são obrigatórios.' }));
                       }
+
+                      // Autentica diretamente no Google Firebase Auth central
+                      let fbUser: any = null;
+                      try {
+                        const fbUrl = 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + (process.env.VITE_FIREBASE_API_KEY || 'AIzaSyC0JteZ0ph3UI1kdmu7m8DqpnGRLh9oS0g');
+                        const fbRes = await fetch(fbUrl, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email: emailIn, password: passIn, returnSecureToken: true }),
+                        });
+                        const fbData = await fbRes.json() as any;
+                        if (fbRes.ok && fbData && !fbData.error) {
+                          fbUser = fbData;
+                        }
+                      } catch {
+                        // Fallback local se rede indisponível
+                      }
+
+                      const currentMasterPass = devCloudStore.masterPassword || 'campeao2027';
+                      const isLocalValid = emailIn === masterEmail && passIn === currentMasterPass;
+
+                      if (!fbUser && !isLocalValid) {
+                        res.statusCode = 401;
+                        return res.end(JSON.stringify({ ok: false, error: 'Senha administrativa incorreta.' }));
+                      }
+
+                      let mustChange = false;
+                      if (fbUser) {
+                        try {
+                          if (fbUser.profilePicture?.startsWith('data:application/json;base64,')) {
+                            const raw = fbUser.profilePicture.replace('data:application/json;base64,', '');
+                            const meta = JSON.parse(Buffer.from(raw, 'base64').toString('utf-8'));
+                            if (typeof meta.mustChangePassword === 'boolean') {
+                              mustChange = meta.mustChangePassword;
+                            }
+                          } else {
+                            mustChange = passIn === 'campeao2027';
+                          }
+                        } catch {
+                          mustChange = passIn === 'campeao2027';
+                        }
+                      } else {
+                        mustChange = devCloudStore.masterMustChange !== false && currentMasterPass === 'campeao2027';
+                      }
+
+                      return res.end(
+                        JSON.stringify({
+                          ok: true,
+                          token: 'dev_signed_master_token_' + Date.now(),
+                          role: 'moderador_master',
+                          mustChangePassword: mustChange,
+                          user: {
+                            id: fbUser?.localId || 'usr_master_cangaceira',
+                            email: emailIn,
+                            name: 'Atlética Cangaceira',
+                            role: 'moderador_master',
+                            organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+                            mustChangePassword: mustChange,
+                          },
+                        })
+                      );
                     }
                     if (body.action === 'change_admin_password') {
+                      const emailIn = String(body.email || 'cangaceira@uema.com').trim().toLowerCase();
+                      const curPass = String(body.currentPassword || '').trim();
                       const newPass = String(body.newPassword || '').trim();
+                      const confPass = String(body.confirmPassword || '').trim();
+
                       if (newPass.length < 6) {
                         res.statusCode = 400;
                         return res.end(
@@ -172,17 +217,75 @@ export default defineConfig(({ mode }) => {
                           })
                         );
                       }
+                      if (confPass && newPass !== confPass) {
+                        res.statusCode = 400;
+                        return res.end(
+                          JSON.stringify({
+                            ok: false,
+                            error: 'A confirmação de senha não confere.',
+                          })
+                        );
+                      }
+
+                      // Persiste a nova senha e os metadados no Google Firebase Auth central
+                      const apiKey = process.env.VITE_FIREBASE_API_KEY || 'AIzaSyC0JteZ0ph3UI1kdmu7m8DqpnGRLh9oS0g';
+                      let idToken: string | null = null;
+                      const passwordsToTry = [curPass, 'campeao2027'].filter(Boolean);
+
+                      for (const p of passwordsToTry) {
+                        try {
+                          const sRes = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + apiKey, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: emailIn, password: p, returnSecureToken: true }),
+                          });
+                          const sData = await sRes.json() as any;
+                          if (sRes.ok && sData?.idToken) {
+                            idToken = sData.idToken;
+                            break;
+                          }
+                        } catch {
+                          // Ignore
+                        }
+                      }
+
+                      const metaB64 = 'data:application/json;base64,' + Buffer.from(JSON.stringify({
+                        role: 'moderador_master',
+                        name: 'Atlética Cangaceira',
+                        organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+                        mustChangePassword: false,
+                        updatedAtIso: new Date().toISOString(),
+                      })).toString('base64');
+
+                      if (idToken) {
+                        try {
+                          await fetch('https://identitytoolkit.googleapis.com/v1/accounts:update?key=' + apiKey, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              idToken,
+                              password: newPass,
+                              displayName: 'Atlética Cangaceira',
+                              photoUrl: metaB64,
+                              returnSecureToken: true,
+                            }),
+                          });
+                        } catch {
+                          // Ignore
+                        }
+                      }
+
                       devCloudStore.masterPassword = newPass;
                       devCloudStore.masterMustChange = false;
                       return res.end(
                         JSON.stringify({
                           ok: true,
                           token: 'dev_unlocked_master_token_' + Date.now(),
-                          message: 'Senha atualizada com sucesso!',
+                          message: 'Senha atualizada com sucesso no banco central!',
                           mustChangePassword: false,
                           user: {
                             id: 'usr_master_cangaceira',
-                            email: 'cangaceira@uema.com',
+                            email: emailIn,
                             name: 'Atlética Cangaceira',
                             role: 'moderador_master',
                             organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
@@ -209,11 +312,49 @@ export default defineConfig(({ mode }) => {
                         res.statusCode = 400;
                         return res.end(JSON.stringify({ ok: false, error: 'Dados incompletos ou senha com menos de 6 caracteres.' }));
                       }
-                      if (devCloudStore.users[emailIn]) {
-                        res.statusCode = 409;
-                        return res.end(JSON.stringify({ ok: false, error: 'E-mail já cadastrado.' }));
+
+                      // Integração Centralizada com Firebase Authentication no Dev Server
+                      const apiKey = 'AIzaSyC0JteZ0ph3UI1kdmu7m8DqpnGRLh9oS0g';
+                      let uId = `usr_${Date.now()}`;
+                      try {
+                        const fbRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email: emailIn, password: passIn, returnSecureToken: true }),
+                        });
+                        const fbData = (await fbRes.json()) as any;
+                        if (!fbRes.ok || fbData.error) {
+                          if (fbData.error?.message === 'EMAIL_EXISTS') {
+                            res.statusCode = 409;
+                            return res.end(JSON.stringify({ ok: false, error: 'E-mail já cadastrado. Faça login.' }));
+                          }
+                          res.statusCode = 400;
+                          return res.end(JSON.stringify({ ok: false, error: fbData.error?.message || 'Erro ao registrar no Firebase Auth.' }));
+                        }
+                        if (fbData.localId) {
+                          uId = fbData.localId;
+                          // Salva metadados no Firebase Auth
+                          const meta = {
+                            userId: uId,
+                            turma: body.turma || null,
+                            turmaLabel: body.turmaLabel || null,
+                            teamId: body.teamId || null,
+                            teamName: body.teamName || null,
+                            bio: body.bio || null,
+                            instagramHandle: body.instagramHandle || null,
+                            role: 'visitante',
+                          };
+                          const photoUrl = 'data:application/json;base64,' + Buffer.from(JSON.stringify(meta)).toString('base64');
+                          void fetch(`https://identitytoolkit.googleapis.com/v1/accounts:update?key=${apiKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ idToken: fbData.idToken, displayName: nameIn, photoUrl, returnSecureToken: true }),
+                          }).catch(() => {});
+                        }
+                      } catch {
+                        // Modo offline
                       }
-                      const uId = `usr_${Date.now()}`;
+
                       const uObj = {
                         id: uId,
                         email: emailIn,
@@ -278,6 +419,66 @@ export default defineConfig(({ mode }) => {
                           return res.end(JSON.stringify({ ok: false, error: 'Senha incorreta.' }));
                         }
                       }
+
+                      // 1. Tenta autenticação centralizada no Firebase Auth
+                      const apiKey = 'AIzaSyC0JteZ0ph3UI1kdmu7m8DqpnGRLh9oS0g';
+                      try {
+                        const fbRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ email: idIn, password: passIn, returnSecureToken: true }),
+                        });
+                        const fbData = (await fbRes.json()) as any;
+                        if (fbRes.ok && fbData.localId) {
+                          const uId = fbData.localId;
+                          const uName = fbData.displayName || idIn.split('@')[0];
+                          let profileMeta: any = null;
+                          if (fbData.profilePicture && fbData.profilePicture.startsWith('data:application/json;base64,')) {
+                            try {
+                              profileMeta = JSON.parse(Buffer.from(fbData.profilePicture.replace('data:application/json;base64,', ''), 'base64').toString('utf-8'));
+                            } catch {}
+                          }
+
+                          const uObj = {
+                            id: uId,
+                            email: idIn,
+                            name: uName,
+                            role: profileMeta?.role || 'visitante',
+                            linkedAthleteId: profileMeta?.linkedAthleteId || null,
+                          };
+                          const pObj = devCloudStore.profiles[uId] || {
+                            id: uId,
+                            userId: uId,
+                            displayName: uName,
+                            turma: profileMeta?.turma || null,
+                            turmaLabel: profileMeta?.turmaLabel || null,
+                            teamId: profileMeta?.teamId || null,
+                            teamName: profileMeta?.teamName || null,
+                            bio: profileMeta?.bio || null,
+                            instagramHandle: profileMeta?.instagramHandle || null,
+                            avatarUrl: null,
+                            isAthlete: Boolean(profileMeta?.linkedAthleteId),
+                            linkedAthleteId: profileMeta?.linkedAthleteId || null,
+                            favoriteModalityIds: [],
+                            createdAtIso: new Date().toISOString(),
+                          };
+                          devCloudStore.users[idIn] = uObj;
+                          devCloudStore.users[uId] = uObj;
+                          devCloudStore.profiles[uId] = pObj;
+
+                          return res.end(
+                            JSON.stringify({
+                              ok: true,
+                              token: `dev_token_${uId}`,
+                              user: uObj,
+                              profile: pObj,
+                            })
+                          );
+                        }
+                      } catch {
+                        // Modo offline
+                      }
+
                       const u = devCloudStore.users[idIn];
                       if (u) {
                         if (u.password !== passIn) {
@@ -294,42 +495,8 @@ export default defineConfig(({ mode }) => {
                           })
                         );
                       }
-                      // Checa registros
-                      const allRegs = Object.values(devCloudStore.registrations);
-                      const foundReg = allRegs.find((r) => {
-                        const em = String(r.athleteEmail || '').trim().toLowerCase();
-                        const usr = String(r.accountUsername || '').trim().toLowerCase();
-                        return em === idIn || (usr && usr === idIn);
-                      });
-                      if (foundReg) {
-                        if (foundReg.accountPassword && String(foundReg.accountPassword) !== passIn) {
-                          res.statusCode = 401;
-                          return res.end(JSON.stringify({ ok: false, error: 'Senha incorreta.' }));
-                        }
-                        const uId = `usr-${foundReg.id}`;
-                        const p = {
-                          id: uId,
-                          userId: uId,
-                          displayName: foundReg.athleteName,
-                          turma: foundReg.turma,
-                          turmaLabel: foundReg.turmaLabel,
-                          teamId: foundReg.teamId,
-                          teamName: foundReg.teamName,
-                          avatarUrl: foundReg.avatarUrl,
-                          isAthlete: true,
-                          linkedAthleteId: foundReg.linkedAthleteId || `ath-${foundReg.id}`,
-                        };
-                        return res.end(
-                          JSON.stringify({
-                            ok: true,
-                            token: `dev_token_${uId}`,
-                            user: { id: uId, email: foundReg.athleteEmail, name: foundReg.athleteName, role: 'atleta', linkedAthleteId: p.linkedAthleteId },
-                            profile: p,
-                          })
-                        );
-                      }
-                      res.statusCode = 404;
-                      return res.end(JSON.stringify({ ok: false, error: 'Conta não encontrada.' }));
+                      res.statusCode = 401;
+                      return res.end(JSON.stringify({ ok: false, error: 'E-mail ou senha incorreto.' }));
                     }
                     if (body.action === 'change_user_password') {
                       const emailIn = String(body.email || '').trim().toLowerCase();
