@@ -74,6 +74,11 @@ const AdminRegistrationsPage = lazy(() =>
     default: m.AdminRegistrationsPage,
   }))
 );
+const CommunityDirectoryPage = lazy(() =>
+  import('./pages/CommunityDirectoryPage').then((m) => ({
+    default: m.CommunityDirectoryPage,
+  }))
+);
 
 const RouteLoadingFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center p-6">
@@ -116,8 +121,11 @@ const RoutedApp: React.FC = () => {
     if (location.pathname === '/favoritos') return 'Meus Favoritos';
     if (location.pathname === '/notificacoes') return 'Central de Alertas';
     if (location.pathname.startsWith('/equipe')) return 'Página da Equipe';
+    if (location.pathname === '/atleta') return 'Ficha do Atleta';
     if (location.pathname.startsWith('/atleta')) return 'Ficha do Atleta';
-    if (location.pathname === '/perfil') return 'Perfil';
+    if (location.pathname === '/comunidade') return 'Comunidade & Perfis';
+    if (location.pathname.startsWith('/perfil/')) return 'Perfil do Participante';
+    if (location.pathname === '/perfil') return 'Meu Perfil';
     if (location.pathname === '/inscricao') return 'Inscrições • INTRAMED IX';
     if (location.pathname === '/admin/inscricoes') return 'Gestão de Inscrições';
     return 'INTRAMED IX';
@@ -184,7 +192,9 @@ const RoutedApp: React.FC = () => {
           <Route path="/equipe/:teamId" element={<TeamDetailPage />} />
           <Route path="/atleta" element={<AthleteDetailPage />} />
           <Route path="/atleta/:athleteId" element={<AthleteDetailPage />} />
+          <Route path="/comunidade" element={<CommunityDirectoryPage />} />
           <Route path="/perfil" element={<ProfilePage />} />
+          <Route path="/perfil/:userId" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Shield,
   Trophy,
@@ -10,6 +10,14 @@ import {
   ChevronRight,
   User,
   ShieldAlert,
+  Edit3,
+  Camera,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  Instagram,
+  ArrowLeft,
+  Users,
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -17,93 +25,307 @@ import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
+import { TURMAS_MEDICINA } from '../data/registrationData';
 
-/**
- * 12. PERFIL E PERMISSÕES DE ACESSO (/perfil)
- * - Exibe os dados reais do usuário autenticado (`currentUser`);
- * - Permite alternar facilmente entre:
- *   • Visitante / Público (consulta pública de atletas, equipes e placar);
- *   • Atleta Vinculado (permite editar a própria foto e abrir diretamente seu perfil `/atleta/:id`);
- *   • Comissão / Administrador (acesso total a cadastros, súmulas e perfis).
- */
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
+  const { userId } = useParams<{ userId?: string }>();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const {
     currentUser,
     setCurrentUser,
     canOperateOfficialData,
+    publicProfiles,
+    getPublicProfileById,
+    updateUserProfile,
+    changeUserPassword,
+    visibleAthletes,
+    getTeamById,
   } = useCompetitionStore();
+
   const isAdmin = canOperateOfficialData();
 
+  // Determina se está visualizando o próprio perfil ou o perfil de outro membro
+  const isViewingSelf = !userId || (currentUser && (userId === currentUser.id || userId === currentUser.email));
+
+  const targetProfile = useMemo(() => {
+    if (userId) {
+      const found = getPublicProfileById(userId);
+      if (found) return found;
+      // Fallback para atleta
+      const ath = visibleAthletes.find((a) => a.id === userId || a.registrationId === userId);
+      if (ath) {
+        return {
+          id: ath.id,
+          userId: ath.id,
+          displayName: ath.name,
+          avatarUrl: ath.avatarUrl || null,
+          turma: ath.turma || null,
+          turmaLabel: ath.turmaLabel || null,
+          teamId: ath.teamId || null,
+          bio: ath.bio || null,
+          instagramHandle: ath.instagramHandle || null,
+          isAthlete: true,
+          linkedAthleteId: ath.id,
+          favoriteModalityIds: ath.modalityIds || [],
+          createdAtIso: new Date().toISOString(),
+        };
+      }
+    }
+    if (currentUser) {
+      const myPublic = getPublicProfileById(currentUser.id);
+      return (
+        myPublic || {
+          id: currentUser.id,
+          userId: currentUser.id,
+          displayName: currentUser.name,
+          avatarUrl: currentUser.avatarUrl || null,
+          turma: null,
+          turmaLabel: null,
+          teamId: currentUser.teamId || null,
+          teamName: currentUser.teamName || null,
+          bio: null,
+          instagramHandle: null,
+          isAthlete: currentUser.role === 'atleta' || Boolean(currentUser.linkedAthleteId),
+          linkedAthleteId: currentUser.linkedAthleteId || null,
+          favoriteModalityIds: currentUser.modalityIds || [],
+          createdAtIso: new Date().toISOString(),
+        }
+      );
+    }
+    return null;
+  }, [userId, currentUser, getPublicProfileById, visibleAthletes]);
+
+  // Modais
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
+
+  // Estados do formulário de senha
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordFeedback, setPasswordFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+
+  // Estados do formulário de edição de perfil
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editInstagram, setEditInstagram] = useState('');
+  const [editTurma, setEditTurma] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState<string | null>(null);
+  const [profileFeedback, setProfileFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
+
+  const openEditModal = () => {
+    if (!targetProfile) return;
+    setEditDisplayName(targetProfile.displayName || currentUser?.name || '');
+    setEditBio(targetProfile.bio || '');
+    setEditInstagram(targetProfile.instagramHandle || '');
+    setEditTurma(targetProfile.turma || '');
+    setEditAvatarUrl(targetProfile.avatarUrl || null);
+    setProfileFeedback(null);
+    setIsEditProfileModalOpen(true);
+  };
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setProfileFeedback({ type: 'error', msg: 'Selecione um arquivo de imagem válido (PNG ou JPG).' });
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setProfileFeedback({ type: 'error', msg: 'A imagem deve possuir tamanho menor que 2MB.' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setEditAvatarUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileFeedback(null);
+
+    if (!editDisplayName.trim()) {
+      setProfileFeedback({ type: 'error', msg: 'O nome de exibição não pode ficar vazio.' });
+      return;
+    }
+
+    setIsSubmittingProfile(true);
+    const selectedTurmaObj = TURMAS_MEDICINA.find((t) => t.turma === editTurma);
+
+    const result = await updateUserProfile({
+      displayName: editDisplayName.trim(),
+      bio: editBio.trim() || null,
+      instagramHandle: editInstagram.trim().replace(/^@/, '') || null,
+      turma: editTurma || null,
+      turmaLabel: selectedTurmaObj ? selectedTurmaObj.fullName : null,
+      teamId: selectedTurmaObj ? selectedTurmaObj.teamId : targetProfile?.teamId || null,
+      avatarUrl: editAvatarUrl,
+    });
+
+    setIsSubmittingProfile(false);
+    if (result.ok) {
+      setProfileFeedback({ type: 'success', msg: 'Perfil atualizado com sucesso no servidor!' });
+      setTimeout(() => {
+        setIsEditProfileModalOpen(false);
+      }, 1000);
+    } else {
+      setProfileFeedback({ type: 'error', msg: result.error || 'Erro ao salvar alterações.' });
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordFeedback(null);
+
+    if (newPassword.length < 6) {
+      setPasswordFeedback({ type: 'error', msg: 'A nova senha deve possuir pelo menos 6 caracteres.' });
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordFeedback({ type: 'error', msg: 'A confirmação não confere com a nova senha digitada.' });
+      return;
+    }
+
+    setIsSubmittingPassword(true);
+    const result = await changeUserPassword(currentPassword, newPassword);
+    setIsSubmittingPassword(false);
+
+    if (result.ok) {
+      setPasswordFeedback({ type: 'success', msg: 'Senha alterada com sucesso! Utilize-a em seus próximos logins.' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setTimeout(() => {
+        setIsPasswordModalOpen(false);
+      }, 1500);
+    } else {
+      setPasswordFeedback({ type: 'error', msg: result.error || 'Falha ao redefinir senha.' });
+    }
+  };
 
   const roleLabel =
     currentUser?.role === 'administrador' || currentUser?.role === 'organizacao'
       ? 'Administrador / Comissão'
       : currentUser?.role === 'atleta'
       ? 'Atleta Oficial Vinculado'
-      : currentUser?.role === 'moderador'
-      ? 'Representante de Período'
-      : 'Visitante / Torcida';
+      : currentUser?.role === 'moderador_master'
+      ? 'Moderador Master'
+      : currentUser?.role === 'mesario'
+      ? 'Mesário Autorizado'
+      : 'Participante da Comunidade';
+
+  const linkedTeam = targetProfile?.teamId ? getTeamById(targetProfile.teamId) : null;
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
+      {/* Botão de Retorno quando visualizando perfil de outro membro */}
+      {!isViewingSelf && (
+        <button
+          type="button"
+          onClick={() => navigate('/comunidade')}
+          className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-[#0B218A] transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Voltar ao Diretório da Comunidade</span>
+        </button>
+      )}
+
       {/* Cabeçalho da página */}
       <div className="pb-2 border-b border-brand-surface-border flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-4 rounded-full bg-brand-yellow" aria-hidden="true" />
           <h2 className="text-lg sm:text-xl font-display font-bold text-brand-text-primary">
-            Meu Perfil
+            {isViewingSelf ? 'Meu Perfil' : 'Perfil do Participante'}
           </h2>
         </div>
 
         <StatusBadge
-          status={currentUser ? 'official' : 'pending'}
-          label={currentUser ? roleLabel : 'Visitante'}
+          status={targetProfile?.isAthlete ? 'official' : 'pending'}
+          label={targetProfile?.isAthlete ? 'Atleta Oficial' : 'Comunidade IntraMed'}
         />
       </div>
 
-      {/* Card Principal: Foto e Nome */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-blue-dark via-brand-blue to-brand-blue-medium text-white p-6 sm:p-8 shadow-elevated border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+      {/* Card Principal: Foto, Nome e Ações */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B218A] via-[#102a9e] to-[#1E3A8A] text-white p-6 sm:p-8 shadow-elevated border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
         <img
-          src="/assets/atletica/mascote-monocor.png"
+          src="/assets/atletica/face-monocor.png"
           alt=""
           aria-hidden="true"
           className="pointer-events-none select-none absolute -right-6 -bottom-8 w-44 h-44 object-contain opacity-[0.07]"
         />
+
         <div className="relative z-10 flex items-center gap-4">
-          <Avatar src={currentUser?.avatarUrl} size="xl" />
+          <div className="relative">
+            <Avatar src={targetProfile?.avatarUrl} alt={targetProfile?.displayName} size="xl" className="border-2 border-white shadow-md" />
+            {isViewingSelf && (
+              <button
+                type="button"
+                onClick={openEditModal}
+                className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-brand-yellow text-slate-900 shadow-lg hover:scale-110 transition-transform"
+                title="Alterar foto de perfil"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
           <div className="space-y-1">
             <h3 className="text-lg sm:text-xl font-display font-extrabold text-white">
-              {currentUser ? currentUser.name : 'Visitante'}
+              {targetProfile ? targetProfile.displayName : 'Participante Não Encontrado'}
             </h3>
             <p className="text-xs text-white/80">
-              {currentUser
-                ? currentUser.email
-                : 'Entre na sua conta para editar seu perfil.'}
+              {targetProfile?.turmaLabel || (targetProfile?.turma ? `Turma ${targetProfile.turma}` : 'Medicina UEMA')}
             </p>
+            {targetProfile?.instagramHandle && (
+              <a
+                href={`https://instagram.com/${targetProfile.instagramHandle}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-brand-yellow hover:underline"
+              >
+                <Instagram className="w-3 h-3" />
+                <span>@{targetProfile.instagramHandle}</span>
+              </a>
+            )}
           </div>
         </div>
 
         <div className="relative z-10 flex flex-wrap items-center gap-2 self-start sm:self-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/inscricao?tab=comunidade')}
-            className="border-white/30 text-white hover:bg-white/15"
-          >
-            Comunidade
-          </Button>
-          {currentUser?.linkedAthleteId && (
+          {isViewingSelf && (
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+              onClick={openEditModal}
+              className="border-white/30 text-white hover:bg-white/15"
+            >
+              Editar Perfil
+            </Button>
+          )}
+
+          {targetProfile?.linkedAthleteId && (
             <Button
               variant="accent"
               size="sm"
-              leftIcon={<User className="w-4 h-4" />}
-              onClick={() => navigate(`/atleta/${currentUser.linkedAthleteId}`)}
+              leftIcon={<Trophy className="w-4 h-4" />}
+              onClick={() => navigate(`/atleta/${targetProfile.linkedAthleteId}`)}
             >
-              Meu Perfil de Atleta
+              Ficha Esportiva
             </Button>
           )}
+
           {!currentUser && (
             <Button
               variant="accent"
@@ -117,55 +339,24 @@ export const ProfilePage: React.FC = () => {
         </div>
       </div>
 
-      {/* Ações Rápidas da Sessão */}
-      <div className="all-sports-card p-5 sm:p-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="all-sports-section-pill">
-          Conta &amp; Acesso
+      {/* Biografia do Participante */}
+      {targetProfile?.bio && (
+        <div className="bg-white rounded-2xl border border-brand-surface-border p-5 shadow-card space-y-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Sobre o Participante
+          </span>
+          <p className="text-sm text-slate-700 leading-relaxed italic bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+            "{targetProfile.bio}"
+          </p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          {!currentUser ? (
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<LogIn className="w-4 h-4" />}
-              onClick={() => navigate('/login')}
-            >
-              Entrar na Conta
-            </Button>
-          ) : (
-            <>
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={() => navigate('/admin')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0B218A] text-white text-xs font-display font-bold shadow-sm hover:bg-blue-900 transition-colors"
-                >
-                  <ShieldAlert className="w-3.5 h-3.5 text-brand-yellow" />
-                  <span>Painel Admin</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setCurrentUser(null)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-display font-bold transition-colors"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Sair</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Grid de Informações Esportivas: Equipe + Modalidades */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div
-          onClick={() =>
-            currentUser?.teamId && navigate(`/equipe/${currentUser.teamId}`)
-          }
+          onClick={() => targetProfile?.teamId && navigate(`/equipe/${targetProfile.teamId}`)}
           className={`rounded-2xl bg-white border border-brand-surface-border p-5 shadow-card space-y-3 ${
-            currentUser?.teamId ? 'cursor-pointer hover:border-brand-blue' : ''
+            targetProfile?.teamId ? 'cursor-pointer hover:border-brand-blue' : ''
           }`}
         >
           <div className="flex items-center justify-between">
@@ -175,8 +366,8 @@ export const ProfilePage: React.FC = () => {
             <Shield className="w-4 h-4 text-brand-blue" />
           </div>
           <div className="p-3.5 rounded-xl bg-brand-surface-muted/70 border border-dashed border-brand-surface-border">
-            <p className="text-sm font-medium text-brand-text-secondary">
-              {currentUser?.teamName || 'Nenhuma equipe vinculada.'}
+            <p className="text-sm font-semibold text-slate-800">
+              {linkedTeam?.name || targetProfile?.teamName || 'Nenhuma equipe vinculada.'}
             </p>
           </div>
         </div>
@@ -184,146 +375,305 @@ export const ProfilePage: React.FC = () => {
         <div className="rounded-2xl bg-white border border-brand-surface-border p-5 shadow-card space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-brand-text-secondary">
-              Modalidades Inscritas
+              Condição Esportiva
             </span>
             <Trophy className="w-4 h-4 text-brand-blue" />
           </div>
           <div className="p-3.5 rounded-xl bg-brand-surface-muted/70 border border-dashed border-brand-surface-border">
-            <p className="text-sm font-medium text-brand-text-secondary">
-              {currentUser && currentUser.modalityIds.length > 0
-                ? `${currentUser.modalityIds.length} modalidade(s) ativa(s)`
-                : 'Nenhuma modalidade vinculada.'}
+            <p className="text-sm font-semibold text-slate-800">
+              {targetProfile?.isAthlete
+                ? 'Atleta Oficial do INTRAMED IX'
+                : 'Membro da Comunidade / Torcida'}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Dados Pessoais Permitidos */}
-      <div className="rounded-2xl bg-white border border-brand-surface-border p-5 sm:p-6 shadow-card space-y-4">
-        <div className="flex items-center gap-2 pb-3 border-b border-brand-surface-border">
-          <UserCheck className="w-4 h-4 text-brand-blue" />
-          <h4 className="text-sm font-display font-bold text-brand-text-primary">
-            Dados Pessoais Permitidos
-          </h4>
+      {/* Ações Rápidas e Segurança (Apenas para o próprio usuário) */}
+      {isViewingSelf && currentUser && (
+        <div className="rounded-2xl bg-white border border-brand-surface-border overflow-hidden shadow-card divide-y divide-brand-surface-border">
+          <button
+            type="button"
+            onClick={() => {
+              setPasswordFeedback(null);
+              setIsPasswordModalOpen(true);
+            }}
+            className="w-full px-5 py-4 flex items-center justify-between gap-3 text-left hover:bg-brand-surface-muted/60 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-brand-blue-light/70 text-brand-blue flex items-center justify-center">
+                <KeyRound className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="block text-sm font-semibold text-brand-text-primary">
+                  Alteração de Senha
+                </span>
+                <span className="block text-xs text-brand-text-secondary">
+                  Atualizar credencial de acesso com segurança criptográfica
+                </span>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-brand-text-muted" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/comunidade')}
+            className="w-full px-5 py-4 flex items-center justify-between gap-3 text-left hover:bg-brand-surface-muted/60 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="block text-sm font-semibold text-brand-text-primary">
+                  Diretório da Comunidade
+                </span>
+                <span className="block text-xs text-brand-text-secondary">
+                  Encontrar e navegar pelos perfis dos demais participantes
+                </span>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-brand-text-muted" />
+          </button>
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => navigate('/admin')}
+              className="w-full px-5 py-4 flex items-center justify-between gap-3 text-left hover:bg-brand-surface-muted/60 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#0B218A] flex items-center justify-center">
+                  <ShieldAlert className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="block text-sm font-semibold text-brand-text-primary">
+                    Painel Administrativo da Atlética
+                  </span>
+                  <span className="block text-xs text-brand-text-secondary">
+                    Gestão de súmulas, arbitragem e inscrições
+                  </span>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-brand-text-muted" />
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setCurrentUser(null)}
+            className="w-full px-5 py-4 flex items-center justify-between gap-3 text-left hover:bg-rose-50/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                <LogOut className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="block text-sm font-semibold text-rose-700">
+                  Sair da Conta
+                </span>
+                <span className="block text-xs text-slate-500">
+                  Encerrar sessão com segurança neste dispositivo
+                </span>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-brand-text-muted" />
+          </button>
         </div>
+      )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-3.5 rounded-xl bg-brand-surface-muted/60 border border-brand-surface-border">
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-brand-text-muted">
-              Nome Completo
-            </span>
-            <span className="mt-1 block text-sm font-medium text-brand-text-secondary">
-              {currentUser?.name || 'Não informado'}
-            </span>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-brand-surface-muted/60 border border-brand-surface-border">
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-brand-text-muted">
-              E-mail Institucional
-            </span>
-            <span className="mt-1 block text-sm font-medium text-brand-text-secondary truncate">
-              {currentUser?.email || 'Não informado'}
-            </span>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-brand-surface-muted/60 border border-brand-surface-border">
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-brand-text-muted">
-              Perfil de Acesso
-            </span>
-            <span className="mt-1 block text-sm font-medium text-brand-text-secondary">
-              {roleLabel}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Configurações de Segurança e Sessão */}
-      <div className="rounded-2xl bg-white border border-brand-surface-border overflow-hidden shadow-card divide-y divide-brand-surface-border">
-        <button
-          type="button"
-          onClick={() => setIsPasswordModalOpen(true)}
-          className="w-full px-5 py-4 flex items-center justify-between gap-3 text-left hover:bg-brand-surface-muted/60 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand-blue-light/70 text-brand-blue flex items-center justify-center">
-              <KeyRound className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="block text-sm font-semibold text-brand-text-primary">
-                Alteração de senha
-              </span>
-              <span className="block text-xs text-brand-text-secondary">
-                Atualizar credencial de acesso à conta
-              </span>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-brand-text-muted" />
-        </button>
-
-        <button
-          type="button"
-          disabled={!currentUser}
-          onClick={() => setCurrentUser(null)}
-          className="w-full px-5 py-4 flex items-center justify-between gap-3 text-left hover:bg-brand-surface-muted/60 transition-colors disabled:opacity-50 disabled:pointer-events-none"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand-surface-muted text-brand-text-secondary flex items-center justify-center">
-              <LogOut className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="block text-sm font-semibold text-brand-text-primary">
-                Sair da conta
-              </span>
-              <span className="block text-xs text-brand-text-secondary">
-                Encerrar sessão atual no dispositivo
-              </span>
-            </div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-brand-text-muted" />
-        </button>
-      </div>
-
+      {/* Modal de Alteração Real de Senha */}
       <Modal
         isOpen={isPasswordModalOpen}
         onClose={() => setIsPasswordModalOpen(false)}
         title="Alteração de Senha"
-        description="Disponível para usuários autenticados na plataforma."
+        description="A nova senha será salva de forma criptografada no banco de dados."
       >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setIsPasswordModalOpen(false);
-          }}
-          className="space-y-4"
-        >
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          {passwordFeedback && (
+            <div
+              className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+                passwordFeedback.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-rose-50 text-rose-800 border-rose-200'
+              }`}
+            >
+              {passwordFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              )}
+              <span>{passwordFeedback.msg}</span>
+            </div>
+          )}
+
           <Input
-            label="Senha atual"
+            label="Senha Atual"
             type="password"
-            placeholder="Digite sua senha atual"
-            disabled={!currentUser}
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Digite a senha atual"
+            required
           />
+
           <Input
-            label="Nova senha"
+            label="Nova Senha Pessoal"
             type="password"
-            placeholder="Digite a nova senha"
-            disabled={!currentUser}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="Mínimo 6 caracteres"
+            required
           />
+
+          <Input
+            label="Confirmar Nova Senha"
+            type="password"
+            value={confirmNewPassword}
+            onChange={(e) => setConfirmNewPassword(e.target.value)}
+            placeholder="Repita a nova senha"
+            required
+          />
+
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => setIsPasswordModalOpen(false)}
+              disabled={isSubmittingPassword}
             >
-              Fechar
+              Cancelar
             </Button>
             <Button
               type="submit"
               variant="primary"
               size="sm"
-              disabled={!currentUser}
+              disabled={isSubmittingPassword}
             >
-              Salvar nova senha
+              {isSubmittingPassword ? 'Salvando...' : 'Salvar Nova Senha'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal de Edição de Perfil Social */}
+      <Modal
+        isOpen={isEditProfileModalOpen}
+        onClose={() => setIsEditProfileModalOpen(false)}
+        title="Editar Meu Perfil"
+        description="Atualize suas informações visíveis para a comunidade do INTRAMED IX."
+      >
+        <form onSubmit={handleSaveProfile} className="space-y-4">
+          {profileFeedback && (
+            <div
+              className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+                profileFeedback.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-rose-50 text-rose-800 border-rose-200'
+              }`}
+            >
+              {profileFeedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              )}
+              <span>{profileFeedback.msg}</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-4">
+            <Avatar src={editAvatarUrl} alt={editDisplayName} size="lg" />
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                leftIcon={<Camera className="w-3.5 h-3.5" />}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Trocar Foto
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarFileChange}
+                className="hidden"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">PNG ou JPG até 2MB</p>
+            </div>
+          </div>
+
+          <Input
+            label="Nome de Exibição"
+            type="text"
+            value={editDisplayName}
+            onChange={(e) => setEditDisplayName(e.target.value)}
+            placeholder="Como deseja ser chamado"
+            required
+          />
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Turma de Medicina
+            </label>
+            <select
+              value={editTurma}
+              onChange={(e) => setEditTurma(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0B218A]/20 focus:border-[#0B218A]"
+            >
+              <option value="">Selecione sua turma</option>
+              {TURMAS_MEDICINA.map((t) => (
+                <option key={t.turma} value={t.turma}>
+                  {t.fullName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <Input
+            label="Instagram (@)"
+            type="text"
+            value={editInstagram}
+            onChange={(e) => setEditInstagram(e.target.value)}
+            placeholder="seu.instagram"
+          />
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Mini Biografia / Frase de Torcida
+            </label>
+            <textarea
+              value={editBio}
+              onChange={(e) => setEditBio(e.target.value)}
+              placeholder="Conte um pouco sobre sua trajetória ou deixe seu recado para o campeonato..."
+              rows={3}
+              maxLength={250}
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B218A]/20 focus:border-[#0B218A]"
+            />
+            <p className="text-[11px] text-slate-400 text-right mt-0.5">
+              {editBio.length}/250 caracteres
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditProfileModalOpen(false)}
+              disabled={isSubmittingProfile}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              disabled={isSubmittingProfile}
+            >
+              {isSubmittingProfile ? 'Salvando...' : 'Salvar Alterações'}
             </Button>
           </div>
         </form>

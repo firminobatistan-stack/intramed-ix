@@ -22,6 +22,7 @@ import {
   Team,
   TournamentPhaseType,
   UserProfile,
+  PublicUserProfile,
   TurmaMedicina,
   RegistrationPaymentStatus,
   MemberStatus,
@@ -260,6 +261,11 @@ interface CompetitionStoreContextValue {
       status?: Match['status'];
     }
   ) => void;
+  publicProfiles: PublicUserProfile[];
+  getPublicProfileById: (id: string) => PublicUserProfile | undefined;
+  updateUserProfile: (profileData: Partial<PublicUserProfile>) => Promise<{ ok: boolean; error?: string }>;
+  changeUserPassword: (currentPassword: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
+  syncStatus: 'synced' | 'syncing' | 'offline' | 'error';
 }
 
 const STORAGE_KEY_STATE = 'intramed_ix_live_engine_v3';
@@ -319,6 +325,7 @@ interface PersistedEngineState {
   favoriteTeamIds: string[];
   favoriteAthleteIds: string[];
   notifications: AppNotificationItem[];
+  publicProfiles: PublicUserProfile[];
 }
 
 const CompetitionStoreContext = createContext<CompetitionStoreContextValue | null>(
@@ -399,6 +406,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             favoriteTeamIds: parsed.favoriteTeamIds || [],
             favoriteAthleteIds: parsed.favoriteAthleteIds || [],
             notifications: parsed.notifications || [],
+            publicProfiles: parsed.publicProfiles || [],
           };
         }
       }
@@ -421,6 +429,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       favoriteTeamIds: [],
       favoriteAthleteIds: [],
       notifications: [],
+      publicProfiles: [],
     };
   });
 
@@ -587,6 +596,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           }
         }
 
+        let nextProfiles = prev.publicProfiles || [];
+        if (Array.isArray(payload.profiles) && payload.profiles.length > 0) {
+          nextProfiles = payload.profiles as PublicUserProfile[];
+          changed = true;
+        }
+
         if (!changed) return prev;
 
         isApplyingRemoteUpdate.current = true;
@@ -596,6 +611,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           officialTeams: nextTeams,
           officialMatches: nextMatches,
           officialSheets: nextSheets,
+          publicProfiles: nextProfiles,
         };
       });
     } catch {
@@ -3598,6 +3614,113 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [enqueueCloudSync]
   );
 
+  const getPublicProfileById = useCallback(
+    (id: string): PublicUserProfile | undefined => {
+      return (state.publicProfiles || []).find(
+        (p) => p.id === id || p.userId === id || (p.linkedAthleteId && p.linkedAthleteId === id)
+      );
+    },
+    [state.publicProfiles]
+  );
+
+  const updateUserProfile = useCallback(
+    async (profileData: Partial<PublicUserProfile>): Promise<{ ok: boolean; error?: string }> => {
+      const targetUserId = profileData.userId || profileData.id || state.currentUser?.id;
+      if (!targetUserId) {
+        return { ok: false, error: 'Usuário não autenticado.' };
+      }
+      try {
+        const token = getStoredOperatorToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['x-intramed-token'] = token;
+        }
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            action: 'update_user_profile',
+            userId: targetUserId,
+            ...profileData,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) {
+          return { ok: false, error: data?.error || 'Erro ao atualizar perfil no servidor.' };
+        }
+
+        const updatedProfile = data.profile as PublicUserProfile;
+        setState((prev) => {
+          const list = [...(prev.publicProfiles || [])];
+          const idx = list.findIndex((p) => p.id === targetUserId || p.userId === targetUserId);
+          if (idx >= 0) {
+            list[idx] = updatedProfile;
+          } else {
+            list.unshift(updatedProfile);
+          }
+          return { ...prev, publicProfiles: list };
+        });
+
+        // Se o perfil atualizado é o usuário logado, atualiza currentUser também
+        if (state.currentUser && (state.currentUser.id === targetUserId || state.currentUser.email === profileData.userId)) {
+          setCurrentUser({
+            ...state.currentUser,
+            name: updatedProfile.displayName || state.currentUser.name,
+            avatarUrl: updatedProfile.avatarUrl !== undefined ? updatedProfile.avatarUrl : state.currentUser.avatarUrl,
+            teamId: updatedProfile.teamId !== undefined ? updatedProfile.teamId : state.currentUser.teamId,
+            teamName: updatedProfile.teamName !== undefined ? updatedProfile.teamName : state.currentUser.teamName,
+          });
+        }
+
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'Falha de conexão com o servidor.' };
+      }
+    },
+    [state.currentUser, setCurrentUser]
+  );
+
+  const changeUserPassword = useCallback(
+    async (currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!state.currentUser?.email) {
+        return { ok: false, error: 'Usuário não autenticado.' };
+      }
+      try {
+        const token = getStoredOperatorToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['x-intramed-token'] = token;
+        }
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            action: 'change_user_password',
+            email: state.currentUser.email,
+            currentPassword,
+            newPassword,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) {
+          return { ok: false, error: data?.error || 'Senha atual incorreta ou erro no servidor.' };
+        }
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'Falha de comunicação com o servidor.' };
+      }
+    },
+    [state.currentUser]
+  );
+
+  const syncStatus: 'synced' | 'syncing' | 'offline' | 'error' = useMemo(() => {
+    if (!isOnline) return 'offline';
+    if (state.pendingSyncCount > 0) return 'syncing';
+    return 'synced';
+  }, [isOnline, state.pendingSyncCount]);
+
   // Item 22 da Auditoria: Context value memoizado com `useMemo` para evitar re-renders desnecessários
   const contextValue = useMemo<CompetitionStoreContextValue>(
     () => ({
@@ -3665,6 +3788,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       registerAthlete,
       createOfficialMatch,
       updateMatchSchedule,
+      publicProfiles: state.publicProfiles || [],
+      getPublicProfileById,
+      updateUserProfile,
+      changeUserPassword,
+      syncStatus,
     }),
     [
       state.isTestMode,
@@ -3731,6 +3859,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       registerAthlete,
       createOfficialMatch,
       updateMatchSchedule,
+      state.publicProfiles,
+      getPublicProfileById,
+      updateUserProfile,
+      changeUserPassword,
+      syncStatus,
     ]
   );
 

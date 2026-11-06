@@ -14,6 +14,7 @@ import {
   Shield,
   CreditCard,
   ShieldCheck,
+  Users,
 } from 'lucide-react';
 import { BrandMark } from './BrandMark';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
@@ -54,6 +55,12 @@ const PRIMARY_ITEMS: SidebarItem[] = [
     label: 'Favoritos',
     icon: Heart,
     matchPrefix: '/favoritos',
+  },
+  {
+    to: '/comunidade',
+    label: 'Comunidade & Perfis',
+    icon: Users,
+    matchPrefix: '/comunidade',
   },
   {
     to: '/notificacoes',

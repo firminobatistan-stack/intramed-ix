@@ -42,6 +42,24 @@ export interface UserProfile {
   lastLoginAtIso?: string;
 }
 
+export interface PublicUserProfile {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  turma?: string | null;
+  turmaLabel?: string | null;
+  teamId?: string | null;
+  teamName?: string | null;
+  bio?: string | null;
+  instagramHandle?: string | null;
+  isAthlete: boolean;
+  linkedAthleteId?: string | null;
+  favoriteModalityIds?: string[];
+  createdAtIso?: string;
+  updatedAtIso?: string;
+}
+
 export interface AdminActionAuditLog {
   id: string;
   timestampIso: string;

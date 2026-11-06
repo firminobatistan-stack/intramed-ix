@@ -41,6 +41,8 @@ export interface CloudCollectionMap {
   matches: Record<string, Record<string, unknown>>;
   match_sheets: Record<string, Record<string, unknown>>;
   match_secrets: Record<string, { pinHash: string; pinDisplay?: string; updatedAtIso: string }>;
+  users?: Record<string, Record<string, unknown>>;
+  profiles?: Record<string, Record<string, unknown>>;
   admin_users?: Record<string, Record<string, unknown>>;
   admin_audit_logs?: AdminActionAuditLog[];
   sync_logs?: SyncDiagnosticLogEntry[];
@@ -355,6 +357,8 @@ export function getCloudStore(): CloudCollectionMap {
           matches: parsed.matches || {},
           match_sheets: parsed.match_sheets || {},
           match_secrets: parsed.match_secrets || {},
+          users: parsed.users || {},
+          profiles: parsed.profiles || {},
           admin_users: parsed.admin_users || {},
           admin_audit_logs: parsed.admin_audit_logs || [],
           updatedAtIso: parsed.updatedAtIso || new Date().toISOString(),
@@ -374,6 +378,8 @@ export function getCloudStore(): CloudCollectionMap {
     matches: {},
     match_sheets: {},
     match_secrets: {},
+    users: {},
+    profiles: {},
     admin_users: {},
     admin_audit_logs: [],
     updatedAtIso: new Date().toISOString(),
@@ -415,6 +421,46 @@ export function sanitizeRegistrationForPublic(
     athleteDocument: maskedDoc,
     athletePhone: '',
     hasAccountPassword: Boolean(_rawPassword || _passwordHash),
+  };
+}
+
+/**
+ * Sanitiza um perfil para consumo público no feed social / diretório de participantes:
+ * NUNCA expõe senhas, hashes, emails privados, documentos, telefones ou dados financeiros.
+ */
+export function sanitizeUserProfileForPublic(
+  profile: Record<string, unknown>
+): Record<string, unknown> {
+  const {
+    password: _pwd,
+    passwordHash: _hash,
+    accountPassword: _accPass,
+    accountPasswordHash: _accHash,
+    email: _em,
+    phone: _ph,
+    document: _doc,
+    mpPaymentId: _mp,
+    ...safePublic
+  } = profile;
+
+  return {
+    id: safePublic.id,
+    userId: safePublic.userId || safePublic.id,
+    displayName: safePublic.displayName || safePublic.name || 'Participante IntraMed',
+    avatarUrl: safePublic.avatarUrl || null,
+    turma: safePublic.turma || null,
+    turmaLabel: safePublic.turmaLabel || null,
+    teamId: safePublic.teamId || null,
+    teamName: safePublic.teamName || null,
+    bio: safePublic.bio || null,
+    instagramHandle: safePublic.instagramHandle || null,
+    isAthlete: Boolean(safePublic.isAthlete || safePublic.linkedAthleteId),
+    linkedAthleteId: safePublic.linkedAthleteId || null,
+    favoriteModalityIds: Array.isArray(safePublic.favoriteModalityIds)
+      ? safePublic.favoriteModalityIds
+      : [],
+    createdAtIso: safePublic.createdAtIso || new Date().toISOString(),
+    updatedAtIso: safePublic.updatedAtIso || new Date().toISOString(),
   };
 }
 
@@ -517,8 +563,8 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
 
   store.hydratedFromFirestoreAtIso = new Date().toISOString();
   const collectionsToHydrate: Array<
-    'registrations' | 'athletes' | 'teams' | 'matches' | 'match_sheets' | 'admin_users'
-  > = ['registrations', 'athletes', 'teams', 'matches', 'match_sheets', 'admin_users'];
+    'registrations' | 'athletes' | 'teams' | 'matches' | 'match_sheets' | 'admin_users' | 'users' | 'profiles'
+  > = ['registrations', 'athletes', 'teams', 'matches', 'match_sheets', 'admin_users', 'users', 'profiles'];
 
   try {
     await Promise.all(
@@ -556,6 +602,17 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
               if (docId && docId !== normalizedEmail) {
                 store.admin_users[docId] = adminUserObj;
               }
+            } else if (colName === 'users') {
+              if (!store.users) store.users = {};
+              const normalizedEmail = String(parsedDoc.email || '').trim().toLowerCase();
+              const userObj = { ...parsedDoc, id: docId, email: normalizedEmail };
+              store.users[docId] = userObj;
+              if (normalizedEmail) {
+                store.users[normalizedEmail] = userObj;
+              }
+            } else if (colName === 'profiles') {
+              if (!store.profiles) store.profiles = {};
+              store.profiles[docId] = { ...parsedDoc, id: docId };
             } else if (!store[colName][docId]) {
               store[colName][docId] = { ...parsedDoc, id: docId };
             }

@@ -34,7 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
   const location = useLocation();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  const { notifications, currentUser, canOperateOfficialData } =
+  const { notifications, currentUser, canOperateOfficialData, syncStatus } =
     useCompetitionStore();
   const unreadCount = notifications.filter((n) => !n.isRead).length;
   const isAdmin = canOperateOfficialData();
@@ -66,6 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'leagues', label: 'Modalidades', path: '/competicoes' },
     { id: 'teams', label: 'Períodos', path: '/equipe' },
     { id: 'athletes', label: 'Atletas', path: '/atleta' },
+    { id: 'comunidade', label: 'Comunidade', path: '/comunidade' },
   ];
 
   const getActiveTopTab = () => {
@@ -78,6 +79,12 @@ export const Header: React.FC<HeaderProps> = ({
     }
     if (location.pathname.startsWith('/equipe')) return 'teams';
     if (location.pathname.startsWith('/atleta')) return 'athletes';
+    if (
+      location.pathname.startsWith('/comunidade') ||
+      location.pathname.startsWith('/perfil')
+    ) {
+      return 'comunidade';
+    }
     return 'matches';
   };
 
@@ -136,6 +143,25 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Ícones da Direita (Search With Calendar + Notification + Súmula) */}
           <div className="flex items-center gap-2">
+            {syncStatus === 'offline' && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 border border-amber-400/30 text-[10px] font-bold text-amber-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <span>Offline</span>
+              </span>
+            )}
+            {syncStatus === 'syncing' && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-[10px] font-bold text-blue-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                <span>Sincronizando</span>
+              </span>
+            )}
+            {syncStatus === 'synced' && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-[10px] font-bold text-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>Online</span>
+              </span>
+            )}
+
             <button
               type="button"
               onClick={() => setIsSearchOpen(true)}

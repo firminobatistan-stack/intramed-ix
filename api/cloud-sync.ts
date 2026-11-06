@@ -19,6 +19,7 @@ import {
   protectMasterAccount,
   sanitizeMatchForPublic,
   sanitizeRegistrationForPublic,
+  sanitizeUserProfileForPublic,
   saveCloudStore,
   USER_ROLE_LEVELS,
   UserRole,
@@ -32,6 +33,8 @@ const ALLOWED_COLLECTIONS = new Set([
   'teams',
   'matches',
   'match_sheets',
+  'profiles',
+  'users',
 ]);
 
 function canClientWriteDocument(
@@ -325,6 +328,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       teams: Object.values(store.teams),
       matches: publicMatches,
       match_sheets: Object.values(store.match_sheets),
+      profiles: Object.values(store.profiles || {}).map(sanitizeUserProfileForPublic),
       syncLogs: isAdminRequest ? store.sync_logs || [] : [],
     });
   }
@@ -507,6 +511,387 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({
         ok: true,
         registration: sanitizeRegistrationForPublic(matchedReg),
+      });
+    }
+
+    // AÇÃO 2C-1: Cadastro Real de Usuário e Perfil Social (/api/cloud-sync -> register_user)
+    if (action === 'register_user') {
+      const nameInput = String(body.name || '').trim();
+      const emailInput = String(body.email || '').trim().toLowerCase();
+      const passwordInput = String(body.password || '').trim();
+      const turmaInput = String(body.turma || '').trim();
+      const turmaLabelInput = String(body.turmaLabel || '').trim();
+      const teamIdInput = String(body.teamId || '').trim();
+      const teamNameInput = String(body.teamName || '').trim();
+      const bioInput = String(body.bio || '').trim();
+      const instagramInput = String(body.instagramHandle || '').trim();
+      const avatarUrlInput = body.avatarUrl && typeof body.avatarUrl === 'string' ? body.avatarUrl : null;
+
+      if (!nameInput || nameInput.length < 2) {
+        return res.status(400).json({ ok: false, error: 'Nome completo deve possuir no mínimo 2 caracteres.' });
+      }
+
+      if (!emailInput || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(emailInput)) {
+        return res.status(400).json({ ok: false, error: 'E-mail informado possui formato inválido.' });
+      }
+
+      if (!passwordInput || passwordInput.length < 6) {
+        return res.status(400).json({ ok: false, error: 'A senha de acesso deve possuir no mínimo 6 caracteres.' });
+      }
+
+      if (!store.users) store.users = {};
+      if (!store.profiles) store.profiles = {};
+
+      // Verifica duplicidade no banco
+      const existingUser = store.users[emailInput] || Object.values(store.users).find((u) => u.email === emailInput);
+      if (existingUser) {
+        return res.status(409).json({ ok: false, error: 'Já existe uma conta cadastrada com este e-mail. Faça login.' });
+      }
+
+      // Procura se o usuário já possui inscrição no evento
+      const existingReg = Object.values(store.registrations).find(
+        (r) => String(r.athleteEmail || '').trim().toLowerCase() === emailInput
+      );
+
+      const userId = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const nowIso = new Date().toISOString();
+      const role: UserRole = existingReg && existingReg.paymentStatus === 'pago' ? 'atleta' : 'visitante';
+      const linkedAthleteId = existingReg ? (existingReg.linkedAthleteId as string) || `ath-${existingReg.id}` : null;
+
+      const userRecord = {
+        id: userId,
+        email: emailInput,
+        name: nameInput,
+        passwordHash: hashPassword(passwordInput),
+        role,
+        linkedAthleteId,
+        registrationId: existingReg ? existingReg.id : null,
+        isActive: true,
+        mustChangePassword: false,
+        createdAtIso: nowIso,
+        updatedAtIso: nowIso,
+        lastLoginAtIso: nowIso,
+      };
+
+      const profileRecord = {
+        id: userId,
+        userId,
+        displayName: nameInput,
+        avatarUrl: avatarUrlInput || (existingReg?.avatarUrl as string) || null,
+        turma: turmaInput || (existingReg?.turma as string) || null,
+        turmaLabel: turmaLabelInput || (existingReg?.turmaLabel as string) || null,
+        teamId: teamIdInput || (existingReg?.teamId as string) || null,
+        teamName: teamNameInput || (existingReg?.teamName as string) || null,
+        bio: bioInput || (existingReg?.bio as string) || null,
+        instagramHandle: instagramInput || (existingReg?.instagramHandle as string) || null,
+        isAthlete: Boolean(linkedAthleteId),
+        linkedAthleteId,
+        favoriteModalityIds: [],
+        createdAtIso: nowIso,
+        updatedAtIso: nowIso,
+      };
+
+      store.users[userId] = userRecord;
+      store.users[emailInput] = userRecord;
+      store.profiles[userId] = profileRecord;
+      store.updatedAtIso = nowIso;
+
+      saveCloudStore(store);
+      void MirrorDocumentToFirestoreRest('users', userId, userRecord);
+      void MirrorDocumentToFirestoreRest('profiles', userId, profileRecord);
+
+      // Emite token assinado seguro
+      const token = createSignedOperatorToken({
+        role,
+        email: emailInput,
+        officialName: nameInput,
+        mustChangePassword: false,
+      });
+
+      return res.status(201).json({
+        ok: true,
+        token,
+        user: {
+          id: userId,
+          email: emailInput,
+          name: nameInput,
+          role,
+          linkedAthleteId,
+        },
+        profile: sanitizeUserProfileForPublic(profileRecord),
+      });
+    }
+
+    // AÇÃO 2C-2: Login Unificado (/api/cloud-sync -> user_login)
+    if (action === 'user_login') {
+      const identifierInput = String(body.email || body.identifier || '').trim().toLowerCase();
+      const passwordInput = String(body.password || '').trim();
+
+      if (!identifierInput || !passwordInput) {
+        return res.status(400).json({ ok: false, error: 'E-mail e senha são obrigatórios.' });
+      }
+
+      if (!store.users) store.users = {};
+      if (!store.profiles) store.profiles = {};
+
+      const inputHash = hashPassword(passwordInput);
+      const inputPinHash = hashSecretPin(passwordInput);
+
+      // 1. Busca em users
+      let foundUser = store.users[identifierInput] || Object.values(store.users).find((u) => u.email === identifierInput);
+      let userRole: UserRole = 'visitante';
+      let userId = '';
+      let userName = '';
+      let userEmail = '';
+
+      if (foundUser) {
+        const storedHash = String(foundUser.passwordHash || '');
+        if (storedHash !== inputHash) {
+          return res.status(401).json({ ok: false, error: 'Senha incorreta para esta conta.' });
+        }
+        userId = String(foundUser.id);
+        userName = String(foundUser.name);
+        userEmail = String(foundUser.email);
+        userRole = (foundUser.role as UserRole) || 'visitante';
+      } else {
+        // 2. Busca em admin_users
+        const adminUsers = store.admin_users || {};
+        const adminFound = adminUsers[identifierInput];
+        if (adminFound) {
+          const storedHash = String(adminFound.passwordHash || '');
+          const isInitial = Boolean(adminFound.mustChangePassword) && passwordInput === 'campeao2027';
+          if (storedHash !== inputHash && !isInitial) {
+            return res.status(401).json({ ok: false, error: 'Senha incorreta para esta conta administrativa.' });
+          }
+          userId = String(adminFound.id || 'usr_master_cangaceira');
+          userName = String(adminFound.name || 'Atlética Cangaceira');
+          userEmail = String(adminFound.email || identifierInput);
+          userRole = (adminFound.role as UserRole) || 'moderador_master';
+        } else {
+          // 3. Busca em registrations
+          const matchedReg = Object.values(store.registrations).find((r) => {
+            const em = String(r.athleteEmail || '').trim().toLowerCase();
+            const usr = String(r.accountUsername || '').trim().toLowerCase();
+            const doc = String(r.athleteDocument || '').replace(/\D/g, '');
+            return em === identifierInput || (usr && usr === identifierInput) || (doc && doc === identifierInput);
+          });
+
+          if (!matchedReg) {
+            return res.status(404).json({ ok: false, error: 'Conta não encontrada no sistema. Cadastre-se.' });
+          }
+
+          const storedRegHash = String(matchedReg.accountPasswordHash || '');
+          if (!storedRegHash || (storedRegHash !== inputHash && storedRegHash !== inputPinHash)) {
+            return res.status(401).json({ ok: false, error: 'Senha incorreta para esta conta de atleta.' });
+          }
+
+          userId = String(matchedReg.userId || `usr-${matchedReg.id}`);
+          userName = String(matchedReg.athleteName);
+          userEmail = String(matchedReg.athleteEmail).toLowerCase();
+          userRole = 'atleta';
+
+          // Auto-provisiona em users e profiles para consistência permanente
+          const nowIso = new Date().toISOString();
+          const autoUser = {
+            id: userId,
+            email: userEmail,
+            name: userName,
+            passwordHash: storedRegHash,
+            role: userRole,
+            linkedAthleteId: matchedReg.linkedAthleteId || `ath-${matchedReg.id}`,
+            registrationId: matchedReg.id,
+            isActive: true,
+            createdAtIso: nowIso,
+            updatedAtIso: nowIso,
+            lastLoginAtIso: nowIso,
+          };
+          const autoProfile = {
+            id: userId,
+            userId,
+            displayName: userName,
+            avatarUrl: matchedReg.avatarUrl || null,
+            turma: matchedReg.turma || null,
+            turmaLabel: matchedReg.turmaLabel || null,
+            teamId: matchedReg.teamId || null,
+            teamName: matchedReg.teamName || null,
+            bio: matchedReg.bio || null,
+            instagramHandle: matchedReg.instagramHandle || null,
+            isAthlete: true,
+            linkedAthleteId: matchedReg.linkedAthleteId || `ath-${matchedReg.id}`,
+            favoriteModalityIds: [],
+            createdAtIso: nowIso,
+            updatedAtIso: nowIso,
+          };
+          store.users[userId] = autoUser;
+          store.users[userEmail] = autoUser;
+          store.profiles[userId] = autoProfile;
+          saveCloudStore(store);
+          void MirrorDocumentToFirestoreRest('users', userId, autoUser);
+          void MirrorDocumentToFirestoreRest('profiles', userId, autoProfile);
+        }
+      }
+
+      // Atualiza lastLogin
+      if (store.users && store.users[userId]) {
+        store.users[userId].lastLoginAtIso = new Date().toISOString();
+        saveCloudStore(store);
+      }
+
+      let profileData = store.profiles ? store.profiles[userId] : null;
+      if (!profileData) {
+        profileData = {
+          id: userId,
+          userId,
+          displayName: userName,
+          avatarUrl: null,
+          turma: null,
+          isAthlete: userRole === 'atleta',
+          linkedAthleteId: null,
+          favoriteModalityIds: [],
+          createdAtIso: new Date().toISOString(),
+          updatedAtIso: new Date().toISOString(),
+        };
+      }
+
+      const token = createSignedOperatorToken({
+        role: userRole,
+        email: userEmail,
+        officialName: userName,
+        mustChangePassword: false,
+      });
+
+      return res.status(200).json({
+        ok: true,
+        token,
+        user: {
+          id: userId,
+          email: userEmail,
+          name: userName,
+          role: userRole,
+          linkedAthleteId: profileData.linkedAthleteId || null,
+        },
+        profile: sanitizeUserProfileForPublic(profileData),
+      });
+    }
+
+    // AÇÃO 2C-3: Alteração de Senha do Usuário (/api/cloud-sync -> change_user_password)
+    if (action === 'change_user_password') {
+      const emailInput = String(body.email || verifiedToken?.email || '').trim().toLowerCase();
+      const currentPassword = String(body.currentPassword || '').trim();
+      const newPassword = String(body.newPassword || '').trim();
+
+      if (!emailInput) {
+        return res.status(400).json({ ok: false, error: 'Identificação de usuário necessária.' });
+      }
+
+      if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ ok: false, error: 'A nova senha deve possuir no mínimo 6 caracteres.' });
+      }
+
+      const users = store.users || {};
+      const user = users[emailInput] || Object.values(users).find((u) => u.email === emailInput);
+
+      if (!user) {
+        return res.status(404).json({ ok: false, error: 'Conta de usuário não localizada no servidor.' });
+      }
+
+      // Se não há token válido já autenticado, exige a senha atual
+      if (!verifiedToken?.email) {
+        if (!currentPassword) {
+          return res.status(401).json({ ok: false, error: 'Informe a senha atual para autorizar a redefinição.' });
+        }
+        const currHash = hashPassword(currentPassword);
+        if (currHash !== user.passwordHash) {
+          return res.status(401).json({ ok: false, error: 'Senha atual incorreta.' });
+        }
+      }
+
+      user.passwordHash = hashPassword(newPassword);
+      user.updatedAtIso = new Date().toISOString();
+      saveCloudStore(store);
+
+      void MirrorDocumentToFirestoreRest('users', String(user.id), user);
+      if (user.email) {
+        void MirrorDocumentToFirestoreRest('users', String(user.email), user);
+      }
+
+      return res.status(200).json({ ok: true, message: 'Senha atualizada com sucesso no banco de dados!' });
+    }
+
+    // AÇÃO 2C-4: Atualização de Perfil Social (/api/cloud-sync -> update_user_profile)
+    if (action === 'update_user_profile') {
+      const targetUserId = String(body.userId || body.id || '').trim();
+      if (!targetUserId) {
+        return res.status(400).json({ ok: false, error: 'ID do perfil não informado.' });
+      }
+
+      // Validação de autorização: somente o próprio usuário ou admin pode editar
+      const isSelf = verifiedToken && (verifiedToken.email || '').toLowerCase() === String(store.users?.[targetUserId]?.email || '').toLowerCase();
+      if (!isAdmin && !isSelf) {
+        return res.status(403).json({ ok: false, error: 'Você não tem permissão para editar o perfil de outro usuário.' });
+      }
+
+      if (!store.profiles) store.profiles = {};
+      const existingProfile = store.profiles[targetUserId] || {
+        id: targetUserId,
+        userId: targetUserId,
+        createdAtIso: new Date().toISOString(),
+      };
+
+      const nowIso = new Date().toISOString();
+      const updatedProfile = {
+        ...existingProfile,
+        displayName: typeof body.displayName === 'string' && body.displayName.trim() ? body.displayName.trim() : existingProfile.displayName,
+        avatarUrl: body.avatarUrl !== undefined ? body.avatarUrl : existingProfile.avatarUrl,
+        turma: body.turma !== undefined ? body.turma : existingProfile.turma,
+        turmaLabel: body.turmaLabel !== undefined ? body.turmaLabel : existingProfile.turmaLabel,
+        teamId: body.teamId !== undefined ? body.teamId : existingProfile.teamId,
+        teamName: body.teamName !== undefined ? body.teamName : existingProfile.teamName,
+        bio: body.bio !== undefined ? body.bio : existingProfile.bio,
+        instagramHandle: body.instagramHandle !== undefined ? body.instagramHandle : existingProfile.instagramHandle,
+        favoriteModalityIds: Array.isArray(body.favoriteModalityIds) ? body.favoriteModalityIds : existingProfile.favoriteModalityIds || [],
+        updatedAtIso: nowIso,
+      };
+
+      store.profiles[targetUserId] = updatedProfile;
+      store.updatedAtIso = nowIso;
+      saveCloudStore(store);
+
+      void MirrorDocumentToFirestoreRest('profiles', targetUserId, updatedProfile);
+
+      return res.status(200).json({
+        ok: true,
+        profile: sanitizeUserProfileForPublic(updatedProfile),
+      });
+    }
+
+    // AÇÃO 2C-5: Listagem e Pesquisa de Perfis Públicos (/api/cloud-sync -> list_public_profiles)
+    if (action === 'list_public_profiles') {
+      const query = String(body.query || '').trim().toLowerCase();
+      const filterTurma = String(body.turma || '').trim();
+      const filterTeam = String(body.teamId || '').trim();
+      const onlyAthletes = Boolean(body.onlyAthletes);
+
+      const allProfiles = Object.values(store.profiles || {}).map(sanitizeUserProfileForPublic);
+
+      const filtered = allProfiles.filter((p) => {
+        if (onlyAthletes && !p.isAthlete) return false;
+        if (filterTurma && p.turma !== filterTurma) return false;
+        if (filterTeam && p.teamId !== filterTeam) return false;
+        if (query) {
+          const matchName = String(p.displayName || '').toLowerCase().includes(query);
+          const matchTurma = String(p.turmaLabel || '').toLowerCase().includes(query);
+          const matchTeam = String(p.teamName || '').toLowerCase().includes(query);
+          const matchBio = String(p.bio || '').toLowerCase().includes(query);
+          return matchName || matchTurma || matchTeam || matchBio;
+        }
+        return true;
+      });
+
+      return res.status(200).json({
+        ok: true,
+        profiles: filtered,
+        total: filtered.length,
       });
     }
 

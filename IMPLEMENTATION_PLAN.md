@@ -195,4 +195,55 @@
 - **`scripts/test-sync-scenarios.mjs`:** 10/10 cenários de concorrência e sincronização aprovados.
 - **Compilação de Produção (`npm run build`):** Sucesso absoluto (0 erros, 1657 módulos transformados).
 
+---
+
+## 9. Infraestrutura Completa de Usuários, Autenticação Unificada, Perfis Públicos e Sincronização Social
+
+### A. Auditoria da Infraestrutura Existente
+- **Autenticação:** Unificada com backend central (`api/cloud-sync.ts`) com criptografia HMAC-SHA256, tokens assinados e sincronização com Google Cloud Firestore.
+- **Banco de Dados:** Cloud Firestore oficial do projeto (`intramed-9`) com as coleções `users`, `profiles`, `registrations`, `athletes`, `teams`, `matches`, `match_sheets` e `admin_audit_logs`.
+- **Persistência Multi-Dispositivo:** Dados persistidos no servidor Cloud Firestore REST e espelhados em `localStorage` para modo offline, permitindo que o usuário entre por qualquer PC, celular ou tablet.
+- **Barreira de Privacidade (LGPD):** Divisão estrita entre `users` (dados privados: credenciais, e-mail, telefone, CPF, comprovantes de pagamento) e `profiles` (dados públicos: nome de exibição, foto/avatar, turma, equipe, bio, Instagram, modalidades favoritas e estatísticas esportivas). Dados privados são 100% filtrados da listagem pública (`sanitizeUserProfileForPublic`).
+
+### B. Sistema de Criação de Contas e Autenticação
+- **`register_user`:** Criação de contas reais com validação de unicidade de e-mail (rejeita duplicatas com HTTP 409), senha mínima de 6 caracteres sob hash criptográfico, geração de ID permanente (`usr_...`) e auto-provisionamento de perfil público.
+- **`user_login`:** Login unificado que atende torcedores, estudantes de Medicina, atletas e comissão organizadora, com verificação de credenciais sem bypass (rejeita senhas incorretas com HTTP 401).
+- **`change_user_password`:** Endpoint seguro que exige validação da senha atual ou token ativo, recalculando o hash e persistindo a nova credencial no Firestore.
+- **`update_user_profile`:** Atualização de nome, bio, Instagram, turma e avatar permitida ao próprio usuário ou moderadores autenticados, com bloqueio estrito para terceiros não autorizados (HTTP 403).
+- **`list_public_profiles`:** Consulta e busca de perfis públicos com filtros combinados de texto (nome/bio), turma e equipe.
+
+### C. Telas e Experiência do Usuário (Frontend)
+- **Tela de Login e Cadastro (`src/pages/LoginPage.tsx`):**
+  - Aba 1 ("Entrar"): Login unificado por e-mail e senha com feedback de erro em tempo real.
+  - Aba 2 ("Criar Conta"): Cadastro completo de novos usuários com seleção de turma e bio inicial.
+  - Aba 3 ("Comissão"): Acesso restrito para moderadores e mesários.
+- **Diretório Social de Comunidade (`src/pages/CommunityDirectoryPage.tsx`):**
+  - Rota oficial: `/comunidade`.
+  - Busca instantânea por nome ou biografia.
+  - Filtros dinâmicos por Turma de Medicina e Equipe oficial.
+  - Alternador para exibir apenas atletas inscritos ou torcedores.
+  - Contadores de estatísticas gerais da comunidade.
+- **Página de Perfil Social (`src/pages/ProfilePage.tsx`):**
+  - Rotas: `/perfil` (meu perfil) e `/perfil/:userId` (visualização de outro integrante).
+  - Modal real de Edição de Perfil Social (com upload de avatar PNG/JPG).
+  - Modal real de Alteração de Senha integrado ao backend HMAC.
+  - Seção esportiva dinâmica: exibe modalidades em que o membro compete, equipe, histórico e medalhas conquistadas.
+- **Cabeçalho e Navegação:**
+  - Adicionado item "Comunidade" na barra de menu superior (`Header.tsx`), no menu lateral de desktop (`Sidebar.tsx`) e na gaveta móvel (`MobileNavDrawer.tsx`).
+  - Indicador de status de sincronização em tempo real na barra de navegação (`Online`, `Sincronizando`, `Offline`).
+
+### D. Bateria de Testes Automatizados Executada
+- **`scripts/test-social-auth-infrastructure.mjs`:**
+  - ✓ Cadastro de novo usuário com ID permanente e hash HMAC-SHA256.
+  - ✓ Rejeição de e-mail duplicado (HTTP 409 Conflict).
+  - ✓ Rejeição de senha curta (HTTP 400 Bad Request).
+  - ✓ Rejeição estrita de senha incorreta no login (HTTP 401 Unauthorized - zero bypass).
+  - ✓ Autenticação legítima com emissão de token de sessão assinado.
+  - ✓ Barreira de privacidade LGPD validada (nenhuma credencial ou dado sensível exposto).
+  - ✓ Busca e filtros combinados por nome e turma funcionando com 100% de precisão.
+  - ✓ Edição de perfil social autorizada para o próprio usuário e bloqueada para terceiros (HTTP 403).
+  - ✓ Alteração real de senha validada com invalidação da senha antiga e aceitação da nova senha.
+- **Compilação de Produção (`npm run build`):** 100% aprovada (código de saída 0).
+
+
 

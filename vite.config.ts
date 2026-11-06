@@ -20,6 +20,8 @@ export default defineConfig(({ mode }) => {
             teams: {},
             matches: {},
             match_sheets: {},
+            users: {},
+            profiles: {},
             masterPassword: 'campeao2027',
             masterMustChange: true,
           };
@@ -37,6 +39,7 @@ export default defineConfig(({ mode }) => {
                     teams: Object.values(devCloudStore.teams),
                     matches: Object.values(devCloudStore.matches),
                     match_sheets: Object.values(devCloudStore.match_sheets),
+                    profiles: Object.values(devCloudStore.profiles),
                   })
                 );
               }
@@ -154,6 +157,156 @@ export default defineConfig(({ mode }) => {
                           },
                         })
                       );
+                    }
+                    if (body.action === 'register_user') {
+                      const emailIn = String(body.email || '').trim().toLowerCase();
+                      const nameIn = String(body.name || '').trim();
+                      const passIn = String(body.password || '').trim();
+                      if (!emailIn || !nameIn || passIn.length < 6) {
+                        res.statusCode = 400;
+                        return res.end(JSON.stringify({ ok: false, error: 'Dados incompletos ou senha com menos de 6 caracteres.' }));
+                      }
+                      if (devCloudStore.users[emailIn]) {
+                        res.statusCode = 409;
+                        return res.end(JSON.stringify({ ok: false, error: 'E-mail já cadastrado.' }));
+                      }
+                      const uId = `usr_${Date.now()}`;
+                      const uObj = {
+                        id: uId,
+                        email: emailIn,
+                        name: nameIn,
+                        password: passIn,
+                        role: 'visitante',
+                        createdAtIso: new Date().toISOString(),
+                      };
+                      const pObj = {
+                        id: uId,
+                        userId: uId,
+                        displayName: nameIn,
+                        turma: body.turma || null,
+                        turmaLabel: body.turmaLabel || null,
+                        teamId: body.teamId || null,
+                        teamName: body.teamName || null,
+                        bio: body.bio || null,
+                        instagramHandle: body.instagramHandle || null,
+                        avatarUrl: body.avatarUrl || null,
+                        isAthlete: false,
+                        favoriteModalityIds: [],
+                        createdAtIso: new Date().toISOString(),
+                      };
+                      devCloudStore.users[emailIn] = uObj;
+                      devCloudStore.users[uId] = uObj;
+                      devCloudStore.profiles[uId] = pObj;
+                      return res.end(
+                        JSON.stringify({
+                          ok: true,
+                          token: `dev_token_${uId}`,
+                          user: { id: uId, email: emailIn, name: nameIn, role: 'visitante' },
+                          profile: pObj,
+                        })
+                      );
+                    }
+                    if (body.action === 'user_login') {
+                      const idIn = String(body.email || body.identifier || '').trim().toLowerCase();
+                      const passIn = String(body.password || '').trim();
+                      if (idIn === 'cangaceira@uema.com') {
+                        const curPass = devCloudStore.masterPassword || 'campeao2027';
+                        if (passIn === curPass) {
+                          return res.end(
+                            JSON.stringify({
+                              ok: true,
+                              token: 'dev_master_token_' + Date.now(),
+                              user: { id: 'usr_master_cangaceira', email: 'cangaceira@uema.com', name: 'Atlética Cangaceira', role: 'moderador_master' },
+                              profile: { id: 'usr_master_cangaceira', displayName: 'Atlética Cangaceira', role: 'moderador_master' },
+                            })
+                          );
+                        } else {
+                          res.statusCode = 401;
+                          return res.end(JSON.stringify({ ok: false, error: 'Senha incorreta.' }));
+                        }
+                      }
+                      const u = devCloudStore.users[idIn];
+                      if (u) {
+                        if (u.password !== passIn) {
+                          res.statusCode = 401;
+                          return res.end(JSON.stringify({ ok: false, error: 'Senha incorreta.' }));
+                        }
+                        const p = devCloudStore.profiles[u.id] || { id: u.id, displayName: u.name };
+                        return res.end(
+                          JSON.stringify({
+                            ok: true,
+                            token: `dev_token_${u.id}`,
+                            user: { id: u.id, email: u.email, name: u.name, role: u.role },
+                            profile: p,
+                          })
+                        );
+                      }
+                      // Checa registros
+                      const allRegs = Object.values(devCloudStore.registrations);
+                      const foundReg = allRegs.find((r) => {
+                        const em = String(r.athleteEmail || '').trim().toLowerCase();
+                        const usr = String(r.accountUsername || '').trim().toLowerCase();
+                        return em === idIn || (usr && usr === idIn);
+                      });
+                      if (foundReg) {
+                        if (foundReg.accountPassword && String(foundReg.accountPassword) !== passIn) {
+                          res.statusCode = 401;
+                          return res.end(JSON.stringify({ ok: false, error: 'Senha incorreta.' }));
+                        }
+                        const uId = `usr-${foundReg.id}`;
+                        const p = {
+                          id: uId,
+                          userId: uId,
+                          displayName: foundReg.athleteName,
+                          turma: foundReg.turma,
+                          turmaLabel: foundReg.turmaLabel,
+                          teamId: foundReg.teamId,
+                          teamName: foundReg.teamName,
+                          avatarUrl: foundReg.avatarUrl,
+                          isAthlete: true,
+                          linkedAthleteId: foundReg.linkedAthleteId || `ath-${foundReg.id}`,
+                        };
+                        return res.end(
+                          JSON.stringify({
+                            ok: true,
+                            token: `dev_token_${uId}`,
+                            user: { id: uId, email: foundReg.athleteEmail, name: foundReg.athleteName, role: 'atleta', linkedAthleteId: p.linkedAthleteId },
+                            profile: p,
+                          })
+                        );
+                      }
+                      res.statusCode = 404;
+                      return res.end(JSON.stringify({ ok: false, error: 'Conta não encontrada.' }));
+                    }
+                    if (body.action === 'change_user_password') {
+                      const emailIn = String(body.email || '').trim().toLowerCase();
+                      const newP = String(body.newPassword || '').trim();
+                      if (devCloudStore.users[emailIn]) {
+                        devCloudStore.users[emailIn].password = newP;
+                        return res.end(JSON.stringify({ ok: true, message: 'Senha alterada com sucesso.' }));
+                      }
+                      return res.end(JSON.stringify({ ok: true, message: 'Senha atualizada.' }));
+                    }
+                    if (body.action === 'update_user_profile') {
+                      const targetId = String(body.userId || body.id || '').trim();
+                      if (targetId && devCloudStore.profiles[targetId]) {
+                        devCloudStore.profiles[targetId] = {
+                          ...devCloudStore.profiles[targetId],
+                          ...body,
+                          id: targetId,
+                        };
+                        return res.end(JSON.stringify({ ok: true, profile: devCloudStore.profiles[targetId] }));
+                      }
+                      if (targetId) {
+                        devCloudStore.profiles[targetId] = { ...body, id: targetId };
+                        return res.end(JSON.stringify({ ok: true, profile: devCloudStore.profiles[targetId] }));
+                      }
+                      res.statusCode = 400;
+                      return res.end(JSON.stringify({ ok: false, error: 'ID inválido.' }));
+                    }
+                    if (body.action === 'list_public_profiles') {
+                      const allP = Object.values(devCloudStore.profiles);
+                      return res.end(JSON.stringify({ ok: true, profiles: allP, total: allP.length }));
                     }
                     if (body.action === 'athlete_login') {
                       const idIn = String(body.identifier || '').trim().toLowerCase();
