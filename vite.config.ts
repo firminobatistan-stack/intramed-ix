@@ -1,5 +1,9 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import {
+  OFFICIAL_TOURNAMENT_MATCHES,
+  OFFICIAL_UNIVERSAL_BRACKETS,
+} from './src/data/officialBracketsData';
 
 function isValidEmail(email: string): boolean {
   return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
@@ -18,11 +22,14 @@ export default defineConfig(({ mode }) => {
             registrations: {},
             athletes: {},
             teams: {},
-            matches: {},
+            matches: OFFICIAL_TOURNAMENT_MATCHES.reduce((acc, m) => {
+              acc[m.id] = m;
+              return acc;
+            }, {} as Record<string, any>),
             match_sheets: {},
             users: {},
             profiles: {},
-            brackets: {},
+            brackets: { ...OFFICIAL_UNIVERSAL_BRACKETS },
             masterPassword: 'campeao2027',
             masterMustChange: true,
             launch_config: {

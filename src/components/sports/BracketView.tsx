@@ -14,6 +14,10 @@ import {
   Layers,
 } from 'lucide-react';
 import { BracketStructure, BracketMatchSlot, Match, MatchTeamSlot } from '../../types/domain';
+import {
+  OFFICIAL_INITIAL_BRACKETS,
+  OFFICIAL_UNIVERSAL_BRACKETS,
+} from '../../data/officialData';
 import { TeamCrest } from './TeamCrest';
 import { StatusBadge } from '../ui/StatusBadge';
 import { Button } from '../ui/Button';
@@ -47,6 +51,8 @@ export const BracketView: React.FC<BracketViewProps> = ({
 
   const targetModalityId = modalityId || bracket?.categoryId || bracket?.modalityId;
   const officialBracket = targetModalityId ? officialBrackets[targetModalityId] : null;
+  const fallbackUniversal = targetModalityId ? OFFICIAL_UNIVERSAL_BRACKETS[targetModalityId] : null;
+  const fallbackInitial = targetModalityId ? OFFICIAL_INITIAL_BRACKETS[targetModalityId] : null;
 
   const modalityKnockoutMatches = targetModalityId
     ? visibleMatches.filter(
@@ -67,11 +73,13 @@ export const BracketView: React.FC<BracketViewProps> = ({
     (m) => m.phase === 'final'
   );
 
-  // Recupera as partidas dos slots originais
+  // Recupera as partidas dos slots originais com fallback em cascata (Store -> Prop -> Universal -> Initial)
   const qfMatchRaw =
     qfMatches[0] ||
     bracket?.quarterfinals?.[0]?.match ||
     (officialBracket?.stages?.find((s) => s.phase === 'quarterfinals')?.matches?.[0] as unknown as Match) ||
+    fallbackInitial?.quarterfinals?.[0]?.match ||
+    (fallbackUniversal?.stages?.find((s) => s.phase === 'quarterfinals')?.matches?.[0] as unknown as Match) ||
     null;
 
   const sf1MatchRaw =
@@ -79,6 +87,8 @@ export const BracketView: React.FC<BracketViewProps> = ({
     sfMatches[0] ||
     bracket?.semifinals?.[0]?.match ||
     (officialBracket?.stages?.find((s) => s.phase === 'semifinals')?.matches?.[0] as unknown as Match) ||
+    fallbackInitial?.semifinals?.[0]?.match ||
+    (fallbackUniversal?.stages?.find((s) => s.phase === 'semifinals')?.matches?.[0] as unknown as Match) ||
     null;
 
   const sf2MatchRaw =
@@ -86,12 +96,16 @@ export const BracketView: React.FC<BracketViewProps> = ({
     sfMatches[1] ||
     bracket?.semifinals?.[1]?.match ||
     (officialBracket?.stages?.find((s) => s.phase === 'semifinals')?.matches?.[1] as unknown as Match) ||
+    fallbackInitial?.semifinals?.[1]?.match ||
+    (fallbackUniversal?.stages?.find((s) => s.phase === 'semifinals')?.matches?.[1] as unknown as Match) ||
     null;
 
   const finalMatchRaw =
     finalMatches[0] ||
     bracket?.final?.match ||
     (officialBracket?.stages?.find((s) => s.phase === 'final')?.matches?.[0] as unknown as Match) ||
+    fallbackInitial?.final?.match ||
+    (fallbackUniversal?.stages?.find((s) => s.phase === 'final')?.matches?.[0] as unknown as Match) ||
     null;
 
   // PROGRESSÃO AUTOMÁTICA
@@ -204,7 +218,7 @@ export const BracketView: React.FC<BracketViewProps> = ({
 
   const hasAnyKnockoutMatch = Boolean(qfMatchRaw || sf1MatchRaw || sf2MatchRaw || finalMatchRaw);
 
-  const isBracketLive = launchConfig.bracketPublished && hasAnyKnockoutMatch;
+  const isBracketLive = launchConfig.bracketPublished !== false && hasAnyKnockoutMatch;
 
   // ESTADO 1: CHAVEAMENTO EM BREVE (Modo de Pré-Lançamento ou Confrontos Não Publicados)
   if (!isBracketLive) {

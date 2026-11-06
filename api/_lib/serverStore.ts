@@ -2,6 +2,10 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import {
+  OFFICIAL_TOURNAMENT_MATCHES,
+  OFFICIAL_UNIVERSAL_BRACKETS,
+} from '../../src/data/officialBracketsData';
 
 const CLOUD_STATE_FILE = path.join(os.tmpdir(), 'intramed_ix_cloud_sync_v2.json');
 
@@ -502,8 +506,29 @@ export function ensureMasterAccountProvisioned(store: CloudCollectionMap): void 
   }
 }
 
+function seedOfficialMatchesAndBrackets(store: CloudCollectionMap) {
+  if (!store.matches) store.matches = {};
+  for (const m of OFFICIAL_TOURNAMENT_MATCHES) {
+    if (!store.matches[m.id]) {
+      store.matches[m.id] = m as unknown as Record<string, unknown>;
+    }
+  }
+
+  if (!store.brackets) store.brackets = {};
+  for (const [k, v] of Object.entries(OFFICIAL_UNIVERSAL_BRACKETS)) {
+    if (!store.brackets[k]) {
+      store.brackets[k] = v as unknown as Record<string, unknown>;
+    }
+  }
+
+  if (store.launch_config) {
+    store.launch_config.bracketPublished = true;
+  }
+}
+
 export function getCloudStore(): CloudCollectionMap {
   if (global.__INTRAMED_CLOUD_STORE_V2__) {
+    seedOfficialMatchesAndBrackets(global.__INTRAMED_CLOUD_STORE_V2__);
     ensureMasterAccountProvisioned(global.__INTRAMED_CLOUD_STORE_V2__);
     return global.__INTRAMED_CLOUD_STORE_V2__;
   }
@@ -528,6 +553,7 @@ export function getCloudStore(): CloudCollectionMap {
           brackets: parsed.brackets || {},
           updatedAtIso: parsed.updatedAtIso || new Date().toISOString(),
         };
+        seedOfficialMatchesAndBrackets(global.__INTRAMED_CLOUD_STORE_V2__);
         ensureMasterAccountProvisioned(global.__INTRAMED_CLOUD_STORE_V2__);
         return global.__INTRAMED_CLOUD_STORE_V2__;
       }
@@ -551,6 +577,7 @@ export function getCloudStore(): CloudCollectionMap {
     brackets: {},
     updatedAtIso: new Date().toISOString(),
   };
+  seedOfficialMatchesAndBrackets(global.__INTRAMED_CLOUD_STORE_V2__);
   ensureMasterAccountProvisioned(global.__INTRAMED_CLOUD_STORE_V2__);
   return global.__INTRAMED_CLOUD_STORE_V2__;
 }

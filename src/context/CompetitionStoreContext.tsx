@@ -439,10 +439,14 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             favoriteAthleteIds: parsed.favoriteAthleteIds || [],
             notifications: parsed.notifications || [],
             publicProfiles: parsed.publicProfiles || [],
-            launchConfig: parsed.launchConfig || { ...DEFAULT_PUBLIC_LAUNCH_CONFIG },
+            launchConfig: {
+              ...DEFAULT_PUBLIC_LAUNCH_CONFIG,
+              ...(parsed.launchConfig || {}),
+              bracketPublished: true,
+            },
             officialBrackets: {
-              ...OFFICIAL_UNIVERSAL_BRACKETS,
               ...(parsed.officialBrackets || {}),
+              ...OFFICIAL_UNIVERSAL_BRACKETS,
             },
           };
         }
@@ -643,13 +647,25 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
         let nextLaunchConfig = prev.launchConfig || DEFAULT_PUBLIC_LAUNCH_CONFIG;
         if (payload.launchConfig && typeof payload.launchConfig === 'object') {
-          nextLaunchConfig = payload.launchConfig as PublicLaunchConfig;
+          nextLaunchConfig = {
+            ...(prev.launchConfig || DEFAULT_PUBLIC_LAUNCH_CONFIG),
+            ...payload.launchConfig,
+            bracketPublished: true,
+          };
           changed = true;
         }
 
-        let nextBrackets = prev.officialBrackets || {};
-        if (payload.brackets && typeof payload.brackets === 'object') {
-          nextBrackets = payload.brackets;
+        let nextBrackets = prev.officialBrackets || { ...OFFICIAL_UNIVERSAL_BRACKETS };
+        if (
+          payload.brackets &&
+          typeof payload.brackets === 'object' &&
+          Object.keys(payload.brackets).length > 0
+        ) {
+          nextBrackets = {
+            ...OFFICIAL_UNIVERSAL_BRACKETS,
+            ...prev.officialBrackets,
+            ...payload.brackets,
+          };
           changed = true;
         }
 

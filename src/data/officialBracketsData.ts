@@ -39,7 +39,7 @@ const OFFICIAL_TEAMS_MAP: Record<string, TeamSeedInfo> = {
   },
 };
 
-interface BracketSeedDefinition {
+export interface BracketSeedDefinition {
   modalityId: string;
   modalityName: string;
   sportSlug: ModalitySlug;
@@ -50,6 +50,14 @@ interface BracketSeedDefinition {
   seed5: string;
 }
 
+/**
+ * Relação Completa dos 16 Chaveamentos Oficiais Consolidados do IntraMed IX.
+ * Todas as modalidades seguem rigorosamente a estrutura eliminatória para 5 equipes:
+ * - Quartas: Cabeça 1 × Cabeça 2
+ * - Semifinal 1: Cabeça 3 × Vencedor das Quartas
+ * - Semifinal 2: Cabeça 4 × Cabeça 5
+ * - Final: Vencedor Semifinal 1 × Vencedor Semifinal 2
+ */
 export const OFFICIAL_CONFIGURED_SEEDS: BracketSeedDefinition[] = [
   // 1. FUTSAL MASCULINO
   {
@@ -95,7 +103,7 @@ export const OFFICIAL_CONFIGURED_SEEDS: BracketSeedDefinition[] = [
     seed4: 'soberana',
     seed5: 'colossal',
   },
-  // 5. BASQUETE FEMININO
+  // 5. BASQUETE FEMININO (Deduplicada com item 17)
   {
     modalityId: 'basquete-fem',
     modalityName: 'Basquete Feminino',
@@ -150,6 +158,83 @@ export const OFFICIAL_CONFIGURED_SEEDS: BracketSeedDefinition[] = [
     seed4: 'predadora',
     seed5: 'colossal',
   },
+  // 10. HANDEBOL MASCULINO
+  {
+    modalityId: 'handebol-masc',
+    modalityName: 'Handebol Masculino',
+    sportSlug: 'handebol',
+    seed1: 'tormenta',
+    seed2: 'soberana',
+    seed3: 'colossal',
+    seed4: 'predadora',
+    seed5: 'sanguinaria',
+  },
+  // 11. HANDEBOL FEMININO
+  {
+    modalityId: 'handebol-fem',
+    modalityName: 'Handebol Feminino',
+    sportSlug: 'handebol',
+    seed1: 'colossal',
+    seed2: 'tormenta',
+    seed3: 'sanguinaria',
+    seed4: 'predadora',
+    seed5: 'soberana',
+  },
+  // 12. BASQUETE MASCULINO
+  {
+    modalityId: 'basquete-masc',
+    modalityName: 'Basquete Masculino',
+    sportSlug: 'basquete',
+    seed1: 'colossal',
+    seed2: 'predadora',
+    seed3: 'sanguinaria',
+    seed4: 'tormenta',
+    seed5: 'soberana',
+  },
+  // 13. VÔLEI DE PRAIA MASCULINO
+  {
+    modalityId: 'volei-praia-masc',
+    modalityName: 'Vôlei de Praia Masculino',
+    sportSlug: 'volei-de-praia',
+    seed1: 'sanguinaria',
+    seed2: 'soberana',
+    seed3: 'tormenta',
+    seed4: 'colossal',
+    seed5: 'predadora',
+  },
+  // 14. VÔLEI DE PRAIA FEMININO
+  {
+    modalityId: 'volei-praia-fem',
+    modalityName: 'Vôlei de Praia Feminino',
+    sportSlug: 'volei-de-praia',
+    seed1: 'colossal',
+    seed2: 'tormenta',
+    seed3: 'predadora',
+    seed4: 'sanguinaria',
+    seed5: 'soberana',
+  },
+  // 15. TRUCO FEMININO
+  {
+    modalityId: 'truco-fem',
+    modalityName: 'Truco Feminino',
+    sportSlug: 'truco',
+    seed1: 'tormenta',
+    seed2: 'predadora',
+    seed3: 'soberana',
+    seed4: 'colossal',
+    seed5: 'sanguinaria',
+  },
+  // 16. TRUCO MASCULINO
+  {
+    modalityId: 'truco-masc',
+    modalityName: 'Truco Masculino',
+    sportSlug: 'truco',
+    seed1: 'colossal',
+    seed2: 'soberana',
+    seed3: 'predadora',
+    seed4: 'tormenta',
+    seed5: 'sanguinaria',
+  },
 ];
 
 export const CONFIGURED_MODALITY_IDS = new Set(
@@ -161,11 +246,11 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
   bracket: BracketStructure;
   universalBracket: UniversalModalityBracket;
 } {
-  const t1 = OFFICIAL_TEAMS_MAP[def.seed1] || { id: def.seed1, name: def.seed1, crestUrl: null };
-  const t2 = OFFICIAL_TEAMS_MAP[def.seed2] || { id: def.seed2, name: def.seed2, crestUrl: null };
-  const t3 = OFFICIAL_TEAMS_MAP[def.seed3] || { id: def.seed3, name: def.seed3, crestUrl: null };
-  const t4 = OFFICIAL_TEAMS_MAP[def.seed4] || { id: def.seed4, name: def.seed4, crestUrl: null };
-  const t5 = OFFICIAL_TEAMS_MAP[def.seed5] || { id: def.seed5, name: def.seed5, crestUrl: null };
+  const t1 = OFFICIAL_TEAMS_MAP[def.seed1] || { id: def.seed1, name: def.seed1, crestUrl: '' };
+  const t2 = OFFICIAL_TEAMS_MAP[def.seed2] || { id: def.seed2, name: def.seed2, crestUrl: '' };
+  const t3 = OFFICIAL_TEAMS_MAP[def.seed3] || { id: def.seed3, name: def.seed3, crestUrl: '' };
+  const t4 = OFFICIAL_TEAMS_MAP[def.seed4] || { id: def.seed4, name: def.seed4, crestUrl: '' };
+  const t5 = OFFICIAL_TEAMS_MAP[def.seed5] || { id: def.seed5, name: def.seed5, crestUrl: '' };
 
   const qfMatchId = `match_${def.modalityId}_qf`;
   const sf1MatchId = `match_${def.modalityId}_sf1`;
@@ -253,7 +338,7 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
     },
   };
 
-  // 4. Final: Vencedor da Semifinal 1 × Vencedor da Semifinal 2
+  // 4. Grande Final: Vencedor Semifinal 1 × Vencedor Semifinal 2
   const finalMatch: Match = {
     id: finalMatchId,
     modalityId: def.sportSlug,
@@ -282,50 +367,50 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
 
   const matches = [qfMatch, sf1Match, sf2Match, finalMatch];
 
+  // Estrutura clássica de BracketStructure
   const bracket: BracketStructure = {
     modalityId: def.sportSlug,
     categoryId: def.modalityId,
     isConfigured: true,
     quarterfinals: [
       {
-        id: `slot_${def.modalityId}_qf`,
+        id: `slot_${qfMatch.id}`,
         phase: 'quarterfinals',
         orderIndex: 0,
-        nextSlotId: `slot_${def.modalityId}_sf1`,
         match: qfMatch,
       },
     ],
     semifinals: [
       {
-        id: `slot_${def.modalityId}_sf1`,
+        id: `slot_${sf1Match.id}`,
         phase: 'semifinals',
         orderIndex: 0,
-        nextSlotId: `slot_${def.modalityId}_final`,
         match: sf1Match,
       },
       {
-        id: `slot_${def.modalityId}_sf2`,
+        id: `slot_${sf2Match.id}`,
         phase: 'semifinals',
         orderIndex: 1,
-        nextSlotId: `slot_${def.modalityId}_final`,
         match: sf2Match,
       },
     ],
     final: {
-      id: `slot_${def.modalityId}_final`,
+      id: `slot_${finalMatch.id}`,
       phase: 'final',
       orderIndex: 0,
       match: finalMatch,
     },
   };
 
+  // Estrutura UniversalModalityBracket
   const universalBracket: UniversalModalityBracket = {
     modalityId: def.modalityId,
     modalityName: def.modalityName,
     format: 'single_elimination',
-    formatLabel: 'Mata-mata Oficial • 5 Equipes',
+    formatLabel: 'Mata-mata 5 Equipes',
     category: def.modalityId,
     isPublished: true,
+    publishedAtIso: new Date().toISOString(),
     stages: [
       {
         id: `${def.modalityId}_stage_qf`,
@@ -344,6 +429,8 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
             status: 'scheduled',
             homeTeam: qfMatch.homeTeam,
             awayTeam: qfMatch.awayTeam,
+            homeSource: { type: 'team', label: t1.name },
+            awaySource: { type: 'team', label: t2.name },
             nextMatchId: sf1Match.id,
             nextMatchTarget: 'away',
           },

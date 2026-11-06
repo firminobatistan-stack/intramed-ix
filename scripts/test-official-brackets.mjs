@@ -1,4 +1,4 @@
-// Test verification for IntraMed Stage 1 Official Brackets
+// Test verification for IntraMed Stage 2 - All 16 Official Tournament Brackets
 import {
   OFFICIAL_CONFIGURED_SEEDS,
   CONFIGURED_MODALITY_IDS,
@@ -7,15 +7,15 @@ import {
   OFFICIAL_UNIVERSAL_BRACKETS
 } from '../src/data/officialBracketsData.ts';
 
-console.log('--- TEST: OFFICIAL BRACKET STRUCTURE AUDIT ---');
+console.log('=== TEST: ALL 16 OFFICIAL MODALITIES BRACKET AUDIT ===');
 
-// 1. Verify exact 9 modalities
-console.log(`Configured modality count: ${CONFIGURED_MODALITY_IDS.size}`);
-if (CONFIGURED_MODALITY_IDS.size !== 9) {
-  throw new Error(`Expected 9 modalities, got ${CONFIGURED_MODALITY_IDS.size}`);
+// 1. Verify exact 16 unique modalities
+console.log(`Configured unique modality count: ${CONFIGURED_MODALITY_IDS.size}`);
+if (CONFIGURED_MODALITY_IDS.size !== 16) {
+  throw new Error(`Expected exactly 16 modalities, got ${CONFIGURED_MODALITY_IDS.size}`);
 }
 
-const expectedModalities = [
+const expected16Modalities = [
   'futsal-masc',
   'futsal-fem',
   'volei-fem',
@@ -24,22 +24,29 @@ const expectedModalities = [
   'tenis-mesa-masc',
   'tenis-mesa-fem',
   'sinuca-fem',
-  'sinuca-masc'
+  'sinuca-masc',
+  'handebol-masc',
+  'handebol-fem',
+  'basquete-masc',
+  'volei-praia-masc',
+  'volei-praia-fem',
+  'truco-fem',
+  'truco-masc'
 ];
 
-for (const modId of expectedModalities) {
+for (const modId of expected16Modalities) {
   if (!CONFIGURED_MODALITY_IDS.has(modId)) {
     throw new Error(`Missing expected modality: ${modId}`);
   }
 }
-console.log('✓ All 9 specified modalities are present in CONFIGURED_MODALITY_IDS');
+console.log('✓ All 16 specified modalities are present in CONFIGURED_MODALITY_IDS');
 
-// 2. Verify total matches: 9 * 4 = 36 matches
+// 2. Verify total matches: 16 * 4 = 64 matches
 console.log(`Total tournament matches: ${OFFICIAL_TOURNAMENT_MATCHES.length}`);
-if (OFFICIAL_TOURNAMENT_MATCHES.length !== 36) {
-  throw new Error(`Expected 36 matches, got ${OFFICIAL_TOURNAMENT_MATCHES.length}`);
+if (OFFICIAL_TOURNAMENT_MATCHES.length !== 64) {
+  throw new Error(`Expected 64 matches (16 x 4), got ${OFFICIAL_TOURNAMENT_MATCHES.length}`);
 }
-console.log('✓ Exactly 36 matches created (4 per modality: QF, SF1, SF2, FIN)');
+console.log('✓ Exactly 64 matches created (4 per modality: QF, SF1, SF2, FIN)');
 
 // 3. Verify dates, times, venues are null
 for (const match of OFFICIAL_TOURNAMENT_MATCHES) {
@@ -47,10 +54,10 @@ for (const match of OFFICIAL_TOURNAMENT_MATCHES) {
     throw new Error(`Match ${match.id} has non-null schedule or venue! Date: ${match.scheduledDate}, Time: ${match.scheduledTime}, Venue: ${match.venue}`);
   }
 }
-console.log('✓ All 36 matches have null scheduledDate, scheduledTime, and venue');
+console.log('✓ All 64 matches have null scheduledDate, scheduledTime, and venue');
 
 // 4. Verify exact seeds per modality
-for (const modId of expectedModalities) {
+for (const modId of expected16Modalities) {
   const seedDef = OFFICIAL_CONFIGURED_SEEDS.find(s => s.modalityId === modId);
   if (!seedDef) {
     throw new Error(`Modality ${modId} not found in OFFICIAL_CONFIGURED_SEEDS`);
@@ -91,83 +98,19 @@ for (const modId of expectedModalities) {
     throw new Error(`Modality ${modId} FIN mismatch. Expected null vs null, got ${fin.homeTeam.teamId} vs ${fin.awayTeam.teamId}`);
   }
 
-  console.log(`✓ ${modId}: Seeds & Matchups verified: [QF: ${seedDef.seed1} vs ${seedDef.seed2}] -> [SF1: ${seedDef.seed3} vs QF] & [SF2: ${seedDef.seed4} vs ${seedDef.seed5}] -> [FIN: SF1 vs SF2]`);
+  console.log(`✓ ${modId.padEnd(16)}: [QF: ${seedDef.seed1} × ${seedDef.seed2}] -> [SF1: ${seedDef.seed3} × QF] & [SF2: ${seedDef.seed4} × ${seedDef.seed5}] -> [FIN: SF1 × SF2]`);
 }
 
 // 5. Verify Bracket structures
-for (const modId of expectedModalities) {
+for (const modId of expected16Modalities) {
   const ub = OFFICIAL_UNIVERSAL_BRACKETS[modId];
   if (!ub || ub.stages.length !== 3) {
     throw new Error(`Universal bracket invalid for ${modId}`);
   }
-}
-console.log('✓ All 9 universal brackets initialized with 3 stages (Quartas, Semifinal, Final)');
-
-// 6. Test Winner Resolution Functionality (Progression simulation)
-function resolveMatchWinner(match) {
-  if (!match || match.status !== 'finished') return null;
-  const hScore = match.homeScore ?? match.homeTeam?.score;
-  const aScore = match.awayScore ?? match.awayTeam?.score;
-  if (hScore === null || hScore === undefined || aScore === null || aScore === undefined) return null;
-  if (hScore > aScore) {
-    return { id: match.homeTeam.teamId, name: match.homeTeam.teamName };
-  } else if (aScore > hScore) {
-    return { id: match.awayTeam.teamId, name: match.awayTeam.teamName };
+  if (!ub.isPublished) {
+    throw new Error(`Universal bracket not published for ${modId}`);
   }
-  return null;
 }
+console.log('✓ All 16 universal brackets initialized with 3 stages (Quartas, Semifinal, Final) and isPublished=true');
 
-// Test progression on futsal-masc:
-const qfMatch = {
-  status: 'finished',
-  homeTeam: { teamId: 'sanguinaria', teamName: 'Sanguinária', score: 3 },
-  awayTeam: { teamId: 'soberana', teamName: 'Soberana', score: 1 },
-  homeScore: 3,
-  awayScore: 1
-};
-const qfWinner = resolveMatchWinner(qfMatch);
-if (qfWinner?.id !== 'sanguinaria') {
-  throw new Error(`Expected QF winner sanguinaria, got ${qfWinner?.id}`);
-}
-console.log(`✓ Automatic progression simulation: QF winner is ${qfWinner.name} (${qfWinner.id})`);
-
-const sf1Match = {
-  status: 'finished',
-  homeTeam: { teamId: 'tormenta', teamName: 'Tormenta', score: 2 },
-  awayTeam: { teamId: qfWinner.id, teamName: qfWinner.name, score: 4 },
-  homeScore: 2,
-  awayScore: 4
-};
-const sf1Winner = resolveMatchWinner(sf1Match);
-if (sf1Winner?.id !== 'sanguinaria') {
-  throw new Error(`Expected SF1 winner sanguinaria, got ${sf1Winner?.id}`);
-}
-console.log(`✓ Automatic progression simulation: SF1 winner is ${sf1Winner.name} (${sf1Winner.id})`);
-
-const sf2Match = {
-  status: 'finished',
-  homeTeam: { teamId: 'colossal', teamName: 'Colossal', score: 5 },
-  awayTeam: { teamId: 'predadora', teamName: 'Predadora', score: 2 },
-  homeScore: 5,
-  awayScore: 2
-};
-const sf2Winner = resolveMatchWinner(sf2Match);
-if (sf2Winner?.id !== 'colossal') {
-  throw new Error(`Expected SF2 winner colossal, got ${sf2Winner?.id}`);
-}
-console.log(`✓ Automatic progression simulation: SF2 winner is ${sf2Winner.name} (${sf2Winner.id})`);
-
-const finalMatch = {
-  status: 'finished',
-  homeTeam: { teamId: sf1Winner.id, teamName: sf1Winner.name, score: 3 },
-  awayTeam: { teamId: sf2Winner.id, teamName: sf2Winner.name, score: 2 },
-  homeScore: 3,
-  awayScore: 2
-};
-const champion = resolveMatchWinner(finalMatch);
-if (champion?.id !== 'sanguinaria') {
-  throw new Error(`Expected Champion sanguinaria, got ${champion?.id}`);
-}
-console.log(`✓ Automatic progression simulation: Final Champion is ${champion.name} (${champion.id})`);
-
-console.log('\n--- ALL AUDIT TESTS PASSED SUCCESSFULLY! ---');
+console.log('\n=== ALL 16 MODALITIES AUDIT TESTS PASSED SUCCESSFULLY! ===');

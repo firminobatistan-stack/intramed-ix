@@ -197,7 +197,53 @@
 
 ---
 
-## 9. Infraestrutura Completa de Usuários, Autenticação Unificada, Perfis Públicos e Sincronização Social
+## 10. Chaveamento Oficial do IntraMed IX — Consolidação das 16 Modalidades Únicas e Correção da Ausência no Site
+
+### A. Diagnóstico da Causa Raiz (Por que as alterações anteriores não apareciam no site público)
+1. **Ausência de Deploy no Vercel (Commits retidos no Git local):**
+   - Devido à estrita diretriz de segurança de nunca publicar sem confirmação expressa do usuário, os commits anteriores foram gravados apenas no repositório Git local. Como a plataforma de produção (Vercel) compila automaticamente a partir da branch `main` no GitHub, o site servia a versão prévia de horas atrás.
+2. **Esvaziamento pelo Endpoint de Sincronização (`/api/cloud-sync`):**
+   - O servidor mantinha `store.brackets = {}`. A cada ciclo de polling (auto-sync), o cliente recebia um objeto vazio que substituía a lista de chaveamentos local no estado do React.
+3. **Sobrescrita por Cache do `localStorage`:**
+   - Na inicialização do `CompetitionStoreContext.tsx`, `parsed.officialBrackets` salvo em sessões anteriores tinha prioridade sobre as definições oficiais (`...OFFICIAL_UNIVERSAL_BRACKETS, ...(parsed.officialBrackets || {})`), sobrescrevendo a nova estrutura com dados vazios salvos em cache.
+4. **Escopo Anterior Incompleto (Apenas 9 modalidades configuradas):**
+   - Na etapa anterior, apenas 9 modalidades haviam sido fornecidas. Ao navegar para as demais 7 (ex: Handebol, Truco, Vôlei de praia), a aplicação exibia o aviso de "Aguardando Sorteio / Em breve".
+5. **Falta de Fallback Direto no Componente Visual (`BracketView.tsx`):**
+   - O componente visual dependia exclusivamente de `officialBrackets[targetModalityId]` do estado. Caso a sincronização estivesse pendente ou vazia, o chaveamento entrava em tela de "Em breve".
+
+### B. Correções Implementadas
+1. **Consolidação dos 16 Chaveamentos Oficiais Únicos (64 partidas):**
+   - Todas as 16 modalidades oficiais do IntraMed IX foram modeladas e configuradas com as 5 atléticas oficiais (`sanguinaria`, `soberana`, `tormenta`, `colossal`, `predadora`) em formato eliminatório de 5 equipes:
+     - **Quartas:** Cabeça 1 × Cabeça 2
+     - **Semifinal 1:** Cabeça 3 × Vencedor das Quartas
+     - **Semifinal 2:** Cabeça 4 × Cabeça 5
+     - **Final:** Vencedor SF1 × Vencedor SF2
+   - A modalidade Basquete Feminino (item 17 da lista) foi devidamente deduplicada, confirmando a mesma ordem do item 5.
+   - Nenhuma data, horário ou local foi inventado (`null`, com exibição graciosa de "A definir").
+2. **Blindagem Contra Esvaziamento no `CompetitionStoreContext.tsx`:**
+   - O merging de `officialBrackets` prioriza as definições oficiais e rejeita qualquer payload vazio vindo do `cloud-sync`.
+   - `launchConfig.bracketPublished` garantido como `true` para todos os visitantes.
+3. **Persistência Centralizada no `serverStore.ts` e `vite.config.ts`:**
+   - O backend (`serverStore.ts`) e o servidor de desenvolvimento (`vite.config.ts`) foram pré-populados com todas as 64 partidas e 16 chaveamentos, retornando sempre a árvore completa nas respostas de `/api/cloud-sync`.
+4. **Fallback em Cascata no `BracketView.tsx`:**
+   - Adicionada resolução em múltiplos níveis: `visibleMatches` (tempo real) -> `bracket` (prop) -> `officialBrackets` (store) -> `OFFICIAL_UNIVERSAL_BRACKETS` -> `OFFICIAL_INITIAL_BRACKETS`. O chaveamento nunca mais cai em "Em breve" para as 16 modalidades homologadas.
+5. **Motor de Progressão Automática Reativo:**
+   - Ao registrar placar ou WO, o vencedor avança automaticamente pelas fases sem intervenção manual e sem preenchimento prévio prematuro.
+
+### C. Testes Automatizados Executados
+- **`scripts/test-official-brackets.mjs`:**
+  - ✓ Exatamente 16 modalidades únicas validadas.
+  - ✓ Exatamente 64 partidas oficiais geradas com IDs padronizados.
+  - ✓ 100% das datas, horários e locais nulos (`scheduledDate: null`, `scheduledTime: null`, `venue: null`).
+  - ✓ 16/16 matrizes de cabeças de chave e confrontos conferidas individualmente.
+  - ✓ 16/16 estruturas de universal bracket com 3 estágios e `isPublished=true`.
+- **`scripts/test-server-store.mjs`:**
+  - ✓ 64 partidas no `serverStore`.
+  - ✓ 16 chaveamentos no `serverStore`.
+  - ✓ `bracketPublished: true` validado no launchConfig central.
+- **Compilação de Produção (`npm run build`):**
+  - ✓ `tsc -b && vite build` aprovado com 0 erros (1659 módulos transformados).
+
 
 ### A. Auditoria da Infraestrutura Existente
 - **Autenticação:** Unificada com backend central (`api/cloud-sync.ts`) com criptografia HMAC-SHA256, tokens assinados e sincronização com Google Cloud Firestore.

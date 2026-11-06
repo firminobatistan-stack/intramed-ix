@@ -406,5 +406,5 @@ export const INITIAL_MATCHES: Match[] = OFFICIAL_TOURNAMENT_MATCHES;
 export const INITIAL_STANDINGS: Record<string, StandingEntry[]> = {};
 export const INITIAL_STATISTICS: Record<string, ModalityStatisticItem[]> = {};
 export const INITIAL_BRACKETS: Record<string, BracketStructure> = OFFICIAL_INITIAL_BRACKETS;
-export { OFFICIAL_UNIVERSAL_BRACKETS, CONFIGURED_MODALITY_IDS };
+export { OFFICIAL_INITIAL_BRACKETS, OFFICIAL_UNIVERSAL_BRACKETS, CONFIGURED_MODALITY_IDS };
 export const INITIAL_USER_PROFILE: UserProfile | null = null;
