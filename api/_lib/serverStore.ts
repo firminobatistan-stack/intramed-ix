@@ -891,7 +891,7 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
       collectionsToHydrate.map(async (colName) => {
         const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(
           colName
-        )}?pageSize=300`;
+        )}?pageSize=300&key=${FIREBASE_API_KEY}`;
         const res = await fetch(url).catch(() => null);
         if (!res || !res.ok) return;
         const { data } = await parseJsonSafe(res);
@@ -968,7 +968,7 @@ export async function checkFirestoreHealth(force = false): Promise<FirestoreHeal
   }
 
   try {
-    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/system_config?key=${FIREBASE_API_KEY}`;
     const res = await fetch(url, { method: 'GET' });
     const data = await res.json().catch(() => ({}));
 
@@ -1029,7 +1029,7 @@ export async function MirrorDocumentToFirestoreRest(
     }
     const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(
       collectionName
-    )}/${encodeURIComponent(docId)}`;
+    )}/${encodeURIComponent(docId)}?key=${FIREBASE_API_KEY}`;
 
     const res = await fetch(url, {
       method: 'PATCH',
