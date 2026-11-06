@@ -25,6 +25,7 @@ import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { Registration, TurmaMedicina } from '../types/domain';
 import { TURMAS_MEDICINA } from '../data/registrationData';
+import { exportRegistrationsToExcel } from '../utils/excelRegistrationsExporter';
 
 export const AdminRegistrationsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -50,6 +51,7 @@ export const AdminRegistrationsPage: React.FC = () => {
   const [adminNotes, setAdminNotes] = useState('');
   const [selectedAuditReg, setSelectedAuditReg] = useState<Registration | null>(null);
   const [selectedReceiptReg, setSelectedReceiptReg] = useState<Registration | null>(null);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
 
   // Métricas
   const totalRegistrations = registrations.length;
@@ -140,6 +142,22 @@ export const AdminRegistrationsPage: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const handleExportExcel = async () => {
+    try {
+      setIsExportingExcel(true);
+      await exportRegistrationsToExcel(registrations, {
+        title: 'INTRAMED IX',
+        edition: '9ª Edição',
+        organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+      });
+    } catch (err) {
+      console.error('Falha ao gerar planilha Excel, acionando fallback CSV:', err);
+      handleExportCsv();
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
   const handleApprove = async () => {
     if (!validatingReg) return;
     await validateMemberDiscount(
@@ -193,9 +211,20 @@ export const AdminRegistrationsPage: React.FC = () => {
               variant="secondary"
               size="sm"
               leftIcon={<Download className="w-4 h-4" />}
-              onClick={handleExportCsv}
+              onClick={handleExportExcel}
+              disabled={isExportingExcel}
+              title="Baixar planilha executiva completa com 5 abas (.xlsx)"
             >
-              Exportar Planilha (CSV)
+              {isExportingExcel ? 'Gerando Excel...' : 'Exportar Planilha Oficial (Excel)'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExportCsv}
+              className="text-xs text-slate-500 hover:text-slate-800"
+              title="Baixar cópia legada em formato texto (.csv)"
+            >
+              CSV
             </Button>
             <Button
               variant="primary"

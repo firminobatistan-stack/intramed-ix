@@ -14,12 +14,14 @@ export default defineConfig(({ mode }) => {
       {
         name: 'mercadopago-api-dev-server',
         configureServer(server) {
-          const devCloudStore: Record<string, Record<string, Record<string, unknown>>> = {
+          const devCloudStore: Record<string, any> = {
             registrations: {},
             athletes: {},
             teams: {},
             matches: {},
             match_sheets: {},
+            masterPassword: 'campeao2027',
+            masterMustChange: true,
           };
 
           server.middlewares.use(async (req, res, next) => {
@@ -90,6 +92,66 @@ export default defineConfig(({ mode }) => {
                           success: true,
                           matchId: mId,
                           hasPassword: Boolean(pin),
+                        })
+                      );
+                    }
+                    if (body.action === 'admin_login') {
+                      const emailIn = String(body.email || '').trim().toLowerCase();
+                      const passIn = String(body.password || '').trim();
+                      const masterEmail = 'cangaceira@uema.com';
+                      if (emailIn === masterEmail) {
+                        const currentMasterPass = devCloudStore.masterPassword || 'campeao2027';
+                        const mustChange = devCloudStore.masterMustChange !== false && currentMasterPass === 'campeao2027';
+                        if (passIn === currentMasterPass) {
+                          return res.end(
+                            JSON.stringify({
+                              ok: true,
+                              token: 'dev_signed_master_token_' + Date.now(),
+                              role: 'moderador_master',
+                              mustChangePassword: mustChange,
+                              user: {
+                                id: 'usr_master_cangaceira',
+                                email: masterEmail,
+                                name: 'Atlética Cangaceira',
+                                role: 'moderador_master',
+                                organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+                                mustChangePassword: mustChange,
+                              },
+                            })
+                          );
+                        } else {
+                          res.statusCode = 401;
+                          return res.end(JSON.stringify({ ok: false, error: 'Senha administrativa incorreta.' }));
+                        }
+                      }
+                    }
+                    if (body.action === 'change_admin_password') {
+                      const newPass = String(body.newPassword || '').trim();
+                      if (newPass.length < 6) {
+                        res.statusCode = 400;
+                        return res.end(
+                          JSON.stringify({
+                            ok: false,
+                            error: 'A nova senha deve possuir no mínimo 6 caracteres.',
+                          })
+                        );
+                      }
+                      devCloudStore.masterPassword = newPass;
+                      devCloudStore.masterMustChange = false;
+                      return res.end(
+                        JSON.stringify({
+                          ok: true,
+                          token: 'dev_unlocked_master_token_' + Date.now(),
+                          message: 'Senha atualizada com sucesso!',
+                          mustChangePassword: false,
+                          user: {
+                            id: 'usr_master_cangaceira',
+                            email: 'cangaceira@uema.com',
+                            name: 'Atlética Cangaceira',
+                            role: 'moderador_master',
+                            organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
+                            mustChangePassword: false,
+                          },
                         })
                       );
                     }

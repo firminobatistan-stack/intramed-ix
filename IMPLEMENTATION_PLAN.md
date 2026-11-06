@@ -151,3 +151,48 @@
 - [x] Fluxos Desktop e Mobile unificados e consistentes.
 - [x] Segurança aplicada e testada para administradores e atletas normais.
 
+---
+
+## 8. Auditoria e Correção das Súmulas Automáticas & Relatório Executivo de Inscrições (Excel .xlsx)
+
+### A. Auditoria e Correção da Súmula Automática (Parte 1)
+1. **Causa Raiz do Não Registro do Cartão Vermelho:**
+   - Em `src/data/quickActionsConfig.ts`, a ação de expulsão estava disparando o evento com `type: 'expulsion'`.
+   - No componente de geração da súmula (`src/pages/GeneratedMatchSheetPage.tsx`), a verificação de desqualificação/cartão vermelho considerava apenas `e.type === 'red_card' || e.type === 'disqualification'`, enquanto a expulsão direta era tratada como `e.type === 'expulsion'` e jogada no rodapé de relatório, não preenchendo a coluna `VER` na grade de atletas.
+   - Além disso, a lista de atletas das equipes estava limitada a 10 linhas (`slice(0, 10)`), omitindo atletas reservas e substitutos em súmulas oficiais de Futsal (14 atletas), Handebol (16 atletas) e Basquete (12 atletas).
+2. **Implementações Realizadas:**
+   - **Módulo do Operador (`LiveMatchSheetOperatorPage.tsx`):**
+     - Detecção automática de 2º cartão amarelo para o mesmo atleta na mesma partida: ao confirmar o 2º amarelo, o sistema registra tanto a advertência quanto a expulsão automática (`type: 'red_card'`), emitindo alerta visual prévio ao operador.
+     - Botão de expulsão direta padronizado para emitir `type: 'red_card'` com label oficial.
+   - **Módulo de Exibição e Impressão da Súmula (`GeneratedMatchSheetPage.tsx`):**
+     - Súmula agora reconhece qualquer formato (`red_card`, `expulsion`, `disqualification`, 2º amarelo ou 3ª exclusão de 2min no Handebol) e registra o 'X' e o minuto exato na coluna disciplinar correspondente.
+     - Nova tabela detalhada de **Ocorrências Disciplinares e Faltas Individuais** renderizada antes das assinaturas de arbitragem em todas as modalidades coletivas (Futsal, Basquete, Handebol e Voleibol).
+     - Suporte a Gol Contra (`own_goal`): pontua diretamente no placar da equipe adversária sem atribuir gol a favor na contagem individual do atleta.
+     - Capacidade de escalação ampliada: Futsal (14 atletas), Handebol (16 atletas), Basquete (12 atletas).
+   - **Motor de Estatísticas (`src/utils/statsEngine.ts`):**
+     - Contabilização disciplinar corrigida em nível de equipe e atleta, assegurando que o 2º cartão amarelo incremente tanto a contagem de amarelos quanto a de vermelhos sem discrepâncias no ranking de fair play.
+
+### B. Reformulação da Planilha de Inscrições (Excel .xlsx Multi-Aba) (Parte 2)
+1. **Estrutura com 5 Abas Oficiais e Identidade Visual Atlética Cangaceira:**
+   - Instalado e integrado o motor nativo `exceljs` (`src/utils/excelRegistrationsExporter.ts`).
+   - Aplicada a paleta oficial da Atlética Cangaceira: Azul Marinho (`#0B218A`), Dourado (`#FACC15`), Ardósia Escuro (`#1E293B`) e fundos contrastantes com zebrado suave (`#F8FAFC`).
+   - **Aba 1 (DASHBOARD GERAL):** 8 cards de KPIs estilizados (Total de Inscritos, Confirmados/Pagos, Pendentes, Cancelados, Taxa de Conversão %, Sócios Cangaceira, Não-Sócios, Sócios Pendentes de Validação) + Consolidação Financeira (Receita Confirmada, Prevista e Potencial Total).
+   - **Aba 2 (INSCRITOS POR TURMA):** Tabela analítica completa agrupada por Turma/Equipe de Medicina UEMA com total de inscritos, pagantes, pendentes, sócios, % de representação e volumes financeiros por turma, finalizada com linha consolidada de Total Geral.
+   - **Aba 3 (PERFIL DOS INSCRITOS):** Distribuição estrita das categorias informadas pelos participantes no formulário (sem inferências indevidas) e consolidação da condição de sócio perante a diretoria da Atlética Cangaceira.
+   - **Aba 4 (PAGAMENTOS E SITUAÇÃO):** Detalhamento dos status de liquidação e distribuição por canal/método de pagamento (Mercado Pago PIX, Cartão, Transferência/Manual).
+   - **Aba 5 (LISTA COMPLETA DE INSCRITOS):** Tabela nominal completa com congelamento de cabeçalho na linha 4 (`freezePanes`), filtros automáticos em todas as colunas (`autoFilter`), largura de coluna ajustada, formatação monetária padrão BRL (`R$ #,##0.00`) e formatação condicional de status (Verde para Pago, Âmbar para Pendente, Vermelho para Cancelado).
+2. **Atualização da Interface (`AdminRegistrationsPage.tsx`):**
+   - Substituído o botão básico por "Exportar Planilha Oficial (Excel)" com spinner e feedback durante o processamento, mantendo opção secundária de download legado em CSV.
+
+### C. Bateria de Testes Automatizados Executada
+- **`scripts/test-scoresheet-cards.mjs`:**
+  - ✓ Expulsão por 2º cartão amarelo validada na súmula com marcação de tempo.
+  - ✓ Expulsão direta registrada na súmula e estatísticas disciplinares.
+  - ✓ Gol contra pontua para a equipe adversária sem creditar gol ao atleta.
+  - ✓ 3 Exclusões de 2 min no Handebol geram cartão vermelho e desqualificação automática.
+  - ✓ Workbook Excel de 5 abas gerado com integridade e buffers válidos.
+- **`scripts/test-master-auth.mjs`:** 12/12 cenários aprovados.
+- **`scripts/test-sync-scenarios.mjs`:** 10/10 cenários de concorrência e sincronização aprovados.
+- **Compilação de Produção (`npm run build`):** Sucesso absoluto (0 erros, 1657 módulos transformados).
+
+

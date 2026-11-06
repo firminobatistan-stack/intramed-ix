@@ -57,6 +57,7 @@ export function getEventPointsDelta(ev: {
   }
   switch (ev.type) {
     case 'goal':
+    case 'own_goal':
     case 'point_1':
     case 'set_point':
     case 'seven_meters':
@@ -131,7 +132,14 @@ export function recomputeMatchAndSheetFromEvents(
         awayScore: 0,
         isFinished: false,
       };
-      if (ev.teamSide === 'home') {
+      const scoringSide =
+        ev.type === 'own_goal'
+          ? ev.teamSide === 'home'
+            ? 'away'
+            : 'home'
+          : ev.teamSide;
+
+      if (scoringSide === 'home') {
         existingPeriod.homeScore += delta;
         homeTotalPoints += delta;
       } else {
@@ -443,6 +451,10 @@ export function computeAthleteModalityStats(
       }
     }
 
+    if (matchYC >= 2 && matchRC === 0) {
+      matchRC += 1;
+    }
+
     const isMatchOfficiallyFinished = match.status === 'finished' || sheet.isClosed;
     const isMatchLive = match.status === 'live' || match.status === 'halftime';
 
@@ -652,17 +664,47 @@ export function computeTeamStats(
     const sheet = sheetsByMatchId[match.id];
     if (sheet) {
       const validEvents = getValidUniqueEvents(sheet.events);
+      const cardsByAthlete = new Map<string, { yc: number; rc: number }>();
+      let unassignedYC = 0;
+      let unassignedRC = 0;
+
       for (const ev of validEvents) {
         if (ev.teamSide !== mySide) continue;
-        if (ev.type === 'yellow_card') yellowCards += 1;
+        const key = ev.athleteId || (ev.athleteName ? ev.athleteName.trim().toLowerCase() : null);
+        if (ev.type === 'yellow_card') {
+          if (key) {
+            const cur = cardsByAthlete.get(key) || { yc: 0, rc: 0 };
+            cur.yc += 1;
+            cardsByAthlete.set(key, cur);
+          } else {
+            unassignedYC += 1;
+          }
+        }
         if (
           ev.type === 'red_card' ||
           ev.type === 'expulsion' ||
           ev.type === 'disqualification'
         ) {
-          redCards += 1;
+          if (key) {
+            const cur = cardsByAthlete.get(key) || { yc: 0, rc: 0 };
+            cur.rc += 1;
+            cardsByAthlete.set(key, cur);
+          } else {
+            unassignedRC += 1;
+          }
         }
       }
+
+      let matchTeamYC = unassignedYC;
+      let matchTeamRC = unassignedRC;
+      for (const { yc, rc } of cardsByAthlete.values()) {
+        matchTeamYC += yc;
+        const totalRC = rc > 0 ? rc : (yc >= 2 ? 1 : 0);
+        matchTeamRC += totalRC;
+      }
+
+      yellowCards += matchTeamYC;
+      redCards += matchTeamRC;
     }
 
     recentCapsules.push({

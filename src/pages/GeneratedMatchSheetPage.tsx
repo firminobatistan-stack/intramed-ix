@@ -101,12 +101,18 @@ export const GeneratedMatchSheetPage: React.FC = () => {
   const isScoringEvent = (ev: MatchEvent) =>
     [
       'goal',
+      'own_goal',
       'point_1',
       'point_2',
       'point_3',
       'set_point',
       'seven_meters',
       'penalty_goal',
+      'direct_free_throw',
+      'volleyball_ace',
+      'volleyball_attack',
+      'volleyball_block',
+      'volleyball_opponent_error',
     ].includes(ev.type);
 
   const getEventDelta = (ev: MatchEvent): number => {
@@ -117,10 +123,16 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     if (ev.type === 'point_2') return 2;
     if (
       ev.type === 'goal' ||
+      ev.type === 'own_goal' ||
       ev.type === 'point_1' ||
       ev.type === 'set_point' ||
       ev.type === 'seven_meters' ||
-      ev.type === 'penalty_goal'
+      ev.type === 'penalty_goal' ||
+      ev.type === 'direct_free_throw' ||
+      ev.type === 'volleyball_ace' ||
+      ev.type === 'volleyball_attack' ||
+      ev.type === 'volleyball_block' ||
+      ev.type === 'volleyball_opponent_error'
     ) {
       return 1;
     }
@@ -140,7 +152,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
         const exists = combinedPlayers.some(
           (p) =>
             (ev.athleteId && p.athleteId === ev.athleteId) ||
-            p.athleteName.toLowerCase() === evAthName.toLowerCase()
+            p.athleteName.trim().toLowerCase() === evAthName.trim().toLowerCase()
         );
         if (!exists) {
           combinedPlayers.push({
@@ -158,13 +170,14 @@ export const GeneratedMatchSheetPage: React.FC = () => {
         (e) =>
           (e.athleteId && e.athleteId === p.athleteId) ||
           (e.athleteName &&
-            e.athleteName.toLowerCase() === p.athleteName.toLowerCase())
+            p.athleteName &&
+            e.athleteName.trim().toLowerCase() === p.athleteName.trim().toLowerCase())
       );
 
       let goalsCount = 0;
       const goalSeq: number[] = [];
       for (const ev of pEvents) {
-        if (isScoringEvent(ev)) {
+        if (isScoringEvent(ev) && ev.type !== 'own_goal') {
           const d = getEventDelta(ev);
           for (let i = 0; i < d; i += 1) {
             goalsCount += 1;
@@ -173,13 +186,40 @@ export const GeneratedMatchSheetPage: React.FC = () => {
         }
       }
 
-      const yellowEv = pEvents.find((e) => e.type === 'yellow_card');
+      const yellowEvs = pEvents.filter((e) => e.type === 'yellow_card');
+      const yellowEv = yellowEvs[0];
+      const secondYellowEv = yellowEvs[1];
       const suspEvs = pEvents.filter((e) => e.type === 'suspension_2min');
-      const disqEv = pEvents.find(
-        (e) => e.type === 'red_card' || e.type === 'disqualification'
+
+      // Expulsão direta ou desqualificação
+      const directDisqEv = pEvents.find(
+        (e) =>
+          e.type === 'red_card' ||
+          e.type === 'expulsion' ||
+          e.type === 'disqualification'
       );
-      const expEv = pEvents.find((e) => e.type === 'expulsion');
-      const foulsCount = pEvents.filter((e) => e.type === 'foul').length;
+
+      // Desqualificação / Cartão Vermelho (VER / D):
+      // 1) Vermelho direto, expulsão ou desqualificação;
+      // 2) Acúmulo de 2 cartões amarelos;
+      // 3) No Handebol, 3 exclusões de 2 minutos.
+      const disqEv =
+        directDisqEv ||
+        secondYellowEv ||
+        (sheet.modalityId === 'handebol' && suspEvs.length >= 3 ? suspEvs[2] : undefined);
+
+      const expEv =
+        pEvents.find((e) => e.type === 'expulsion') ||
+        pEvents.find((e) => e.type === 'disqualification') ||
+        directDisqEv;
+
+      const foulsCount = pEvents.filter(
+        (e) =>
+          e.type === 'foul' ||
+          e.type === 'team_foul' ||
+          e.type === 'technical_foul' ||
+          e.type === 'unsportsmanlike_foul'
+      ).length;
 
       return {
         jerseyNumber: p.jerseyNumber ?? '',
@@ -348,6 +388,97 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     }
   };
 
+  const disciplinaryEvents = chronologicalEvents.filter(
+    (e) =>
+      e.type === 'yellow_card' ||
+      e.type === 'red_card' ||
+      e.type === 'expulsion' ||
+      e.type === 'disqualification' ||
+      e.type === 'suspension_2min' ||
+      e.type === 'technical_foul' ||
+      e.type === 'unsportsmanlike_foul'
+  );
+
+  const renderDisciplinaryTable = () => (
+    <div className="border-2 border-black text-[9px]">
+      <div className="bg-slate-100 p-1 font-extrabold border-b border-black flex items-center justify-between">
+        <span className="uppercase tracking-tight">RELATÓRIO DE INFRAÇÕES &amp; OCORRÊNCIAS DISCIPLINARES (CARTÕES)</span>
+        <span className="text-[8px] font-mono text-slate-700">Auditado Oficialmente pelo IntraMed IX</span>
+      </div>
+      {disciplinaryEvents.length > 0 ? (
+        <div className="divide-y divide-black text-[8px]">
+          <div className="grid grid-cols-[48px_110px_28px_1fr_130px_1fr] divide-x divide-black font-extrabold bg-slate-50 text-center py-0.5">
+            <span>Tempo</span>
+            <span>Equipe</span>
+            <span>Nº</span>
+            <span className="text-left px-1">Atleta Apenado</span>
+            <span>Punição Aplicada</span>
+            <span className="text-left px-1">Motivo / Observações da Arbitragem</span>
+          </div>
+          {disciplinaryEvents.map((ev, idx) => {
+            const isRed =
+              ev.type === 'red_card' ||
+              ev.type === 'expulsion' ||
+              ev.type === 'disqualification';
+            const isYellow = ev.type === 'yellow_card';
+            const isSusp = ev.type === 'suspension_2min';
+            const teamDisplay =
+              ev.teamName ||
+              (ev.teamSide === 'home'
+                ? match.homeTeam.teamName
+                : match.awayTeam.teamName);
+            return (
+              <div
+                key={idx}
+                className="grid grid-cols-[48px_110px_28px_1fr_130px_1fr] divide-x divide-black items-center py-0.5"
+              >
+                <span className="text-center font-mono font-bold">
+                  {ev.matchClockDisplay || '—'}
+                </span>
+                <span className="px-1 truncate font-semibold">
+                  {teamDisplay}
+                </span>
+                <span className="text-center font-mono font-bold">
+                  {ev.athleteNumber ? `#${ev.athleteNumber}` : '—'}
+                </span>
+                <span className="px-1 truncate font-medium">
+                  {ev.athleteName || 'Atleta não identificado'}
+                </span>
+                <span
+                  className={`px-1 font-bold text-center ${
+                    isRed
+                      ? 'bg-rose-100 text-rose-900 font-extrabold'
+                      : isYellow
+                      ? 'bg-amber-100 text-amber-900 font-bold'
+                      : isSusp
+                      ? 'bg-blue-100 text-blue-900 font-bold'
+                      : ''
+                  }`}
+                >
+                  {ev.typeLabel ||
+                    (isRed
+                      ? '🟥 Cartão Vermelho'
+                      : isYellow
+                      ? '🟨 Cartão Amarelo'
+                      : 'Punição')}
+                </span>
+                <span className="px-1 truncate text-slate-700">
+                  {ev.foulReason ||
+                    ev.notes ||
+                    'Infração disciplinar anotada pela arbitragem'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="p-1.5 text-center text-[8px] text-slate-600 font-medium italic">
+          Nenhuma infração disciplinar grave ou cartão registrado nesta partida — Jogo pautado pelo Fair Play.
+        </div>
+      )}
+    </div>
+  );
+
   // ==========================================
   // 1. SÚMULA OFICIAL DE FUTSAL (FOLHA ÚNICA A4)
   // ==========================================
@@ -448,7 +579,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
                 <span title="Cartão Vermelho">VER</span>
               </div>
               <div className="divide-y divide-black">
-                {teamData.rows.slice(0, 10).map((r, idx) => (
+                {teamData.rows.slice(0, 14).map((r, idx) => (
                   <div key={idx} className="grid grid-cols-[20px_1fr_26px_28px_28px] divide-x divide-black items-center min-h-[17px] text-[9px]">
                     <span className="text-center font-mono">{r.name ? idx + 1 : ''}</span>
                     <span className="px-1 font-semibold truncate">{r.name}</span>
@@ -537,6 +668,9 @@ export const GeneratedMatchSheetPage: React.FC = () => {
           </div>
         </div>
       ))}
+
+      {/* Quadro de Ocorrências Disciplinares Oficiais */}
+      {renderDisciplinaryTable()}
 
       {/* Rodapé Oficial: 1º Árbitro, 2º Árbitro, Anotador, Coordenador e Observações */}
       <div className="border-2 border-black text-[9px] divide-y divide-black">
@@ -644,7 +778,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
                   <span>Faltas (1-5)</span>
                 </div>
                 <div className="divide-y divide-black text-[8px]">
-                  {tObj.rows.slice(0, 10).map((r, rIdx) => (
+                  {tObj.rows.slice(0, 12).map((r, rIdx) => (
                     <div key={rIdx} className="grid grid-cols-[36px_1fr_26px_50px] divide-x divide-black items-center min-h-[16px]">
                       <span className="text-center font-mono">{r.name ? `IX-${rIdx+1}` : ''}</span>
                       <span className="px-1 font-semibold truncate">{r.name}</span>
@@ -697,6 +831,9 @@ export const GeneratedMatchSheetPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Quadro de Ocorrências Disciplinares Oficiais */}
+      {renderDisciplinaryTable()}
 
       {/* Pontuação por Período: Período 1 A-B, 2 A-B, 3 A-B, 4 A-B, Pontuação Final e Vencedor */}
       <div className="border-2 border-black p-2 text-[9px] space-y-1.5">
@@ -829,6 +966,9 @@ export const GeneratedMatchSheetPage: React.FC = () => {
           </div>
         );
       })}
+
+      {/* Quadro de Ocorrências Disciplinares Oficiais */}
+      {renderDisciplinaryTable()}
 
       {/* Aprovação, Árbitros, Apontador e Resultado Final */}
       <div className="border-2 border-black p-1.5 text-[9px] space-y-1">
@@ -1081,7 +1221,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
                     <span>D+R</span>
                   </div>
                   <div className="divide-y divide-black text-[8px]">
-                    {tObj.rows.slice(0, 14).map((r, rIdx) => (
+                    {tObj.rows.slice(0, 16).map((r, rIdx) => (
                       <div key={rIdx} className="grid grid-cols-[24px_1fr_22px_22px_60px_22px_24px] divide-x divide-black items-center min-h-[17px]">
                         <span className="font-mono font-bold text-center">{r.jerseyNumber}</span>
                         <span className="px-1 font-semibold truncate text-left">{r.name}</span>
@@ -1111,6 +1251,9 @@ export const GeneratedMatchSheetPage: React.FC = () => {
                 </div>
               ))}
             </div>
+
+            {/* Quadro de Ocorrências Disciplinares Oficiais */}
+            {renderDisciplinaryTable()}
 
             {/* Observações e Assinaturas Oficiais */}
             <div className="border-2 border-black p-1.5 text-[9px] space-y-1">

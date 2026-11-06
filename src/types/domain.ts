@@ -298,6 +298,7 @@ export interface MatchLineupEntry {
 // 5. EVENTOS EM TEMPO REAL E AUDITORIA (CORREÇÃO / HISTÓRICO)
 export type MatchEventType =
   | 'goal'
+  | 'own_goal'
   | 'point_1'
   | 'point_2'
   | 'point_3'

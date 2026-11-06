@@ -21,6 +21,14 @@ const FUTSAL_QUICK_ACTIONS: QuickActionDef[] = [
     accentColor: 'blue',
   },
   {
+    type: 'own_goal',
+    label: 'GOL CONTRA (GC)',
+    shortBadge: '🥅⚡',
+    pointsDelta: 1,
+    requiresAthlete: true,
+    accentColor: 'neutral',
+  },
+  {
     type: 'penalty_goal',
     label: 'GOL DE PÊNALTI',
     shortBadge: '🥅',
@@ -82,6 +90,14 @@ const HANDEBOL_QUICK_ACTIONS: QuickActionDef[] = [
     pointsDelta: 1,
     requiresAthlete: true,
     accentColor: 'blue',
+  },
+  {
+    type: 'own_goal',
+    label: 'GOL CONTRA (GC)',
+    shortBadge: '🤾⚡',
+    pointsDelta: 1,
+    requiresAthlete: true,
+    accentColor: 'neutral',
   },
   {
     type: 'seven_meters',

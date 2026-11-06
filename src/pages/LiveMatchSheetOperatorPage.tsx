@@ -265,29 +265,79 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
       (a) => a.athleteId === selectedSecondaryAthleteId
     );
 
-    const finalType: MatchEventType =
-      wizardAction.type === 'yellow_card' ? selectedCardSubType : wizardAction.type;
+    const alreadyHasYellow =
+      primaryAth &&
+      activeEvents.some(
+        (e) =>
+          (e.athleteId === primaryAth.athleteId ||
+            (e.athleteName &&
+              primaryAth.athleteName &&
+              e.athleteName.trim().toLowerCase() === primaryAth.athleteName.trim().toLowerCase())) &&
+          e.type === 'yellow_card'
+      );
 
-    const finalLabel =
-      wizardAction.type === 'yellow_card'
-        ? selectedCardSubType === 'yellow_card'
-          ? 'Cartão Amarelo'
-          : 'Cartão Vermelho'
-        : wizardAction.label;
+    const isSecondYellow =
+      wizardAction.type === 'yellow_card' &&
+      selectedCardSubType === 'yellow_card' &&
+      alreadyHasYellow;
 
-    recordMatchEvent(matchId, {
-      type: finalType,
-      typeLabel: finalLabel,
-      teamSide: selectedSide,
-      athleteId: primaryAth?.athleteId || null,
-      athleteName: primaryAth?.athleteName || null,
-      athleteNumber: primaryAth?.jerseyNumber ?? null,
-      secondaryAthleteId: secondaryAth?.athleteId || null,
-      secondaryAthleteName: secondaryAth?.athleteName || null,
-      secondaryAthleteNumber: secondaryAth?.jerseyNumber ?? null,
-      pointsDelta: wizardAction.pointsDelta,
-      foulReason: foulReasonInput || undefined,
-    });
+    if (isSecondYellow) {
+      // 1. Registra o 2º cartão amarelo
+      recordMatchEvent(matchId, {
+        type: 'yellow_card',
+        typeLabel: '2º Cartão Amarelo',
+        teamSide: selectedSide,
+        athleteId: primaryAth?.athleteId || null,
+        athleteName: primaryAth?.athleteName || null,
+        athleteNumber: primaryAth?.jerseyNumber ?? null,
+        pointsDelta: 0,
+        foulReason: foulReasonInput || '2º Cartão Amarelo na Partida',
+      });
+
+      // 2. Registra a expulsão automática decorrente do acúmulo dos 2 cartões amarelos
+      recordMatchEvent(matchId, {
+        type: 'red_card',
+        typeLabel: 'Cartão Vermelho (Expulsão por 2º Amarelo)',
+        teamSide: selectedSide,
+        athleteId: primaryAth?.athleteId || null,
+        athleteName: primaryAth?.athleteName || null,
+        athleteNumber: primaryAth?.jerseyNumber ?? null,
+        pointsDelta: 0,
+        foulReason: 'Expulsão compulsória após acúmulo de dois cartões amarelos na partida',
+      });
+    } else {
+      const finalType: MatchEventType =
+        wizardAction.type === 'yellow_card'
+          ? selectedCardSubType
+          : wizardAction.type === 'expulsion'
+          ? 'red_card'
+          : wizardAction.type;
+
+      const finalLabel =
+        wizardAction.type === 'yellow_card'
+          ? selectedCardSubType === 'yellow_card'
+            ? 'Cartão Amarelo'
+            : 'Cartão Vermelho Direto'
+          : wizardAction.type === 'expulsion'
+          ? 'Cartão Vermelho (Expulsão Direta)'
+          : wizardAction.type === 'own_goal'
+          ? 'Gol Contra (GC)'
+          : wizardAction.label;
+
+      recordMatchEvent(matchId, {
+        type: finalType,
+        typeLabel: finalLabel,
+        teamSide: selectedSide,
+        athleteId: primaryAth?.athleteId || null,
+        athleteName: primaryAth?.athleteName || null,
+        athleteNumber: primaryAth?.jerseyNumber ?? null,
+        secondaryAthleteId: secondaryAth?.athleteId || null,
+        secondaryAthleteName: secondaryAth?.athleteName || null,
+        secondaryAthleteNumber: secondaryAth?.jerseyNumber ?? null,
+        pointsDelta: wizardAction.pointsDelta,
+        foulReason: foulReasonInput || undefined,
+      });
+    }
 
     if (soundEnabled) {
       matchSound.playConfirmBeep();
@@ -1805,6 +1855,29 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                     CONFIRMAR {wizardAction.label}?
                   </span>
                   <div className="text-sm space-y-1 text-brand-text-primary">
+                    {wizardAction.type === 'yellow_card' &&
+                      selectedCardSubType === 'yellow_card' &&
+                      selectedAthleteId &&
+                      activeEvents.some(
+                        (e) =>
+                          (e.athleteId === selectedAthleteId ||
+                            (e.athleteName &&
+                              (selectedSide === 'home'
+                                ? sheet.homeLineup
+                                : sheet.awayLineup
+                              )
+                                .find((a) => a.athleteId === selectedAthleteId)
+                                ?.athleteName.toLowerCase() ===
+                                e.athleteName.toLowerCase())) &&
+                          e.type === 'yellow_card'
+                      ) && (
+                        <div className="p-2.5 rounded-xl bg-red-50 border border-red-300 text-red-900 font-bold text-xs flex items-center gap-2 mb-2">
+                          <span className="text-base">⚠️</span>
+                          <span>
+                            ATENÇÃO: Este atleta já possui 1 cartão amarelo! A confirmação aplicará o 2º Cartão Amarelo e a EXPULSÃO AUTOMÁTICA (Cartão Vermelho).
+                          </span>
+                        </div>
+                      )}
                     <p>
                       <strong>Equipe:</strong>{' '}
                       {selectedSide === 'home'
