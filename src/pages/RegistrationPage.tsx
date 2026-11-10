@@ -23,7 +23,16 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
-import { useCompetitionStore } from '../context/CompetitionStoreContext';
+import {
+  useCompetitionStore,
+  setStoredOperatorToken,
+} from '../context/CompetitionStoreContext';
+import {
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signInWithRedirect,
+} from '../lib/firebase';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { TURMAS_MEDICINA } from '../data/registrationData';
 import { SportIcon } from '../components/sports/SportIcon';
@@ -77,6 +86,7 @@ export const RegistrationPage: React.FC = () => {
 
   const {
     currentUser,
+    setCurrentUser,
     canOperateOfficialData,
     visibleAthletes,
     visibleTeams,
@@ -85,6 +95,61 @@ export const RegistrationPage: React.FC = () => {
     launchConfig,
   } = useCompetitionStore();
   const isAdmin = canOperateOfficialData();
+  const [isGoogleAuthLoading, setIsGoogleAuthLoading] = useState(false);
+
+  const handleQuickGoogleLogin = async () => {
+    setIsGoogleAuthLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result && result.user) {
+        const idToken = await result.user.getIdToken();
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'google_login',
+            idToken,
+            uid: result.user.uid,
+            email: result.user.email,
+            displayName: result.user.displayName,
+            photoUrl: result.user.photoURL,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (res.ok && data?.ok && data?.user) {
+          if (data.token) {
+            setStoredOperatorToken(data.token);
+          }
+          setCurrentUser({
+            id: data.user.id,
+            name: data.user.name,
+            email: data.user.email,
+            avatarUrl: data.profile?.avatarUrl || result.user.photoURL || null,
+            role: data.user.role || 'visitante',
+            turma: data.profile?.turma || null,
+            turmaLabel: data.profile?.turmaLabel || null,
+            teamId: data.profile?.teamId || null,
+            teamName: data.profile?.teamName || null,
+            linkedAthleteId: data.user.linkedAthleteId || null,
+            modalityIds: [],
+            mustChangePassword: false,
+          });
+        } else {
+          navigate('/login?mode=register&returnTo=/inscricao');
+        }
+      }
+    } catch (err: any) {
+      if (err?.code === 'auth/popup-blocked') {
+        await signInWithRedirect(auth, googleProvider).catch(() => {});
+        return;
+      }
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        navigate('/login?mode=register&returnTo=/inscricao');
+      }
+    } finally {
+      setIsGoogleAuthLoading(false);
+    }
+  };
 
   const {
     tournamentEvent,
@@ -124,6 +189,17 @@ export const RegistrationPage: React.FC = () => {
   const [selectedModalities, setSelectedModalities] = useState<ModalitySlug[]>(
     () => OFFICIAL_MODALITIES.map((m) => m.id)
   );
+
+  useEffect(() => {
+    if (currentUser) {
+      if (currentUser.name) setAthleteName(currentUser.name);
+      if (currentUser.email) setAthleteEmail(currentUser.email);
+      if (currentUser.avatarUrl) setAvatarUrl(currentUser.avatarUrl);
+      if (currentUser.turma && ['21', '22', '23', '24', '25'].includes(currentUser.turma)) {
+        setSelectedTurma(currentUser.turma as TurmaMedicina);
+      }
+    }
+  }, [currentUser]);
 
   const [isSocioClaim, setIsSocioClaim] = useState(true);
   const [socioDocumentProof, setSocioDocumentProof] = useState('');
@@ -199,21 +275,28 @@ export const RegistrationPage: React.FC = () => {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!athleteName.trim() || !athleteEmail.trim() || !athleteDocument.trim()) {
+    const finalName = athleteName.trim() || currentUser?.name || '';
+    const finalEmail = athleteEmail.trim() || currentUser?.email || '';
+    const finalDoc = athleteDocument.trim();
+
+    if (!finalName || !finalEmail || !finalDoc) {
       alert('Por favor, preencha Nome, E-mail e CPF/Matrícula.');
       return;
     }
-    if (!accountUsername.trim() || !accountPassword.trim()) {
-      alert('Crie seu nome de usuário e uma senha para sua conta.');
-      return;
-    }
-    if (accountPassword.trim().length < 4) {
-      alert('A senha deve ter pelo menos 4 caracteres.');
-      return;
-    }
-    if (accountPassword.trim() !== accountPasswordConfirm.trim()) {
-      alert('As duas senhas digitadas não conferem.');
-      return;
+
+    if (!currentUser) {
+      if (!accountUsername.trim() || !accountPassword.trim()) {
+        alert('Crie seu nome de usuário e uma senha para sua conta.');
+        return;
+      }
+      if (accountPassword.trim().length < 4) {
+        alert('A senha deve ter pelo menos 4 caracteres.');
+        return;
+      }
+      if (accountPassword.trim() !== accountPasswordConfirm.trim()) {
+        alert('As duas senhas digitadas não conferem.');
+        return;
+      }
     }
 
     try {
@@ -222,15 +305,15 @@ export const RegistrationPage: React.FC = () => {
         ? parseInt(jerseyNumber.trim(), 10)
         : null;
 
-      await createRegistration({
+      const created = await createRegistration({
         eventId: tournamentEvent.id,
         lotId: activeLot?.id || 'lote-1-cangaceira',
-        athleteName,
-        athleteEmail,
+        athleteName: finalName,
+        athleteEmail: finalEmail,
         athletePhone,
-        athleteDocument,
-        accountUsername: accountUsername.trim().toLowerCase(),
-        accountPassword: accountPassword.trim(),
+        athleteDocument: finalDoc,
+        accountUsername: (accountUsername.trim() || finalEmail.split('@')[0]).toLowerCase(),
+        accountPassword: accountPassword.trim() || undefined,
         turma: selectedTurma,
         turmaLabel: selectedTurmaObj.fullName,
         teamId: selectedTurmaObj.teamId,
@@ -248,6 +331,8 @@ export const RegistrationPage: React.FC = () => {
         instagramHandle: instagramHandle.trim() || null,
       });
 
+      // Abre automaticamente o modal de pagamento do passaporte
+      setPayingRegistration(created);
       setActiveTab('minhas_inscricoes');
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Falha ao processar inscrição.');
@@ -663,19 +748,25 @@ export const RegistrationPage: React.FC = () => {
                   : 'text-brand-text-secondary hover:text-brand-text-primary'
               }`}
             >
-              Nova Inscrição
+              {!currentUser
+                ? 'Inscrição de Atletas'
+                : hasCompletedRegistration
+                ? 'Nova Inscrição'
+                : 'Inscrição & Pagamento de Atleta'}
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('minhas_inscricoes')}
-              className={`px-4 py-2 rounded-xl text-xs font-display font-bold transition-all ${
-                activeTab === 'minhas_inscricoes'
-                  ? 'bg-brand-blue text-white shadow-sm'
-                  : 'text-brand-text-secondary hover:text-brand-text-primary'
-              }`}
-            >
-              Meu Passaporte ({myRegistrations.length})
-            </button>
+            {currentUser && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('minhas_inscricoes')}
+                className={`px-4 py-2 rounded-xl text-xs font-display font-bold transition-all ${
+                  activeTab === 'minhas_inscricoes'
+                    ? 'bg-brand-blue text-white shadow-sm'
+                    : 'text-brand-text-secondary hover:text-brand-text-primary'
+                }`}
+              >
+                Meu Passaporte ({myRegistrations.length})
+              </button>
+            )}
             {(launchConfig?.publicProfilesVisible || isAdmin) && (
               <button
                 type="button"
@@ -717,48 +808,78 @@ export const RegistrationPage: React.FC = () => {
         </div>
 
         {/* ============================================================ */}
-        {/* ABA 1: FORMULÁRIO DE NOVA INSCRIÇÃO OU AVISO DE EM BREVE     */}
+        {/* ABA 1: FORMULÁRIO DE INSCRIÇÃO DE ATLETA OU AVISO DE CADASTRO*/}
         {/* ============================================================ */}
         {activeTab === 'nova_inscricao' && (
-          launchConfig?.publicRegistrationEnabled === false ? (
+          !currentUser ? (
             <div className="rounded-3xl bg-white border border-brand-surface-border shadow-card p-8 sm:p-12 text-center max-w-2xl mx-auto space-y-6">
-              <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center mx-auto shadow-sm">
-                <Sparkles className="w-8 h-8" />
+              <div className="w-16 h-16 rounded-3xl bg-brand-blue/10 border border-brand-blue/20 text-brand-blue flex items-center justify-center mx-auto shadow-sm">
+                <ShieldCheck className="w-8 h-8" />
               </div>
               <div>
-                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-500/15 text-amber-800 text-xs font-bold uppercase tracking-wider mb-2">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Divulgação Oficial</span>
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand-yellow/30 text-brand-blue-dark text-xs font-bold uppercase tracking-wider mb-2">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Passaporte Oficial de Atleta</span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-display font-black text-slate-900 tracking-tight">
-                  INSCRIÇÕES EM BREVE
+                  CRIE SUA CONTA PARA SE INSCREVER COMO ATLETA
                 </h2>
               </div>
               <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-lg mx-auto">
-                Estamos preparando a abertura oficial das inscrições do IntraMed.
+                Qualquer pessoa pode criar uma conta gratuita no IntraMed.
                 <br />
-                Em breve, você poderá realizar seu cadastro e acompanhar todas as etapas diretamente pelo aplicativo.
+                <strong>Somente após se registrar e entrar na sua conta</strong>, a aba exclusiva para efetuar o pagamento e se registrar como atleta oficial será liberada para você garantir o seu passaporte em todas as 16 modalidades!
               </p>
-              <p className="text-xs sm:text-sm font-bold text-[#0B218A]">
-                Até lá, acompanhe as novidades por aqui.
-              </p>
-              <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={() => navigate('/chaveamento')}
-                  className="w-full sm:w-auto font-bold justify-center"
+              <div className="pt-3 max-w-md mx-auto space-y-3">
+                <button
+                  type="button"
+                  onClick={handleQuickGoogleLogin}
+                  disabled={isGoogleAuthLoading}
+                  className="w-full flex items-center justify-center gap-3 px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 active:scale-[0.99] border-2 border-slate-200 hover:border-slate-300 shadow-sm text-slate-800 text-xs sm:text-sm font-display font-bold transition-all disabled:opacity-60"
                 >
-                  Visualizar Chaveamento
-                </Button>
-                <Button
-                  variant="outline"
-                  size="md"
-                  onClick={() => navigate('/competicoes')}
-                  className="w-full sm:w-auto justify-center"
-                >
-                  16 Modalidades Esportivas
-                </Button>
+                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-3.98v3.09C3.515 21.3 7.565 24 12.255 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.525 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62h-3.98a11.86 11.86 0 000 10.76l3.98-3.09z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0c-4.69 0-8.74 2.7-10.71 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
+                    />
+                  </svg>
+                  <span>
+                    {isGoogleAuthLoading
+                      ? 'Conectando com sua conta Google...'
+                      : 'Continuar com o Google (1 Clique)'}
+                  </span>
+                </button>
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={() => navigate('/login?mode=register&returnTo=/inscricao')}
+                    className="w-full sm:w-auto font-bold justify-center"
+                  >
+                    Criar Conta com E-mail
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="md"
+                    onClick={() => navigate('/login?mode=login&returnTo=/inscricao')}
+                    className="w-full sm:w-auto justify-center"
+                  >
+                    Já tenho conta • Entrar
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
@@ -875,49 +996,71 @@ export const RegistrationPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Criação da Conta de Acesso */}
+              {/* Conta de Acesso */}
               <div className="border-t border-brand-surface-border pt-5 space-y-4">
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                  3. Criar Conta de Acesso
+                  3. Conta de Acesso
                 </h2>
 
-                <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
-                    label="Nome de Usuário *"
-                    placeholder="Ex: lucas.ferreira"
-                    value={accountUsername}
-                    onChange={(e) =>
-                      setAccountUsername(
-                        e.target.value.toLowerCase().replace(/\s+/g, '')
-                      )
-                    }
-                    required
-                  />
-                  <Input
-                    label="E-mail da Conta *"
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={athleteEmail}
-                    onChange={(e) => setAthleteEmail(e.target.value)}
-                    required
-                  />
-                  <Input
-                    label="Senha *"
-                    type="password"
-                    placeholder="Mínimo 4 caracteres"
-                    value={accountPassword}
-                    onChange={(e) => setAccountPassword(e.target.value)}
-                    required
-                  />
-                  <Input
-                    label="Confirmar Senha *"
-                    type="password"
-                    placeholder="Repita a senha"
-                    value={accountPasswordConfirm}
-                    onChange={(e) => setAccountPasswordConfirm(e.target.value)}
-                    required
-                  />
-                </div>
+                {currentUser ? (
+                  <div className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 font-black">
+                        <CheckCircle2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-emerald-950">
+                          {currentUser.name}
+                        </p>
+                        <p className="text-xs text-emerald-700 font-medium">
+                          {currentUser.email}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-200/70 text-emerald-900 text-[11px] font-bold uppercase tracking-wider self-start sm:self-center">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Conta Conectada
+                    </span>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200/80 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input
+                      label="Nome de Usuário *"
+                      placeholder="Ex: lucas.ferreira"
+                      value={accountUsername}
+                      onChange={(e) =>
+                        setAccountUsername(
+                          e.target.value.toLowerCase().replace(/\s+/g, '')
+                        )
+                      }
+                      required
+                    />
+                    <Input
+                      label="E-mail da Conta *"
+                      type="email"
+                      placeholder="seu@email.com"
+                      value={athleteEmail}
+                      onChange={(e) => setAthleteEmail(e.target.value)}
+                      required
+                    />
+                    <Input
+                      label="Senha *"
+                      type="password"
+                      placeholder="Mínimo 4 caracteres"
+                      value={accountPassword}
+                      onChange={(e) => setAccountPassword(e.target.value)}
+                      required
+                    />
+                    <Input
+                      label="Confirmar Senha *"
+                      type="password"
+                      placeholder="Repita a senha"
+                      value={accountPasswordConfirm}
+                      onChange={(e) => setAccountPasswordConfirm(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Perfil Social do Atleta (Foto, Camisa, Instagram e Modalidades) */}
@@ -1068,8 +1211,8 @@ export const RegistrationPage: React.FC = () => {
                   disabled={isSubmitting}
                 >
                   {isSubmitting
-                    ? 'Criando Conta e Inscrição...'
-                    : `Criar Conta & Confirmar Inscrição • R$ ${currentDisplayPrice.toFixed(2)}`}
+                    ? 'Salvando Inscrição de Atleta...'
+                    : `Prosseguir para Pagamento do Passaporte • R$ ${currentDisplayPrice.toFixed(2)}`}
                 </Button>
               </div>
             </form>

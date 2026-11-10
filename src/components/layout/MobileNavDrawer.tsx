@@ -20,6 +20,7 @@ import {
   LogOut,
   LogIn,
   Users,
+  Flame,
 } from 'lucide-react';
 import { BrandMark } from './BrandMark';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
@@ -215,7 +216,7 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                 location.pathname.startsWith('/inscricao')
                   ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
-                  : !hasCompletedRegistration
+                  : !(hasCompletedRegistration || currentUser?.role === 'atleta')
                   ? 'text-amber-300 hover:text-white hover:bg-white/10 bg-amber-400/10 border border-amber-400/20'
                   : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
@@ -223,21 +224,21 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
               <span className="flex items-center gap-3">
                 <CreditCard className="w-4 h-4 shrink-0" />
                 <span>
-                  {hasCompletedRegistration
-                    ? 'Minha Inscrição & Ingresso'
-                    : launchConfig.publicRegistrationEnabled
-                    ? 'Inscrições & Pagamento'
-                    : 'Inscrições (Em Breve)'}
+                  {!currentUser
+                    ? 'Inscrição de Atletas'
+                    : hasCompletedRegistration || currentUser.role === 'atleta'
+                    ? 'Meu Passaporte de Atleta'
+                    : 'Tornar-se Atleta (Pagamento)'}
                 </span>
               </span>
-              {!hasCompletedRegistration ? (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-yellow text-brand-blue-dark text-[9px] font-black uppercase">
-                  <Sparkles className="w-2.5 h-2.5" />
-                  {launchConfig.publicRegistrationEnabled ? 'Lote 1' : 'Em Breve'}
+              {hasCompletedRegistration || currentUser?.role === 'atleta' ? (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold uppercase border border-emerald-500/30">
+                  Confirmado
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold uppercase border border-emerald-500/30">
-                  Inscrito
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-yellow text-brand-blue-dark text-[9px] font-black uppercase">
+                  <Sparkles className="w-2.5 h-2.5" />
+                  {!currentUser ? 'Entrar' : 'Lote 1'}
                 </span>
               )}
             </button>
@@ -377,18 +378,33 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
             </button>
 
             {(launchConfig.publicProfilesVisible || isAdmin) && (
-              <button
-                type="button"
-                onClick={() => handleNav('/comunidade')}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                  location.pathname.startsWith('/comunidade')
-                    ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
-                    : 'text-white/80 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <Users className="w-4 h-4 shrink-0 text-cyan-300" />
-                <span>Comunidade & Perfis</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleNav('/feed')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                    location.pathname.startsWith('/feed')
+                      ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <Flame className="w-4 h-4 shrink-0 text-amber-300" />
+                  <span>Feed Social</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleNav('/comunidade')}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                    location.pathname.startsWith('/comunidade')
+                      ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <Users className="w-4 h-4 shrink-0 text-cyan-300" />
+                  <span>Comunidade & Perfis</span>
+                </button>
+              </>
             )}
 
             {(currentUser || launchConfig.publicLoginEnabled || isAdmin) && (

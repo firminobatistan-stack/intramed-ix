@@ -28,6 +28,12 @@ import {
   TurmaMedicina,
   RegistrationPaymentStatus,
   MemberStatus,
+  SocialPost,
+  PostComment,
+  PostLike,
+  UserFollow,
+  SavedPost,
+  SocialNotification,
 } from '../types/domain';
 import { db } from '../lib/firebase';
 import { collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
@@ -277,6 +283,21 @@ interface CompetitionStoreContextValue {
   updateLaunchConfig: (newConfig: Partial<PublicLaunchConfig>) => Promise<{ ok: boolean; error?: string }>;
   officialBrackets: Record<string, UniversalModalityBracket>;
   saveOfficialBracket: (modalityId: string, bracket: UniversalModalityBracket) => Promise<{ ok: boolean; error?: string }>;
+  socialPosts: SocialPost[];
+  fetchFeedPosts: (params?: { teamId?: string; authorUid?: string; onlySaved?: boolean }) => Promise<SocialPost[]>;
+  createPost: (content: string, images?: string[], tags?: { teamTag?: string; modalityTag?: string }) => Promise<{ ok: boolean; post?: SocialPost; error?: string }>;
+  updatePost: (postId: string, content: string, images?: string[]) => Promise<{ ok: boolean; error?: string }>;
+  deletePost: (postId: string) => Promise<{ ok: boolean; error?: string }>;
+  toggleLikePost: (postId: string) => Promise<{ ok: boolean; isLiked: boolean; likesCount: number; error?: string }>;
+  toggleSavePost: (postId: string) => Promise<{ ok: boolean; isSaved: boolean; error?: string }>;
+  fetchComments: (postId: string) => Promise<PostComment[]>;
+  addComment: (postId: string, content: string) => Promise<{ ok: boolean; comment?: PostComment; error?: string }>;
+  deleteComment: (commentId: string) => Promise<{ ok: boolean; error?: string }>;
+  toggleFollowUser: (targetUid: string) => Promise<{ ok: boolean; isFollowing: boolean; followersCount: number; error?: string }>;
+  fetchNetworkList: (targetUid: string, mode: 'followers' | 'following') => Promise<PublicUserProfile[]>;
+  socialNotifications: SocialNotification[];
+  fetchSocialNotifications: () => Promise<SocialNotification[]>;
+  markSocialNotificationAsRead: (notificationId: string) => Promise<void>;
   syncStatus: 'synced' | 'syncing' | 'offline' | 'error';
   forceServerResync: () => Promise<{ ok: boolean; error?: string; count?: number }>;
   lastSyncedIso: string;
@@ -285,16 +306,16 @@ interface CompetitionStoreContextValue {
 }
 
 export const DEFAULT_PUBLIC_LAUNCH_CONFIG: PublicLaunchConfig = {
-  publicLaunchMode: true,
-  publicLoginEnabled: false,
-  publicRegistrationEnabled: false,
-  publicPaymentsEnabled: false,
-  publicPricesVisible: false,
+  publicLaunchMode: false,
+  publicLoginEnabled: true,
+  publicRegistrationEnabled: true,
+  publicPaymentsEnabled: true,
+  publicPricesVisible: true,
   bracketPublished: true,
   publicProfilesVisible: true,
-  announcementTitle: 'ACESSO EM BREVE',
+  announcementTitle: 'INSCRIÇÕES E PASSAPORTE INTRAMED IX',
   announcementMessage:
-    'Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.',
+    'Área de participantes do IntraMed liberada. Crie sua conta gratuita, complete seu perfil e garanta seu passaporte oficial!',
 };
 
 const STORAGE_KEY_STATE = 'intramed_ix_live_engine_v3';
@@ -421,7 +442,17 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           return {
             isTestMode: Boolean(hasAdminSession && parsed.isTestMode),
             officialTeams: mergeTeamsWithDefaults(parsed.officialTeams, INITIAL_TEAMS),
-            officialAthletes: parsed.officialAthletes || INITIAL_ATHLETES,
+            officialAthletes: (parsed.officialAthletes || INITIAL_ATHLETES).filter(
+              (a: Athlete) =>
+                a &&
+                a.id &&
+                !a.id.startsWith('ath-reg-cang-') &&
+                !a.id.startsWith('user-ath-') &&
+                !a.id.startsWith('ath-demo-') &&
+                !a.name?.includes('Gabriel Medeiros') &&
+                !a.name?.includes('Beatriz Vasconcelos') &&
+                !a.name?.includes('Lucas Albuquerque')
+            ),
             officialMatches:
               parsed.officialMatches && parsed.officialMatches.length > 0
                 ? (() => {
@@ -1453,7 +1484,20 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   const visibleMatches = state.isTestMode ? state.testMatches : state.officialMatches;
   const visibleTeams = state.isTestMode ? state.testTeams : state.officialTeams;
-  const visibleAthletes = state.isTestMode ? state.testAthletes : state.officialAthletes;
+  const rawAthletes = state.isTestMode ? state.testAthletes : state.officialAthletes;
+  const visibleAthletes = useMemo(() => {
+    return (rawAthletes || []).filter(
+      (a) =>
+        a &&
+        a.id &&
+        !a.id.startsWith('ath-reg-cang-') &&
+        !a.id.startsWith('user-ath-') &&
+        !a.id.startsWith('ath-demo-') &&
+        !a.name?.includes('Gabriel Medeiros') &&
+        !a.name?.includes('Beatriz Vasconcelos') &&
+        !a.name?.includes('Lucas Albuquerque')
+    );
+  }, [rawAthletes]);
   const activeSheetsMap = state.isTestMode ? state.testSheets : state.officialSheets;
 
   const getMatchById = useCallback(
@@ -3912,6 +3956,407 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     []
   );
 
+  // ==========================================
+  // MÓDULO SOCIAL: ESTADO E AÇÕES CLIENTE-SERVIDOR
+  // ==========================================
+  const [socialNotifications, setSocialNotifications] = useState<SocialNotification[]>([]);
+  const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
+
+  // Validação estrita de sessão no boot (Item 1 e 2 da Auditoria - Zero Bypass Local)
+  useEffect(() => {
+    const token = getStoredOperatorToken();
+    if (token) {
+      fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-intramed-token': token,
+        },
+        body: JSON.stringify({ action: 'validate_session' }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && data.ok && data.user) {
+            setState((prev) => ({
+              ...prev,
+              currentUser: data.user,
+            }));
+          } else {
+            setStoredOperatorToken(null);
+            setState((prev) => ({ ...prev, currentUser: null }));
+          }
+        })
+        .catch(() => {
+          // Mantém o estado temporário em caso de falha transitória de rede
+        });
+    }
+  }, []);
+
+  const fetchFeedPosts = useCallback(
+    async (params?: { teamId?: string; authorUid?: string; onlySaved?: boolean }): Promise<SocialPost[]> => {
+      try {
+        const token = getStoredOperatorToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['x-intramed-token'] = token;
+        }
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            action: 'list_posts',
+            teamId: params?.teamId,
+            authorUid: params?.authorUid,
+            onlySaved: params?.onlySaved,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok && Array.isArray(data.posts)) {
+          setSocialPosts(data.posts);
+          return data.posts;
+        }
+        return [];
+      } catch {
+        return [];
+      }
+    },
+    []
+  );
+
+  const createPost = useCallback(
+    async (
+      content: string,
+      images?: string[],
+      tags?: { teamTag?: string; modalityTag?: string }
+    ): Promise<{ ok: boolean; post?: SocialPost; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return { ok: false, error: 'Faça login para publicar.' };
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({
+            action: 'create_post',
+            content,
+            images,
+            teamTag: tags?.teamTag,
+            modalityTag: tags?.modalityTag,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok && data.post) {
+          setSocialPosts((prev) => [data.post, ...prev]);
+          return { ok: true, post: data.post };
+        }
+        return { ok: false, error: data?.error || 'Erro ao publicar.' };
+      } catch {
+        return { ok: false, error: 'Falha de comunicação com o servidor.' };
+      }
+    },
+    []
+  );
+
+  const updatePost = useCallback(
+    async (postId: string, content: string, images?: string[]): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return { ok: false, error: 'Faça login para editar.' };
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({
+            action: 'update_post',
+            postId,
+            content,
+            images,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok) {
+          setSocialPosts((prev) =>
+            prev.map((p) => (p.id === postId ? { ...p, content, images: images || p.images } : p))
+          );
+          return { ok: true };
+        }
+        return { ok: false, error: data?.error || 'Erro ao atualizar publicação.' };
+      } catch {
+        return { ok: false, error: 'Falha de rede.' };
+      }
+    },
+    []
+  );
+
+  const deletePost = useCallback(
+    async (postId: string): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return { ok: false, error: 'Faça login para excluir.' };
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({
+            action: 'delete_post',
+            postId,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok) {
+          setSocialPosts((prev) => prev.filter((p) => p.id !== postId));
+          return { ok: true };
+        }
+        return { ok: false, error: data?.error || 'Erro ao excluir.' };
+      } catch {
+        return { ok: false, error: 'Falha de rede.' };
+      }
+    },
+    []
+  );
+
+  const toggleLikePost = useCallback(
+    async (postId: string): Promise<{ ok: boolean; isLiked: boolean; likesCount: number; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return { ok: false, isLiked: false, likesCount: 0, error: 'Faça login para curtir.' };
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({
+            action: 'toggle_like',
+            postId,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok) {
+          return { ok: true, isLiked: data.isLiked, likesCount: data.likesCount };
+        }
+        return { ok: false, isLiked: false, likesCount: 0, error: data?.error || 'Erro ao registrar curtida.' };
+      } catch {
+        return { ok: false, isLiked: false, likesCount: 0, error: 'Falha de conexão.' };
+      }
+    },
+    []
+  );
+
+  const toggleSavePost = useCallback(
+    async (postId: string): Promise<{ ok: boolean; isSaved: boolean; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return { ok: false, isSaved: false, error: 'Faça login para salvar.' };
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({
+            action: 'toggle_save_post',
+            postId,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok) {
+          return { ok: true, isSaved: data.isSaved };
+        }
+        return { ok: false, isSaved: false, error: data?.error || 'Erro ao salvar.' };
+      } catch {
+        return { ok: false, isSaved: false, error: 'Falha de rede.' };
+      }
+    },
+    []
+  );
+
+  const fetchComments = useCallback(
+    async (postId: string): Promise<PostComment[]> => {
+      try {
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'list_comments', postId }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok && Array.isArray(data.comments)) {
+          return data.comments;
+        }
+        return [];
+      } catch {
+        return [];
+      }
+    },
+    []
+  );
+
+  const addComment = useCallback(
+    async (postId: string, content: string): Promise<{ ok: boolean; comment?: PostComment; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return { ok: false, error: 'Faça login para comentar.' };
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({ action: 'create_comment', postId, content }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok && data.comment) {
+          return { ok: true, comment: data.comment };
+        }
+        return { ok: false, error: data?.error || 'Erro ao enviar comentário.' };
+      } catch {
+        return { ok: false, error: 'Falha de conexão.' };
+      }
+    },
+    []
+  );
+
+  const deleteComment = useCallback(
+    async (commentId: string): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return { ok: false, error: 'Faça login.' };
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({ action: 'delete_comment', commentId }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok) return { ok: true };
+        return { ok: false, error: data?.error || 'Erro ao excluir comentário.' };
+      } catch {
+        return { ok: false, error: 'Falha de rede.' };
+      }
+    },
+    []
+  );
+
+  const toggleFollowUser = useCallback(
+    async (targetUid: string): Promise<{ ok: boolean; isFollowing: boolean; followersCount: number; error?: string }> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return { ok: false, isFollowing: false, followersCount: 0, error: 'Faça login para seguir participantes.' };
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({ action: 'toggle_follow', targetUid }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok) {
+          return { ok: true, isFollowing: data.isFollowing, followersCount: data.followersCount };
+        }
+        return { ok: false, isFollowing: false, followersCount: 0, error: data?.error || 'Erro ao seguir participante.' };
+      } catch {
+        return { ok: false, isFollowing: false, followersCount: 0, error: 'Falha de rede.' };
+      }
+    },
+    []
+  );
+
+  const fetchNetworkList = useCallback(
+    async (targetUid: string, mode: 'followers' | 'following'): Promise<PublicUserProfile[]> => {
+      try {
+        const token = getStoredOperatorToken();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['x-intramed-token'] = token;
+        }
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ action: 'list_network', targetUid, mode }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok && Array.isArray(data.profiles)) {
+          return data.profiles;
+        }
+        return [];
+      } catch {
+        return [];
+      }
+    },
+    []
+  );
+
+  const fetchSocialNotifications = useCallback(
+    async (): Promise<SocialNotification[]> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return [];
+        const res = await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({ action: 'list_social_notifications' }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.ok && Array.isArray(data.notifications)) {
+          setSocialNotifications(data.notifications);
+          return data.notifications;
+        }
+        return [];
+      } catch {
+        return [];
+      }
+    },
+    []
+  );
+
+  const markSocialNotificationAsRead = useCallback(
+    async (notificationId: string): Promise<void> => {
+      try {
+        const token = getStoredOperatorToken();
+        if (!token) return;
+        await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-intramed-token': token,
+          },
+          body: JSON.stringify({ action: 'mark_notification_read', notificationId }),
+        });
+        setSocialNotifications((prev) =>
+          prev.map((n) => (notificationId === 'all' || n.id === notificationId ? { ...n, isRead: true } : n))
+        );
+      } catch {
+        // Silencioso
+      }
+    },
+    []
+  );
+
   const saveOfficialBracket = useCallback(
     async (
       modalityId: string,
@@ -4034,6 +4479,21 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updateLaunchConfig,
       officialBrackets: state.officialBrackets || {},
       saveOfficialBracket,
+      socialPosts,
+      fetchFeedPosts,
+      createPost,
+      updatePost,
+      deletePost,
+      toggleLikePost,
+      toggleSavePost,
+      fetchComments,
+      addComment,
+      deleteComment,
+      toggleFollowUser,
+      fetchNetworkList,
+      socialNotifications,
+      fetchSocialNotifications,
+      markSocialNotificationAsRead,
       syncStatus,
       forceServerResync,
       lastSyncedIso,
@@ -4045,6 +4505,21 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updateLaunchConfig,
       state.officialBrackets,
       saveOfficialBracket,
+      socialPosts,
+      fetchFeedPosts,
+      createPost,
+      updatePost,
+      deletePost,
+      toggleLikePost,
+      toggleSavePost,
+      fetchComments,
+      addComment,
+      deleteComment,
+      toggleFollowUser,
+      fetchNetworkList,
+      socialNotifications,
+      fetchSocialNotifications,
+      markSocialNotificationAsRead,
       state.isTestMode,
       setTestMode,
       resetTestEnvironment,

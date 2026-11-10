@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -31,6 +31,13 @@ import {
 } from '../context/RegistrationStoreContext';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { TURMAS_MEDICINA } from '../data/registrationData';
+import {
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+} from '../lib/firebase';
 
 type LoginModeTab = 'login' | 'register' | 'admin';
 
@@ -46,11 +53,18 @@ export const LoginPage: React.FC = () => {
 
   const { registrations } = useRegistrationStore();
 
+  const searchParams = new URLSearchParams(location.search);
+  const paramReturnTo = searchParams.get('returnTo');
   const returnTo =
-    (location.state as { returnTo?: string } | null)?.returnTo || null;
+    (location.state as { returnTo?: string } | null)?.returnTo || paramReturnTo || null;
 
+  const initialMode = searchParams.get('mode') || searchParams.get('tab');
   const [loginMode, setLoginMode] = useState<LoginModeTab>(
-    returnTo?.includes('/admin') ? 'admin' : 'login'
+    initialMode === 'register'
+      ? 'register'
+      : returnTo?.includes('/admin')
+      ? 'admin'
+      : 'login'
   );
 
   // Estados de Login Unificado
@@ -76,9 +90,137 @@ export const LoginPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryFeedback, setRecoveryFeedback] = useState<string | null>(null);
+
+  const syncGoogleUserWithServer = async (fbUser: {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+    photoURL: string | null;
+    getIdToken: () => Promise<string>;
+  }) => {
+    setIsGoogleLoading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    try {
+      const idToken = await fbUser.getIdToken();
+      const selectedTurmaObj = TURMAS_MEDICINA.find((t) => t.turma === registerTurma);
+
+      const res = await fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'google_login',
+          idToken,
+          uid: fbUser.uid,
+          email: fbUser.email,
+          displayName: fbUser.displayName,
+          photoUrl: fbUser.photoURL,
+          turma: registerTurma || null,
+          turmaLabel: selectedTurmaObj ? selectedTurmaObj.fullName : null,
+          teamId: selectedTurmaObj ? selectedTurmaObj.teamId : null,
+          teamName: selectedTurmaObj ? selectedTurmaObj.name : null,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.ok && data?.user) {
+        if (data.token) {
+          setStoredOperatorToken(data.token);
+        }
+
+        const userObj = {
+          id: data.user.id,
+          name: data.user.name,
+          email: data.user.email,
+          avatarUrl: data.profile?.avatarUrl || fbUser.photoURL || null,
+          role: data.user.role || 'visitante',
+          turma: data.profile?.turma || null,
+          turmaLabel: data.profile?.turmaLabel || null,
+          teamId: data.profile?.teamId || null,
+          teamName: data.profile?.teamName || null,
+          linkedAthleteId: data.user.linkedAthleteId || null,
+          modalityIds: [],
+          mustChangePassword: false,
+        };
+
+        setCurrentUser(userObj);
+        setSuccessMessage(
+          data.isNewUser
+            ? `Bem-vindo(a), ${data.user.name}! Sua conta Google foi registrada com sucesso.`
+            : `Bem-vindo(a) de volta, ${data.user.name}!`
+        );
+
+        setTimeout(() => {
+          navigate(returnTo || '/perfil', { replace: true });
+        }, 650);
+        return;
+      } else {
+        setErrorMessage(data?.error || 'Não foi possível autenticar sua conta Google no servidor.');
+      }
+    } catch {
+      setErrorMessage('Falha de conexão ao sincronizar sua conta Google com o servidor.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  // Trata retorno de signInWithRedirect caso o navegador mobile tenha usado redirecionamento
+  useEffect(() => {
+    let active = true;
+    getRedirectResult(auth)
+      .then((result) => {
+        if (active && result && result.user) {
+          void syncGoogleUserWithServer(result.user);
+        }
+      })
+      .catch(() => {
+        // Ignora silenciosamente quando não há redirect pendente
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setIsGoogleLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result && result.user) {
+        await syncGoogleUserWithServer(result.user);
+      } else {
+        setIsGoogleLoading(false);
+      }
+    } catch (err: any) {
+      const code = String(err?.code || '');
+      if (code === 'auth/popup-blocked') {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch {
+          setErrorMessage('O bloqueador de pop-ups impediu a janela do Google. Permita pop-ups ou use e-mail e senha.');
+        }
+      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // Usuário fechou a janela voluntariamente
+      } else if (code === 'auth/operation-not-allowed' || code === 'auth/configuration-not-found') {
+        setErrorMessage(
+          'O provedor Google precisa ser ativado no Console do Firebase (Authentication -> Sign-in method -> Google -> Ativar). Enquanto isso, você pode usar seu e-mail e senha normalmente!'
+        );
+      } else if (code === 'auth/unauthorized-domain') {
+        setErrorMessage(
+          'Este domínio precisa estar autorizado no Firebase Console (Authentication -> Settings -> Authorized domains).'
+        );
+      } else {
+        setErrorMessage('Não foi possível concluir o login com o Google. Tente novamente ou use e-mail e senha.');
+      }
+      setIsGoogleLoading(false);
+    }
+  };
 
   // SUBMIT: LOGIN UNIFICADO (Usuário / Atleta / Participante)
   const handleUserSubmit = async (e: React.FormEvent) => {
@@ -88,13 +230,6 @@ export const LoginPage: React.FC = () => {
 
     const q = identifier.trim().toLowerCase();
     const pass = loginPassword.trim();
-
-    if (launchConfig?.publicLoginEnabled === false && q !== 'cangaceira@uema.com') {
-      setErrorMessage(
-        'ACESSO EM BREVE: O login público de participantes está em preparação e será liberado em breve. Acompanhe as informações do evento por aqui!'
-      );
-      return;
-    }
 
     if (!q) {
       setErrorMessage('Informe seu e-mail, nome de usuário ou documento.');
@@ -193,13 +328,6 @@ export const LoginPage: React.FC = () => {
     const email = registerEmail.trim().toLowerCase();
     const pass = registerPassword.trim();
     const confirmPass = registerConfirmPassword.trim();
-
-    if (launchConfig?.publicRegistrationEnabled === false) {
-      setErrorMessage(
-        'CADASTRO EM BREVE: As inscrições e o cadastro de participantes estão temporariamente indisponíveis. Em breve o IntraMed será aberto oficialmente!'
-      );
-      return;
-    }
 
     if (!name || name.length < 2) {
       setErrorMessage('Informe seu nome completo (mínimo 2 caracteres).');
@@ -485,48 +613,55 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
+          {/* BOTÃO DE ACESSO RÁPIDO COM CONTA GOOGLE (NAS ABAS ENTRAR E CRIAR CONTA) */}
+          {(loginMode === 'login' || loginMode === 'register') && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={isGoogleLoading || isSubmitting}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-2xl bg-white hover:bg-slate-50 active:scale-[0.99] border-2 border-slate-200 hover:border-slate-300 shadow-xs text-slate-800 text-xs sm:text-sm font-display font-bold transition-all disabled:opacity-60"
+              >
+                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.79-.07-1.54-.19-2.27h-11.3v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12.255 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96h-3.98v3.09C3.515 21.3 7.565 24 12.255 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.525 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62h-3.98a11.86 11.86 0 000 10.76l3.98-3.09z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12.255 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C18.205 1.19 15.495 0 12.255 0c-4.69 0-8.74 2.7-10.71 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
+                  />
+                </svg>
+                <span>
+                  {isGoogleLoading
+                    ? 'Conectando com o Google...'
+                    : loginMode === 'register'
+                    ? 'Criar conta rápida com o Google'
+                    : 'Continuar com o Google'}
+                </span>
+              </button>
+
+              <div className="relative flex items-center py-1">
+                <div className="flex-grow border-t border-slate-200" />
+                <span className="shrink-0 mx-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  ou com e-mail e senha
+                </span>
+                <div className="flex-grow border-t border-slate-200" />
+              </div>
+            </div>
+          )}
+
           {/* ABA 1: LOGIN UNIFICADO */}
           {loginMode === 'login' && (
-            launchConfig?.publicLoginEnabled === false ? (
-              <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 text-center space-y-4">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 border border-amber-500/20 flex items-center justify-center mx-auto">
-                  <Clock className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase tracking-wider mb-2">
-                    Divulgação Inicial
-                  </span>
-                  <h3 className="text-base font-display font-black text-slate-900 tracking-tight">
-                    ACESSO EM BREVE
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
-                  Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma.
-                </p>
-                <p className="text-xs font-bold text-[#0B218A]">
-                  Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.
-                </p>
-                <div className="pt-2 flex flex-col gap-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => navigate('/chaveamento')}
-                    className="w-full text-xs font-bold justify-center"
-                  >
-                    Acompanhar Chaveamento
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setLoginMode('admin')}
-                    className="w-full text-xs text-slate-600 hover:text-slate-900 justify-center"
-                  >
-                    Acesso da Comissão / Moderação
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleUserSubmit} className="space-y-4">
+            <form onSubmit={handleUserSubmit} className="space-y-4">
               <Input
                 label="E-mail, Usuário ou Documento"
                 type="text"
@@ -561,7 +696,7 @@ export const LoginPage: React.FC = () => {
                 variant="primary"
                 size="lg"
                 fullWidth
-                disabled={isSubmitting}
+                disabled={isSubmitting || isGoogleLoading}
               >
                 {isSubmitting ? 'Verificando...' : 'Entrar na Plataforma'}
               </Button>
@@ -576,51 +711,11 @@ export const LoginPage: React.FC = () => {
                 </button>
               </div>
             </form>
-            )
           )}
 
           {/* ABA 2: CRIAR CONTA */}
           {loginMode === 'register' && (
-            launchConfig?.publicRegistrationEnabled === false ? (
-              <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 text-center space-y-4">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 border border-amber-500/20 flex items-center justify-center mx-auto">
-                  <Sparkles className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-700 text-[10px] font-black uppercase tracking-wider mb-2">
-                    Lançamento Oficial
-                  </span>
-                  <h3 className="text-base font-display font-black text-slate-900 tracking-tight">
-                    ACESSO EM BREVE
-                  </h3>
-                </div>
-                <p className="text-xs text-slate-600 leading-relaxed max-w-sm mx-auto">
-                  Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma.
-                </p>
-                <p className="text-xs font-bold text-[#0B218A]">
-                  Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.
-                </p>
-                <div className="pt-2 flex flex-col gap-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => navigate('/chaveamento')}
-                    className="w-full text-xs font-bold justify-center"
-                  >
-                    Ver Chaveamento Oficial
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setLoginMode('admin')}
-                    className="w-full text-xs text-slate-600 hover:text-slate-900 justify-center"
-                  >
-                    Acesso da Comissão / Moderação
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+            <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
               <Input
                 label="Nome Completo"
                 type="text"
@@ -692,12 +787,11 @@ export const LoginPage: React.FC = () => {
                 variant="primary"
                 size="lg"
                 fullWidth
-                disabled={isSubmitting}
+                disabled={isSubmitting || isGoogleLoading}
               >
                 {isSubmitting ? 'Cadastrando...' : 'Cadastrar e Criar Perfil'}
               </Button>
             </form>
-            )
           )}
 
           {/* ABA 3: COMISSÃO / MASTER */}

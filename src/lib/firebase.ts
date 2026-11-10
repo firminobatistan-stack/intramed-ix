@@ -1,6 +1,13 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
-import { getAuth, Auth } from 'firebase/auth';
+import {
+  getAuth,
+  Auth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+} from 'firebase/auth';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
@@ -17,3 +24,10 @@ export const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseC
 export const db: Firestore = getFirestore(app);
 export const auth: Auth = getAuth(app);
 export const storage: FirebaseStorage = getStorage(app);
+
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+});
+
+export { signInWithPopup, signInWithRedirect, getRedirectResult };

@@ -14,6 +14,58 @@ import { HomePage } from './pages/HomePage';
 import { RegistrationProvider } from './context/RegistrationStoreContext';
 import { OFFICIAL_MODALITIES } from './data/officialData';
 
+// Purga automática imediata de caches de demonstração em dispositivos móveis e navegadores
+if (typeof window !== 'undefined') {
+  try {
+    const regKey = 'intramed_registrations_store_v1';
+    const rawRegs = localStorage.getItem(regKey);
+    if (rawRegs && (rawRegs.includes('reg-cang-') || rawRegs.includes('user-ath-') || rawRegs.includes('Gabriel Medeiros') || rawRegs.includes('Beatriz Vasconcelos') || rawRegs.includes('Lucas Albuquerque'))) {
+      const parsed = JSON.parse(rawRegs);
+      if (Array.isArray(parsed?.registrations)) {
+        parsed.registrations = parsed.registrations.filter((r: any) =>
+          r && r.id && !r.id.startsWith('reg-cang-') && !r.userId?.startsWith('user-ath-') &&
+          !r.athleteName?.includes('Gabriel Medeiros') &&
+          !r.athleteName?.includes('Beatriz Vasconcelos') &&
+          !r.athleteName?.includes('Lucas Albuquerque')
+        );
+        localStorage.setItem(regKey, JSON.stringify(parsed));
+      }
+    }
+    for (const compKey of ['intramed_ix_live_engine_v3', 'intramed_competition_store_v2']) {
+      const rawComp = localStorage.getItem(compKey);
+      if (rawComp) {
+        const parsedComp = JSON.parse(rawComp);
+        let modified = false;
+        if (Array.isArray(parsedComp?.officialAthletes)) {
+          const filtered = parsedComp.officialAthletes.filter((a: any) =>
+            a && a.id && !a.id.startsWith('ath-reg-cang-') && !a.id.startsWith('user-ath-') &&
+            !a.name?.includes('Gabriel Medeiros') &&
+            !a.name?.includes('Beatriz Vasconcelos') &&
+            !a.name?.includes('Lucas Albuquerque')
+          );
+          if (filtered.length !== parsedComp.officialAthletes.length) {
+            parsedComp.officialAthletes = filtered;
+            modified = true;
+          }
+        }
+        if (parsedComp?.launchConfig) {
+          if (parsedComp.launchConfig.publicLoginEnabled === false || parsedComp.launchConfig.publicRegistrationEnabled === false) {
+            parsedComp.launchConfig.publicLoginEnabled = true;
+            parsedComp.launchConfig.publicRegistrationEnabled = true;
+            parsedComp.launchConfig.publicPaymentsEnabled = true;
+            modified = true;
+          }
+        }
+        if (modified) {
+          localStorage.setItem(compKey, JSON.stringify(parsedComp));
+        }
+      }
+    }
+  } catch {
+    // Silencioso
+  }
+}
+
 // Lazy-loaded pages (Code Splitting por rota para reduzir o bundle inicial em 3-4x)
 const CompetitionsPage = lazy(() =>
   import('./pages/CompetitionsPage').then((m) => ({ default: m.CompetitionsPage }))
@@ -32,6 +84,9 @@ const ProfilePage = lazy(() =>
 );
 const LoginPage = lazy(() =>
   import('./pages/LoginPage').then((m) => ({ default: m.LoginPage }))
+);
+const FeedPage = lazy(() =>
+  import('./pages/FeedPage').then((m) => ({ default: m.FeedPage }))
 );
 const FirstAccessPage = lazy(() =>
   import('./pages/FirstAccessPage').then((m) => ({ default: m.FirstAccessPage }))
@@ -124,6 +179,7 @@ const RoutedApp: React.FC = () => {
     if (location.pathname === '/atleta') return 'Ficha do Atleta';
     if (location.pathname.startsWith('/atleta')) return 'Ficha do Atleta';
     if (location.pathname === '/comunidade') return 'Comunidade & Perfis';
+    if (location.pathname === '/feed') return 'Feed Social • INTRAMED IX';
     if (location.pathname.startsWith('/perfil/')) return 'Perfil do Participante';
     if (location.pathname === '/perfil') return 'Meu Perfil';
     if (location.pathname === '/inscricao') return 'Inscrições • INTRAMED IX';
@@ -193,6 +249,7 @@ const RoutedApp: React.FC = () => {
           <Route path="/atleta" element={<AthleteDetailPage />} />
           <Route path="/atleta/:athleteId" element={<AthleteDetailPage />} />
           <Route path="/comunidade" element={<CommunityDirectoryPage />} />
+          <Route path="/feed" element={<FeedPage />} />
           <Route path="/perfil" element={<ProfilePage />} />
           <Route path="/perfil/:userId" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

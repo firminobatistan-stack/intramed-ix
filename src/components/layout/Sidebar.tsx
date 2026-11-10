@@ -15,9 +15,11 @@ import {
   CreditCard,
   ShieldCheck,
   Users,
+  Flame,
 } from 'lucide-react';
 import { BrandMark } from './BrandMark';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
+import { useRegistrationStore } from '../../context/RegistrationStoreContext';
 
 interface SidebarItem {
   to: string;
@@ -80,7 +82,10 @@ export const Sidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, canOperateOfficialData, launchConfig } = useCompetitionStore();
+  const { hasCompletedRegistration } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
+
+  const isAthlete = hasCompletedRegistration || currentUser?.role === 'atleta';
 
   // Itens dinâmicos baseados no modo de lançamento e privilégios
   const navItems: SidebarItem[] = [
@@ -97,7 +102,11 @@ export const Sidebar: React.FC = () => {
     },
     {
       to: '/inscricao',
-      label: launchConfig.publicRegistrationEnabled ? 'Inscrições & Lotes' : 'Inscrições (Em Breve)',
+      label: !currentUser
+        ? 'Inscrição de Atletas'
+        : isAthlete
+        ? 'Meu Passaporte de Atleta'
+        : 'Tornar-se Atleta (Pagamento)',
       icon: CreditCard,
       matchPrefix: '/inscricao',
     },
@@ -121,6 +130,12 @@ export const Sidebar: React.FC = () => {
     },
     ...(launchConfig.publicProfilesVisible || isAdmin
       ? [
+          {
+            to: '/feed',
+            label: 'Feed Social',
+            icon: Flame,
+            matchPrefix: '/feed',
+          },
           {
             to: '/comunidade',
             label: 'Comunidade & Perfis',

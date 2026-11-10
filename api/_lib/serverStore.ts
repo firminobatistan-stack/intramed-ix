@@ -67,16 +67,16 @@ export interface PublicLaunchConfig {
 }
 
 export const DEFAULT_LAUNCH_CONFIG: PublicLaunchConfig = {
-  publicLaunchMode: true,
-  publicLoginEnabled: false,
-  publicRegistrationEnabled: false,
-  publicPaymentsEnabled: false,
-  publicPricesVisible: false,
+  publicLaunchMode: false,
+  publicLoginEnabled: true,
+  publicRegistrationEnabled: true,
+  publicPaymentsEnabled: true,
+  publicPricesVisible: true,
   bracketPublished: true,
   publicProfilesVisible: true,
-  announcementTitle: 'ACESSO EM BREVE',
+  announcementTitle: 'INSCRIÇÕES E PASSAPORTE INTRAMED IX',
   announcementMessage:
-    'Estamos preparando a área de participantes do IntraMed. Em breve, você poderá criar sua conta e acompanhar sua participação no evento diretamente pela plataforma. Enquanto isso, continue acompanhando as informações e o chaveamento por aqui.',
+    'Área de participantes do IntraMed liberada. Crie sua conta gratuita, complete seu perfil e garanta seu passaporte oficial!',
 };
 
 export const INITIAL_OFFICIAL_TEAMS: Array<{
@@ -192,6 +192,12 @@ export interface CloudCollectionMap {
   match_secrets: Record<string, { pinHash: string; pinDisplay?: string; updatedAtIso: string }>;
   users?: Record<string, Record<string, unknown>>;
   profiles?: Record<string, Record<string, unknown>>;
+  posts?: Record<string, Record<string, unknown>>;
+  post_likes?: Record<string, Record<string, unknown>>;
+  post_comments?: Record<string, Record<string, unknown>>;
+  user_follows?: Record<string, Record<string, unknown>>;
+  user_saves?: Record<string, Record<string, unknown>>;
+  social_notifications?: Record<string, Record<string, unknown>>;
   admin_users?: Record<string, Record<string, unknown>>;
   admin_audit_logs?: AdminActionAuditLog[];
   sync_logs?: SyncDiagnosticLogEntry[];
@@ -568,6 +574,42 @@ export async function firebaseAuthUpdateProfile(params: {
   }
 }
 
+export async function firebaseAuthVerifyIdToken(
+  idToken: string
+): Promise<{ ok: boolean; user?: FirebaseAuthUserRecord; error?: string }> {
+  try {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_WEB_API_KEY}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+    const data = (await res.json()) as any;
+    if (!res.ok || data.error || !Array.isArray(data.users) || data.users.length === 0) {
+      return {
+        ok: false,
+        error: data.error?.message || 'Token Google inválido ou expirado.',
+      };
+    }
+    const u = data.users[0];
+    return {
+      ok: true,
+      user: {
+        localId: u.localId,
+        email: u.email,
+        displayName: u.displayName,
+        photoUrl: u.photoUrl,
+        idToken,
+      },
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: err?.message || 'Falha de rede ao verificar token Google no Firebase Auth',
+    };
+  }
+}
+
 export function isMasterAccount(email?: string | null): boolean {
   if (!email) return false;
   return email.trim().toLowerCase() === MASTER_MODERATOR_EMAIL.toLowerCase();
@@ -674,6 +716,12 @@ export function getCloudStore(): CloudCollectionMap {
           match_secrets: parsed.match_secrets || {},
           users: parsed.users || {},
           profiles: parsed.profiles || {},
+          posts: parsed.posts || {},
+          post_likes: parsed.post_likes || {},
+          post_comments: parsed.post_comments || {},
+          user_follows: parsed.user_follows || {},
+          user_saves: parsed.user_saves || {},
+          social_notifications: parsed.social_notifications || {},
           admin_users: parsed.admin_users || {},
           admin_audit_logs: parsed.admin_audit_logs || [],
           launch_config: parsed.launch_config || { ...DEFAULT_LAUNCH_CONFIG },
@@ -698,6 +746,12 @@ export function getCloudStore(): CloudCollectionMap {
     match_secrets: {},
     users: {},
     profiles: {},
+    posts: {},
+    post_likes: {},
+    post_comments: {},
+    user_follows: {},
+    user_saves: {},
+    social_notifications: {},
     admin_users: {},
     admin_audit_logs: [],
     launch_config: { ...DEFAULT_LAUNCH_CONFIG },
@@ -769,6 +823,7 @@ export function sanitizeUserProfileForPublic(
     userId: safePublic.userId || safePublic.id,
     displayName: safePublic.displayName || safePublic.name || 'Participante IntraMed',
     avatarUrl: safePublic.avatarUrl || null,
+    coverUrl: safePublic.coverUrl || null,
     turma: safePublic.turma || null,
     turmaLabel: safePublic.turmaLabel || null,
     teamId: safePublic.teamId || null,
@@ -780,6 +835,9 @@ export function sanitizeUserProfileForPublic(
     favoriteModalityIds: Array.isArray(safePublic.favoriteModalityIds)
       ? safePublic.favoriteModalityIds
       : [],
+    followersCount: Number(safePublic.followersCount || 0),
+    followingCount: Number(safePublic.followingCount || 0),
+    postsCount: Number(safePublic.postsCount || 0),
     createdAtIso: safePublic.createdAtIso || new Date().toISOString(),
     updatedAtIso: safePublic.updatedAtIso || new Date().toISOString(),
   };
@@ -873,19 +931,27 @@ export function appendServerSyncLog(
  */
 export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
   const store = getCloudStore();
-  const hasData =
-    Object.keys(store.registrations).length > 0 ||
-    Object.keys(store.matches).length > 0 ||
-    Object.keys(store.match_sheets).length > 0;
-
-  if (hasData || store.hydratedFromFirestoreAtIso) {
+  if (store.hydratedFromFirestoreAtIso) {
     return store;
   }
 
   store.hydratedFromFirestoreAtIso = new Date().toISOString();
-  const collectionsToHydrate: Array<
-    'registrations' | 'athletes' | 'teams' | 'matches' | 'match_sheets' | 'admin_users' | 'users' | 'profiles'
-  > = ['registrations', 'athletes', 'teams', 'matches', 'match_sheets', 'admin_users', 'users', 'profiles'];
+  const collectionsToHydrate = [
+    'registrations',
+    'athletes',
+    'teams',
+    'matches',
+    'match_sheets',
+    'admin_users',
+    'users',
+    'profiles',
+    'posts',
+    'post_likes',
+    'post_comments',
+    'user_follows',
+    'user_saves',
+    'social_notifications',
+  ];
 
   try {
     await Promise.all(
@@ -934,8 +1000,12 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
             } else if (colName === 'profiles') {
               if (!store.profiles) store.profiles = {};
               store.profiles[docId] = { ...parsedDoc, id: docId };
-            } else if (!store[colName][docId]) {
-              store[colName][docId] = { ...parsedDoc, id: docId };
+            } else {
+              const targetCol = (store as Record<string, any>)[colName] || {};
+              if (!targetCol[docId]) {
+                targetCol[docId] = { ...parsedDoc, id: docId };
+                (store as Record<string, any>)[colName] = targetCol;
+              }
             }
           }
         }
@@ -1054,6 +1124,30 @@ export async function MirrorDocumentToFirestoreRest(
   }
 }
 
+export async function DeleteDocumentFromFirestoreRest(
+  collectionName: string,
+  docId: string
+): Promise<void> {
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(
+      collectionName
+    )}/${encodeURIComponent(docId)}?key=${FIREBASE_API_KEY}`;
+
+    const res = await fetch(url, {
+      method: 'DELETE',
+    }).catch(() => null);
+
+    if (res && res.ok) {
+      appendServerSyncLog({
+        category: 'firestore_mirror',
+        message: `Delete ${collectionName}/${docId} no Cloud Firestore concluído.`,
+      });
+    }
+  } catch {
+    // Non-blocking best effort delete
+  }
+}
+
 /**
  * Registra o ID de pagamento ou preferência do Mercado Pago na inscrição assim que gerado,
  * permitindo reconciliação automática mesmo se o usuário fechar o modal ou o webhook atrasar.
@@ -1130,18 +1224,50 @@ export async function markRegistrationPaidOnServer(params: {
 
   store.registrations[params.registrationId] = updated;
 
-  // Atualiza também o atleta vinculado, se já existir no store
+  // Atualiza ou cria o atleta vinculado no store e no Firestore
   const linkedAthId =
     (existing.linkedAthleteId as string) || `ath-${params.registrationId}`;
-  if (store.athletes[linkedAthId]) {
-    store.athletes[linkedAthId] = {
-      ...store.athletes[linkedAthId],
-      paymentStatus: 'pago',
-      status: 'confirmado',
-      updatedAtIso: nowIso,
-      revision: Number(store.athletes[linkedAthId].revision || 0) + 1,
-    };
-    void MirrorDocumentToFirestoreRest('athletes', linkedAthId, store.athletes[linkedAthId]);
+  const athleteRecord: Record<string, unknown> = {
+    ...(store.athletes[linkedAthId] || {}),
+    id: linkedAthId,
+    name: String(existing.athleteName || 'Atleta IntraMed'),
+    email: String(existing.athleteEmail || ''),
+    teamId: String(existing.teamId || ''),
+    turma: String(existing.turma || ''),
+    turmaLabel: String(existing.turmaLabel || ''),
+    jerseyNumber: existing.jerseyNumber ?? null,
+    position: (existing.position as string) || 'Atleta Confirmado',
+    avatarUrl: (existing.avatarUrl as string) || null,
+    bio: (existing.bio as string) || null,
+    instagramHandle: (existing.instagramHandle as string) || null,
+    registrationId: params.registrationId,
+    paymentStatus: 'pago',
+    memberStatus: (existing.memberStatus as string) || 'nao_solicitado',
+    status: 'confirmado',
+    updatedAtIso: nowIso,
+    revision: Number(store.athletes[linkedAthId]?.revision || 0) + 1,
+  };
+  store.athletes[linkedAthId] = athleteRecord;
+  await MirrorDocumentToFirestoreRest('athletes', linkedAthId, athleteRecord);
+
+  // Promove o usuário e perfil vinculados para papel 'atleta'
+  const athleteEmail = String(existing.athleteEmail || '').trim().toLowerCase();
+  for (const [uid, user] of Object.entries(store.users || {})) {
+    if (user && (String(user.email || '').trim().toLowerCase() === athleteEmail || user.id === existing.userId)) {
+      user.role = 'atleta';
+      user.linkedAthleteId = linkedAthId;
+      user.registrationId = params.registrationId;
+      user.updatedAtIso = nowIso;
+      await MirrorDocumentToFirestoreRest('users', String(user.id), user);
+      if (store.profiles?.[user.id as string]) {
+        const prof = store.profiles[user.id as string];
+        prof.role = 'atleta';
+        prof.isAthlete = true;
+        prof.linkedAthleteId = linkedAthId;
+        prof.updatedAtIso = nowIso;
+        await MirrorDocumentToFirestoreRest('profiles', String(user.id), prof);
+      }
+    }
   }
 
   appendServerSyncLog({
@@ -1226,7 +1352,7 @@ export async function handleNonApprovedPaymentStatusOnServer(params: {
         updatedAtIso: nowIso,
         revision: Number(store.athletes[linkedAthId].revision || 0) + 1,
       };
-      void MirrorDocumentToFirestoreRest('athletes', linkedAthId, store.athletes[linkedAthId]);
+      await MirrorDocumentToFirestoreRest('athletes', linkedAthId, store.athletes[linkedAthId]);
     }
   }
 

@@ -209,9 +209,19 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.registrations)) {
-          return (parsed.registrations as Registration[]).map((r) =>
-            normalizePendingRegistrationPrice(r)
-          );
+          const clean = (parsed.registrations as Registration[])
+            .filter(
+              (r) =>
+                r &&
+                r.id &&
+                !r.id.startsWith('reg-cang-') &&
+                !r.userId?.startsWith('user-ath-') &&
+                !r.athleteName?.includes('Gabriel Medeiros') &&
+                !r.athleteName?.includes('Beatriz Vasconcelos') &&
+                !r.athleteName?.includes('Lucas Albuquerque')
+            )
+            .map((r) => normalizePendingRegistrationPrice(r));
+          return clean;
         }
       }
     } catch {
@@ -263,6 +273,15 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
 
     registrations.forEach((reg) => {
       if (reg.paymentStatus === 'cancelado') return;
+      if (
+        reg.id.startsWith('reg-cang-') ||
+        reg.userId?.startsWith('user-ath-') ||
+        reg.athleteName?.includes('Gabriel Medeiros') ||
+        reg.athleteName?.includes('Beatriz Vasconcelos') ||
+        reg.athleteName?.includes('Lucas Albuquerque')
+      ) {
+        return;
+      }
       const sig = `${reg.updatedAtIso}_${reg.paymentStatus}_${reg.memberStatus}_${reg.avatarUrl || ''}_${reg.jerseyNumber || ''}_${reg.position || ''}`;
       if (syncedRegSignaturesRef.current.get(reg.id) === sig) return;
       syncedRegSignaturesRef.current.set(reg.id, sig);
@@ -322,15 +341,41 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     const handleCloudRegistrations = (ev: Event) => {
       const customEv = ev as CustomEvent<Registration[]>;
       const remoteList = customEv.detail;
-      if (!Array.isArray(remoteList) || remoteList.length === 0) return;
+      if (!Array.isArray(remoteList)) return;
+
+      const cleanRemote = remoteList.filter(
+        (cr) =>
+          cr &&
+          cr.id &&
+          !cr.id.startsWith('reg-cang-') &&
+          !cr.userId?.startsWith('user-ath-') &&
+          !cr.athleteName?.includes('Gabriel Medeiros') &&
+          !cr.athleteName?.includes('Beatriz Vasconcelos') &&
+          !cr.athleteName?.includes('Lucas Albuquerque')
+      );
 
       setRegistrations((prev) => {
-        const byId = new Map<string, Registration>();
-        for (const r of prev) byId.set(r.id, r);
-        let hasDiff = false;
+        // Remove qualquer registro fictício/demo que possa estar no estado local
+        const cleanPrev = prev.filter(
+          (r) =>
+            r &&
+            r.id &&
+            !r.id.startsWith('reg-cang-') &&
+            !r.userId?.startsWith('user-ath-') &&
+            !r.athleteName?.includes('Gabriel Medeiros') &&
+            !r.athleteName?.includes('Beatriz Vasconcelos') &&
+            !r.athleteName?.includes('Lucas Albuquerque')
+        );
 
-        for (const cr of remoteList) {
-          if (!cr || !cr.id) continue;
+        if (cleanRemote.length === 0) {
+          return cleanPrev.length === 0 ? cleanPrev : [];
+        }
+
+        const byId = new Map<string, Registration>();
+        for (const r of cleanPrev) byId.set(r.id, r);
+        let hasDiff = cleanPrev.length !== prev.length;
+
+        for (const cr of cleanRemote) {
           const ex = byId.get(cr.id);
           const exRev = ex?.revision ?? 0;
           const crRev = cr.revision ?? 0;

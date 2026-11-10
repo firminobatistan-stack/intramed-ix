@@ -155,6 +155,109 @@ rules_version = '2';
 //      - modalityIds: list (optional, max 30 strings)
 //      - registrationCode: string (optional, max 50 chars)
 //
+// 9. Collection: profiles/{userId}
+//    Document ID: matches userId
+//    Fields:
+//      - id: string (required, matches userId)
+//      - userId: string (required, matches userId)
+//      - displayName: string (required, 1-100 chars)
+//      - avatarUrl: string (optional, URL <= 500 chars ou data:image/ <= 350000 chars)
+//      - coverUrl: string (optional, URL <= 500 chars)
+//      - turma: string (optional, 1-20 chars)
+//      - turmaLabel: string (optional, 1-100 chars)
+//      - teamId: string (optional, 1-50 chars)
+//      - teamName: string (optional, 1-100 chars)
+//      - bio: string (optional, max 500 chars)
+//      - instagramHandle: string (optional, max 50 chars)
+//      - isAthlete: bool (optional)
+//      - role: string (optional, 1-50 chars)
+//      - linkedAthleteId: string (optional, max 64 chars)
+//      - favoriteModalityIds: list of strings (optional, max 30 items)
+//      - followersCount: number (optional, >= 0)
+//      - followingCount: number (optional, >= 0)
+//      - postsCount: number (optional, >= 0)
+//      - createdAtIso: string (optional, max 50 chars)
+//      - updatedAtIso: string (optional, max 50 chars)
+//
+// 10. Collection: posts/{postId}
+//    Document ID: post_{timestamp}_{random} or UUID
+//    Fields:
+//      - id: string (optional, 1-64 chars)
+//      - authorUid: string (required, 1-100 chars)
+//      - authorName: string (required, 1-100 chars)
+//      - authorAvatarUrl: string (optional, URL <= 500 chars ou data:image/ <= 350000 chars)
+//      - authorTurma: string (optional, max 50 chars)
+//      - authorTurmaLabel: string (optional, max 100 chars)
+//      - authorTeamId: string (optional, max 50 chars)
+//      - authorTeamName: string (optional, max 100 chars)
+//      - isAuthorAthlete: bool (optional)
+//      - authorRole: string (optional, max 50 chars)
+//      - content: string (required, max 2000 chars)
+//      - images: list of strings (optional, max 10 items)
+//      - likesCount: number (optional, >= 0)
+//      - commentsCount: number (optional, >= 0)
+//      - sharesCount: number (optional, >= 0)
+//      - teamTag: string (optional, max 50 chars)
+//      - modalityTag: string (optional, max 50 chars)
+//      - pinned: bool (optional)
+//      - createdAtIso: string (optional, max 50 chars)
+//      - updatedAtIso: string (optional, max 50 chars)
+//
+// 11. Collection: post_likes/{likeId}
+//    Document ID: ${postId}_${userId}
+//    Fields:
+//      - id: string (optional, max 165 chars)
+//      - postId: string (required, 1-64 chars)
+//      - userId: string (required, 1-100 chars)
+//      - createdAtIso: string (optional, max 50 chars)
+//
+// 12. Collection: post_comments/{commentId}
+//    Document ID: comm_{timestamp}_{random} or UUID
+//    Fields:
+//      - id: string (optional, 1-64 chars)
+//      - postId: string (required, 1-64 chars)
+//      - authorUid: string (required, 1-100 chars)
+//      - authorName: string (required, 1-100 chars)
+//      - authorAvatarUrl: string (optional, URL ou data:image/)
+//      - authorTurma: string (optional, max 50 chars)
+//      - authorTeamId: string (optional, max 50 chars)
+//      - isAuthorAthlete: bool (optional)
+//      - content: string (required, 1-500 chars)
+//      - createdAtIso: string (optional, max 50 chars)
+//      - updatedAtIso: string (optional, max 50 chars)
+//
+// 13. Collection: user_follows/{followId}
+//    Document ID: ${followerUid}_${followingUid}
+//    Fields:
+//      - id: string (optional, max 205 chars)
+//      - followerUid: string (required, 1-100 chars)
+//      - followingUid: string (required, 1-100 chars)
+//      - createdAtIso: string (optional, max 50 chars)
+//
+// 14. Collection: user_saves/{saveId}
+//    Document ID: ${userId}_${postId}
+//    Fields:
+//      - id: string (optional, max 165 chars)
+//      - userId: string (required, 1-100 chars)
+//      - postId: string (required, 1-64 chars)
+//      - savedAtIso: string (optional, max 50 chars)
+//
+// 15. Collection: social_notifications/{notificationId}
+//    Document ID: notif_{timestamp}_{random} or UUID
+//    Fields:
+//      - id: string (optional, 1-64 chars)
+//      - recipientUid: string (required, 1-100 chars)
+//      - actorUid: string (required, 1-100 chars)
+//      - actorName: string (required, 1-100 chars)
+//      - actorAvatarUrl: string (optional, URL ou data:image/)
+//      - type: string (required, in ['like', 'comment', 'follow', 'mention', 'athlete_achievement'])
+//      - title: string (required, 1-100 chars)
+//      - message: string (required, 1-300 chars)
+//      - targetPostId: string (optional, max 64 chars)
+//      - targetCommentId: string (optional, max 64 chars)
+//      - isRead: bool (required)
+//      - createdAtIso: string (optional, max 50 chars)
+//
 // ===============================================================
 
 service cloud.firestore {
@@ -246,6 +349,17 @@ service cloud.firestore {
       return !( 'revision' in data ) || data.revision == null || (
         data.revision is number && data.revision >= 0
       );
+    }
+
+    function isPostAuthor(postId) {
+      return postId != null &&
+        exists(/databases/$(database)/documents/posts/$(postId)) &&
+        get(/databases/$(database)/documents/posts/$(postId)).data.authorUid == request.auth.uid;
+    }
+
+    function isAuthorizedProfileRole(data) {
+      return isAdmin() || !( 'role' in data ) || data.role == null ||
+        !(data.role in ['admin', 'administrador', 'organizacao', 'moderador', 'moderador_master']);
     }
 
     // ===============================================================
@@ -473,6 +587,165 @@ service cloud.firestore {
         data.lots is list && data.lots.size() <= 10;
     }
 
+    // Validador de Perfil Público (Rede Social)
+    function isValidPublicProfile(data) {
+      let requiredFields = ['id', 'userId', 'displayName'];
+      let allowedFields = [
+        'id', 'userId', 'displayName', 'avatarUrl', 'coverUrl', 'turma',
+        'turmaLabel', 'teamId', 'teamName', 'bio', 'instagramHandle',
+        'isAthlete', 'role', 'linkedAthleteId', 'favoriteModalityIds',
+        'followersCount', 'followingCount', 'postsCount',
+        'createdAtIso', 'updatedAtIso'
+      ];
+
+      return hasRequiredFields(data, requiredFields) &&
+        hasOnlyAllowedFields(data, allowedFields) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 100 &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 100 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+        isValidOptionalAvatar(data.get('avatarUrl', null)) &&
+        isValidOptionalUrl(data.get('coverUrl', null)) &&
+        isValidOptionalString(data, 'turma', 1, 20) &&
+        isValidOptionalString(data, 'turmaLabel', 1, 100) &&
+        isValidOptionalString(data, 'teamId', 1, 50) &&
+        isValidOptionalString(data, 'teamName', 1, 100) &&
+        isValidOptionalString(data, 'bio', 1, 500) &&
+        isValidOptionalString(data, 'instagramHandle', 1, 50) &&
+        isValidOptionalString(data, 'linkedAthleteId', 1, 64) &&
+        isValidOptionalString(data, 'role', 1, 50) &&
+        isValidOptionalString(data, 'createdAtIso', 1, 50) &&
+        isValidOptionalString(data, 'updatedAtIso', 1, 50) &&
+        (!( 'isAthlete' in data ) || data.isAthlete == null || data.isAthlete is bool) &&
+        (!( 'followersCount' in data ) || data.followersCount == null || (data.followersCount is number && data.followersCount >= 0)) &&
+        (!( 'followingCount' in data ) || data.followingCount == null || (data.followingCount is number && data.followingCount >= 0)) &&
+        (!( 'postsCount' in data ) || data.postsCount == null || (data.postsCount is number && data.postsCount >= 0)) &&
+        (!( 'favoriteModalityIds' in data ) || data.favoriteModalityIds == null || (data.favoriteModalityIds is list && data.favoriteModalityIds.size() <= 30));
+    }
+
+    // Validador de Publicação (Feed Social)
+    function isValidSocialPost(data) {
+      let requiredFields = ['authorUid', 'authorName', 'content'];
+      let allowedFields = [
+        'id', 'authorUid', 'authorName', 'authorAvatarUrl', 'authorTurma',
+        'authorTurmaLabel', 'authorTeamId', 'authorTeamName', 'isAuthorAthlete',
+        'authorRole', 'content', 'images', 'likesCount', 'commentsCount',
+        'sharesCount', 'teamTag', 'modalityTag', 'pinned',
+        'createdAtIso', 'updatedAtIso'
+      ];
+
+      return hasRequiredFields(data, requiredFields) &&
+        hasOnlyAllowedFields(data, allowedFields) &&
+        data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 100 &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100 &&
+        data.content is string && data.content.size() <= 2000 &&
+        isValidOptionalString(data, 'id', 1, 64) &&
+        isValidOptionalAvatar(data.get('authorAvatarUrl', null)) &&
+        isValidOptionalString(data, 'authorTurma', 1, 50) &&
+        isValidOptionalString(data, 'authorTurmaLabel', 1, 100) &&
+        isValidOptionalString(data, 'authorTeamId', 1, 50) &&
+        isValidOptionalString(data, 'authorTeamName', 1, 100) &&
+        isValidOptionalString(data, 'authorRole', 1, 50) &&
+        isValidOptionalString(data, 'teamTag', 1, 50) &&
+        isValidOptionalString(data, 'modalityTag', 1, 50) &&
+        isValidOptionalString(data, 'createdAtIso', 1, 50) &&
+        isValidOptionalString(data, 'updatedAtIso', 1, 50) &&
+        (!( 'isAuthorAthlete' in data ) || data.isAuthorAthlete == null || data.isAuthorAthlete is bool) &&
+        (!( 'pinned' in data ) || data.pinned == null || data.pinned is bool) &&
+        (!( 'images' in data ) || data.images == null || (data.images is list && data.images.size() <= 10)) &&
+        (!( 'likesCount' in data ) || data.likesCount == null || (data.likesCount is number && data.likesCount >= 0)) &&
+        (!( 'commentsCount' in data ) || data.commentsCount == null || (data.commentsCount is number && data.commentsCount >= 0)) &&
+        (!( 'sharesCount' in data ) || data.sharesCount == null || (data.sharesCount is number && data.sharesCount >= 0));
+    }
+
+    // Validador de Curtida em Post
+    function isValidPostLike(data) {
+      let requiredFields = ['postId', 'userId'];
+      let allowedFields = ['id', 'postId', 'userId', 'createdAtIso'];
+
+      return hasRequiredFields(data, requiredFields) &&
+        hasOnlyAllowedFields(data, allowedFields) &&
+        data.postId is string && data.postId.size() >= 1 && data.postId.size() <= 64 &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 100 &&
+        isValidOptionalString(data, 'id', 1, 165) &&
+        isValidOptionalString(data, 'createdAtIso', 1, 50);
+    }
+
+    // Validador de Comentário em Post
+    function isValidPostComment(data) {
+      let requiredFields = ['postId', 'authorUid', 'authorName', 'content'];
+      let allowedFields = [
+        'id', 'postId', 'authorUid', 'authorName', 'authorAvatarUrl',
+        'authorTurma', 'authorTeamId', 'isAuthorAthlete', 'content',
+        'createdAtIso', 'updatedAtIso'
+      ];
+
+      return hasRequiredFields(data, requiredFields) &&
+        hasOnlyAllowedFields(data, allowedFields) &&
+        data.postId is string && data.postId.size() >= 1 && data.postId.size() <= 64 &&
+        data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 100 &&
+        data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 100 &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 500 &&
+        isValidOptionalString(data, 'id', 1, 64) &&
+        isValidOptionalAvatar(data.get('authorAvatarUrl', null)) &&
+        isValidOptionalString(data, 'authorTurma', 1, 50) &&
+        isValidOptionalString(data, 'authorTeamId', 1, 50) &&
+        isValidOptionalString(data, 'createdAtIso', 1, 50) &&
+        isValidOptionalString(data, 'updatedAtIso', 1, 50) &&
+        (!( 'isAuthorAthlete' in data ) || data.isAuthorAthlete == null || data.isAuthorAthlete is bool);
+    }
+
+    // Validador de Seguidor / Conexão
+    function isValidUserFollow(data) {
+      let requiredFields = ['followerUid', 'followingUid'];
+      let allowedFields = ['id', 'followerUid', 'followingUid', 'createdAtIso'];
+
+      return hasRequiredFields(data, requiredFields) &&
+        hasOnlyAllowedFields(data, allowedFields) &&
+        data.followerUid is string && data.followerUid.size() >= 1 && data.followerUid.size() <= 100 &&
+        data.followingUid is string && data.followingUid.size() >= 1 && data.followingUid.size() <= 100 &&
+        data.followerUid != data.followingUid &&
+        isValidOptionalString(data, 'id', 1, 205) &&
+        isValidOptionalString(data, 'createdAtIso', 1, 50);
+    }
+
+    // Validador de Publicação Salva
+    function isValidSavedPost(data) {
+      let requiredFields = ['userId', 'postId'];
+      let allowedFields = ['id', 'userId', 'postId', 'savedAtIso'];
+
+      return hasRequiredFields(data, requiredFields) &&
+        hasOnlyAllowedFields(data, allowedFields) &&
+        data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 100 &&
+        data.postId is string && data.postId.size() >= 1 && data.postId.size() <= 64 &&
+        isValidOptionalString(data, 'id', 1, 165) &&
+        isValidOptionalString(data, 'savedAtIso', 1, 50);
+    }
+
+    // Validador de Notificação Social
+    function isValidSocialNotification(data) {
+      let requiredFields = ['recipientUid', 'actorUid', 'actorName', 'type', 'title', 'message', 'isRead'];
+      let allowedFields = [
+        'id', 'recipientUid', 'actorUid', 'actorName', 'actorAvatarUrl',
+        'type', 'title', 'message', 'targetPostId', 'targetCommentId',
+        'isRead', 'createdAtIso'
+      ];
+
+      return hasRequiredFields(data, requiredFields) &&
+        hasOnlyAllowedFields(data, allowedFields) &&
+        data.recipientUid is string && data.recipientUid.size() >= 1 && data.recipientUid.size() <= 100 &&
+        data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 100 &&
+        data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100 &&
+        data.type in ['like', 'comment', 'follow', 'mention', 'athlete_achievement'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+        data.message is string && data.message.size() >= 1 && data.message.size() <= 300 &&
+        data.isRead is bool &&
+        isValidOptionalString(data, 'id', 1, 64) &&
+        isValidOptionalAvatar(data.get('actorAvatarUrl', null)) &&
+        isValidOptionalString(data, 'targetPostId', 1, 64) &&
+        isValidOptionalString(data, 'targetCommentId', 1, 64) &&
+        isValidOptionalString(data, 'createdAtIso', 1, 50);
+    }
+
     // ===============================================================
     // Root Match: Default Deny
     // ===============================================================
@@ -624,5 +897,193 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ===============================================================
+    // 7. Perfis Públicos da Comunidade Universitária (Rede Social)
+    // ===============================================================
+
+    match /profiles/{userId} {
+      // Leitura pública universal para descoberta de membros, atletas e torcedores
+      allow read: if true;
+
+      // Criação permitida ao titular autenticado ou administradores
+      // Bloqueia auto-atribuição de privilégios administrativos
+      allow create: if isAuthenticated() &&
+        (isOwner(userId) || isAdmin()) &&
+        isValidPublicProfile(request.resource.data) &&
+        request.resource.data.userId == userId &&
+        isAuthorizedProfileRole(request.resource.data);
+
+      // Atualização permitida para o próprio usuário ou administradores
+      // Imutabilidade de userId e prevenção rigorosa de elevação de privilégios de role
+      allow update: if isAuthenticated() &&
+        (isOwner(userId) || isAdmin()) &&
+        isValidPublicProfile(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'userId']) &&
+        (isAdmin() || !( 'role' in request.resource.data ) || request.resource.data.role == resource.data.get('role', null));
+
+      // Exclusão restrita exclusivamente a administradores
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 8. Publicações do Feed Universitário (Posts)
+    // ===============================================================
+
+    match /posts/{postId} {
+      // Leitura pública de postagens e comunicados no feed
+      allow read: if true;
+
+      // Criação aberta para usuários autenticados com autoria comprovada
+      allow create: if isAuthenticated() &&
+        isValidSocialPost(request.resource.data) &&
+        request.resource.data.authorUid == request.auth.uid &&
+        (isAdmin() || !( 'pinned' in request.resource.data ) || request.resource.data.pinned == false || request.resource.data.pinned == null);
+
+      // Edição restrita ao autor da postagem ou administradores
+      // Imutabilidade estrita dos campos identificadores e de autoria (id, authorUid, createdAtIso)
+      allow update: if isAuthenticated() &&
+        isValidSocialPost(request.resource.data) &&
+        (resource.data.authorUid == request.auth.uid || isAdmin()) &&
+        areImmutableFieldsUnchanged(['id', 'authorUid', 'createdAtIso']) &&
+        (isAdmin() || !( 'pinned' in request.resource.data ) || request.resource.data.pinned == resource.data.get('pinned', false));
+
+      // Exclusão permitida apenas ao autor da postagem ou administradores
+      allow delete: if isAuthenticated() &&
+        (resource.data.authorUid == request.auth.uid || isAdmin());
+    }
+
+    // ===============================================================
+    // 9. Curtidas em Publicações (Likes)
+    // ===============================================================
+
+    match /post_likes/{likeId} {
+      // Leitura pública do engajamento esportivo
+      allow read: if true;
+
+      // Criação vinculada estritamente ao usuário autenticado
+      // Document ID determinístico: ${postId}_${userId}
+      allow create: if isAuthenticated() &&
+        isValidPostLike(request.resource.data) &&
+        request.resource.data.userId == request.auth.uid &&
+        likeId == request.resource.data.postId + '_' + request.auth.uid;
+
+      // Imutabilidade: curtidas não são editadas, apenas criadas ou removidas
+      allow update: if false;
+
+      // Exclusão (descurtir) restrita ao próprio usuário ou administradores
+      allow delete: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // ===============================================================
+    // 10. Comentários em Publicações
+    // ===============================================================
+
+    match /post_comments/{commentId} {
+      // Leitura pública das discussões e interações
+      allow read: if true;
+
+      // Criação aberta a membros autenticados com autoria validada
+      allow create: if isAuthenticated() &&
+        isValidPostComment(request.resource.data) &&
+        request.resource.data.authorUid == request.auth.uid;
+
+      // Edição permitida ao autor do comentário ou administradores
+      allow update: if isAuthenticated() &&
+        isValidPostComment(request.resource.data) &&
+        (resource.data.authorUid == request.auth.uid || isAdmin()) &&
+        areImmutableFieldsUnchanged(['id', 'postId', 'authorUid', 'createdAtIso']);
+
+      // Exclusão permitida ao autor do comentário, ao autor da postagem (moderação de conteúdo próprio) ou administrador
+      allow delete: if isAuthenticated() && (
+        resource.data.authorUid == request.auth.uid ||
+        isAdmin() ||
+        isPostAuthor(resource.data.postId)
+      );
+    }
+
+    // ===============================================================
+    // 11. Conexões e Seguidores (Follows)
+    // ===============================================================
+
+    match /user_follows/{followId} {
+      // Leitura pública da rede de seguidores
+      allow read: if true;
+
+      // Criação permitida ao seguidor autenticado; bloqueia explicitamente o auto-follow
+      // Document ID determinístico: ${followerUid}_${followingUid}
+      allow create: if isAuthenticated() &&
+        isValidUserFollow(request.resource.data) &&
+        request.resource.data.followerUid == request.auth.uid &&
+        request.resource.data.followerUid != request.resource.data.followingUid &&
+        followId == request.auth.uid + '_' + request.resource.data.followingUid;
+
+      // Imutabilidade: relações de amizade/seguidor não são modificadas in-place
+      allow update: if false;
+
+      // Exclusão (deixar de seguir) restrita ao seguidor autenticado ou administradores
+      allow delete: if isAuthenticated() &&
+        (resource.data.followerUid == request.auth.uid || isAdmin());
+    }
+
+    // ===============================================================
+    // 12. Publicações Salvas (Bookmarks Pessoais)
+    // ===============================================================
+
+    match /user_saves/{saveId} {
+      // Coleção estritamente PRIVADA: leitura permitida apenas ao proprietário ou admin
+      allow read: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+
+      // Salvar publicação: vinculado ao usuário autenticado com ID determinístico (${userId}_${postId})
+      allow create: if isAuthenticated() &&
+        isValidSavedPost(request.resource.data) &&
+        request.resource.data.userId == request.auth.uid &&
+        saveId == request.auth.uid + '_' + request.resource.data.postId;
+
+      // Imutabilidade
+      allow update: if false;
+
+      // Remover item salvo restrito ao proprietário ou administrador
+      allow delete: if isAuthenticated() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // ===============================================================
+    // 13. Notificações Sociais do Participante
+    // ===============================================================
+
+    match /social_notifications/{notificationId} {
+      // Coleção PRIVADA: Leitura permitida apenas ao destinatário ou administrador
+      allow read: if isAuthenticated() &&
+        (resource.data.recipientUid == request.auth.uid || isAdmin());
+
+      // Criação aberta a usuários autenticados gerando interações legítimas
+      // O ator disparador deve corresponder à sessão auth e não pode notificar a si mesmo
+      allow create: if isAuthenticated() &&
+        isValidSocialNotification(request.resource.data) &&
+        request.resource.data.actorUid == request.auth.uid &&
+        request.resource.data.recipientUid != request.auth.uid &&
+        request.resource.data.isRead == false;
+
+      // Atualização permitida ao destinatário marcar status de leitura (isRead) ou administradores
+      allow update: if isAuthenticated() && (
+        (
+          resource.data.recipientUid == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']) &&
+          request.resource.data.isRead is bool
+        ) || (
+          isAdmin() &&
+          isValidSocialNotification(request.resource.data) &&
+          areImmutableFieldsUnchanged(['id', 'recipientUid', 'actorUid', 'createdAtIso'])
+        )
+      );
+
+      // Exclusão permitida para o destinatário ou administrador
+      allow delete: if isAuthenticated() &&
+        (resource.data.recipientUid == request.auth.uid || isAdmin());
+    }
+
   }
 }
+

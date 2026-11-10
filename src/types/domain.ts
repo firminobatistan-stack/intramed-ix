@@ -33,11 +33,19 @@ export interface UserProfile {
   role: UserRole;
   teamId?: string | null;
   teamName?: string | null;
+  turma?: TurmaMedicina | string | null;
+  turmaLabel?: string | null;
+  bio?: string | null;
+  instagramHandle?: string | null;
   linkedAthleteId?: string | null;
   modalityIds: string[];
   registrationCode?: string | null;
   mustChangePassword?: boolean;
   isActive?: boolean;
+  coverUrl?: string | null;
+  followersCount?: number;
+  followingCount?: number;
+  postsCount?: number;
   createdAtIso?: string;
   lastLoginAtIso?: string;
 }
@@ -47,6 +55,7 @@ export interface PublicUserProfile {
   userId: string;
   displayName: string;
   avatarUrl?: string | null;
+  coverUrl?: string | null;
   turma?: string | null;
   turmaLabel?: string | null;
   teamId?: string | null;
@@ -56,6 +65,11 @@ export interface PublicUserProfile {
   isAthlete: boolean;
   linkedAthleteId?: string | null;
   favoriteModalityIds?: string[];
+  followersCount?: number;
+  followingCount?: number;
+  postsCount?: number;
+  isFollowing?: boolean;
+  isFollower?: boolean;
   createdAtIso?: string;
   updatedAtIso?: string;
 }
@@ -828,4 +842,97 @@ export interface FinancialAuditLog {
   metadata?: Record<string, unknown>;
   timestampIso: string;
 }
+
+// ==========================================
+// 13. REDE SOCIAL UNIVERSITÁRIA & ESPORTIVA (INTRAMED IX)
+// ==========================================
+
+export interface SocialPost {
+  id: string;
+  authorUid: string;
+  authorName: string;
+  authorAvatarUrl?: string | null;
+  authorTurma?: string | null;
+  authorTurmaLabel?: string | null;
+  authorTeamId?: string | null;
+  authorTeamName?: string | null;
+  isAuthorAthlete: boolean;
+  authorRole?: UserRole;
+  content: string;
+  images: string[];
+  likesCount: number;
+  commentsCount: number;
+  sharesCount: number;
+  isLikedByMe?: boolean;
+  isSavedByMe?: boolean;
+  teamTag?: string | null;
+  modalityTag?: ModalitySlug | null;
+  pinned?: boolean;
+  createdAtIso: string;
+  updatedAtIso: string;
+}
+
+export interface PostLike {
+  id: string; // `${postId}_${userId}`
+  postId: string;
+  userId: string;
+  createdAtIso: string;
+}
+
+export interface PostComment {
+  id: string;
+  postId: string;
+  authorUid: string;
+  authorName: string;
+  authorAvatarUrl?: string | null;
+  authorTurma?: string | null;
+  authorTeamId?: string | null;
+  isAuthorAthlete?: boolean;
+  content: string;
+  createdAtIso: string;
+  updatedAtIso?: string;
+}
+
+export interface UserFollow {
+  id: string; // `${followerUid}_${followingUid}`
+  followerUid: string;
+  followingUid: string;
+  createdAtIso: string;
+}
+
+export interface UserFollowRelationship {
+  isFollowing: boolean;
+  isFollower: boolean;
+  mutualFollow: boolean;
+}
+
+export interface SavedPost {
+  id: string; // `${userId}_${postId}`
+  userId: string;
+  postId: string;
+  savedAtIso: string;
+}
+
+export type SocialNotificationType =
+  | 'like'
+  | 'comment'
+  | 'follow'
+  | 'mention'
+  | 'athlete_achievement';
+
+export interface SocialNotification {
+  id: string;
+  recipientUid: string;
+  actorUid: string;
+  actorName: string;
+  actorAvatarUrl?: string | null;
+  type: SocialNotificationType;
+  title: string;
+  message: string;
+  targetPostId?: string | null;
+  targetCommentId?: string | null;
+  isRead: boolean;
+  createdAtIso: string;
+}
+
 

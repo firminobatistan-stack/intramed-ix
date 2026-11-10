@@ -9,6 +9,7 @@ import {
   Medal,
   ChevronRight,
   UserCheck,
+  UserPlus,
   Sparkles,
   ExternalLink,
   Clock,
@@ -30,6 +31,7 @@ export const CommunityDirectoryPage: React.FC = () => {
     currentUser,
     canOperateOfficialData,
     launchConfig,
+    toggleFollowUser,
   } = useCompetitionStore();
 
   const isAdmin = canOperateOfficialData();
@@ -38,6 +40,23 @@ export const CommunityDirectoryPage: React.FC = () => {
   const [selectedTurma, setSelectedTurma] = useState<string>('todas');
   const [selectedTeam, setSelectedTeam] = useState<string>('todas');
   const [onlyAthletes, setOnlyAthletes] = useState(false);
+  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
+
+  const handleFollowToggle = async (targetUid: string) => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    const isCurrentlyFollowing = Boolean(followingMap[targetUid]);
+    setFollowingMap((prev) => ({ ...prev, [targetUid]: !isCurrentlyFollowing }));
+
+    const res = await toggleFollowUser(targetUid);
+    if (res.ok) {
+      setFollowingMap((prev) => ({ ...prev, [targetUid]: res.isFollowing }));
+    } else {
+      setFollowingMap((prev) => ({ ...prev, [targetUid]: isCurrentlyFollowing }));
+    }
+  };
 
   // Se o modo de lançamento público estiver com perfis ocultos e o visitante não for admin
   if (!launchConfig.publicProfilesVisible && !isAdmin) {
@@ -374,14 +393,26 @@ export const CommunityDirectoryPage: React.FC = () => {
                   <span className="text-[11px] text-slate-400">Torcida &amp; Comunidade</span>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => navigate(`/perfil/${member.userId || member.id}`)}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-[#0B218A] hover:text-blue-900 group-hover:translate-x-0.5 transition-all"
-                >
-                  <span>Ver Perfil</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {currentUser && (currentUser.id !== member.userId && currentUser.email !== member.userId) && (
+                    <Button
+                      variant={followingMap[member.userId || member.id] ? 'secondary' : 'primary'}
+                      size="sm"
+                      onClick={() => handleFollowToggle(member.userId || member.id)}
+                      className="px-2.5 py-1 text-[11px] h-auto"
+                    >
+                      {followingMap[member.userId || member.id] ? 'Seguindo' : 'Seguir'}
+                    </Button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/perfil/${member.userId || member.id}`)}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-[#0B218A] hover:text-blue-900 group-hover:translate-x-0.5 transition-all"
+                  >
+                    <span>Ver Perfil</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}

@@ -8,12 +8,14 @@ import {
   createSignedOperatorToken,
   decodeProfileMetadata,
   DEFAULT_LAUNCH_CONFIG,
+  DeleteDocumentFromFirestoreRest,
   encodeProfileMetadata,
   ensureCloudStoreHydrated,
   extractBearerOrHeaderToken,
   firebaseAuthSignIn,
   firebaseAuthSignUp,
   firebaseAuthUpdateProfile,
+  firebaseAuthVerifyIdToken,
   getCloudStore,
   handleNonApprovedPaymentStatusOnServer,
   hashPassword,
@@ -46,6 +48,12 @@ const ALLOWED_COLLECTIONS = new Set([
   'profiles',
   'users',
   'brackets',
+  'posts',
+  'post_likes',
+  'post_comments',
+  'user_follows',
+  'user_saves',
+  'social_notifications',
 ]);
 
 function canClientWriteDocument(
@@ -291,6 +299,30 @@ function canClientWriteDocument(
     };
   }
 
+  // 6. Coleções Sociais (posts, likes, comments, follows, saves, notifications)
+  if (
+    collectionName === 'posts' ||
+    collectionName === 'post_likes' ||
+    collectionName === 'post_comments' ||
+    collectionName === 'user_follows' ||
+    collectionName === 'user_saves' ||
+    collectionName === 'social_notifications'
+  ) {
+    if (!authTokenPayload) {
+      return { allowed: false, sanitizedData: {}, reason: 'Autenticação necessária para operações sociais.' };
+    }
+    return {
+      allowed: true,
+      sanitizedData: {
+        ...(existing || {}),
+        ...incoming,
+        id: docId,
+        revision: Math.max(prevRevision + 1, incomingRevision),
+        updatedAtIso: nowIso,
+      },
+    };
+  }
+
   return { allowed: false, sanitizedData: {}, reason: 'Coleção não autorizada.' };
 }
 
@@ -386,6 +418,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       matches: publicMatches,
       match_sheets: Object.values(store.match_sheets),
       profiles: publicProfiles,
+      posts: Object.values(store.posts || {}),
       brackets: store.brackets || {},
       lots: sanitizedLots,
       syncLogs: isAdminRequest ? store.sync_logs || [] : [],
@@ -591,14 +624,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // AÇÃO 2C-1: Cadastro Real de Usuário e Perfil Social (/api/cloud-sync -> register_user)
     if (action === 'register_user') {
-      const launchCfg = store.launch_config || DEFAULT_LAUNCH_CONFIG;
-      if (launchCfg.publicRegistrationEnabled === false) {
-        return res.status(403).json({
-          ok: false,
-          error: 'As inscrições e o cadastro de participantes estão temporariamente indisponíveis. Em breve o IntraMed será aberto oficialmente!',
-        });
-      }
-
       const nameInput = String(body.name || '').trim();
       const emailInput = String(body.email || '').trim().toLowerCase();
       const passwordInput = String(body.password || '').trim();
@@ -707,8 +732,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       store.updatedAtIso = nowIso;
 
       saveCloudStore(store);
-      void MirrorDocumentToFirestoreRest('users', userId, userRecord);
-      void MirrorDocumentToFirestoreRest('profiles', userId, profileRecord);
+      await MirrorDocumentToFirestoreRest('users', userId, userRecord);
+      await MirrorDocumentToFirestoreRest('profiles', userId, profileRecord);
 
       // Emite token assinado seguro
       const token = createSignedOperatorToken({
@@ -733,6 +758,128 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // AÇÃO 2C-1B: Login / Cadastro Unificado com Conta Google (/api/cloud-sync -> google_login)
+    if (action === 'google_login') {
+      const idTokenInput = String(body.idToken || '').trim();
+      if (!idTokenInput) {
+        return res.status(400).json({ ok: false, error: 'Token de autenticação do Google ausente.' });
+      }
+
+      const verifyRes = await firebaseAuthVerifyIdToken(idTokenInput);
+      if (!verifyRes.ok || !verifyRes.user) {
+        return res.status(401).json({
+          ok: false,
+          error: verifyRes.error || 'Não foi possível validar sua conta Google junto ao Firebase.',
+        });
+      }
+
+      if (!store.users) store.users = {};
+      if (!store.profiles) store.profiles = {};
+
+      const fbUser = verifyRes.user;
+      const userId = fbUser.localId;
+      const userEmail = String(fbUser.email || body.email || '').trim().toLowerCase();
+      const nowIso = new Date().toISOString();
+
+      const existingUser = store.users[userId] || (userEmail ? store.users[userEmail] : undefined);
+      const existingProfile = store.profiles[userId] || (existingUser?.id ? store.profiles[String(existingUser.id)] : undefined);
+
+      const userName =
+        String(existingUser?.name || fbUser.displayName || body.displayName || userEmail.split('@')[0] || 'Participante IntraMed').trim();
+
+      const googleAvatar =
+        (existingProfile?.avatarUrl as string) ||
+        fbUser.photoUrl ||
+        (typeof body.photoUrl === 'string' && body.photoUrl ? body.photoUrl : null);
+
+      const existingReg = Object.values(store.registrations).find(
+        (r) => userEmail && String(r.athleteEmail || '').trim().toLowerCase() === userEmail
+      );
+
+      let userRole: UserRole = (existingUser?.role as UserRole) || 'visitante';
+      if (isMasterAccount(userEmail)) {
+        userRole = 'moderador_master';
+      } else if (store.admin_users?.[userEmail]?.role) {
+        userRole = store.admin_users[userEmail].role as UserRole;
+      } else if (existingReg && existingReg.paymentStatus === 'pago') {
+        userRole = 'atleta';
+      }
+
+      const linkedAthleteId =
+        (existingUser?.linkedAthleteId as string) ||
+        (existingProfile?.linkedAthleteId as string) ||
+        (existingReg ? (existingReg.linkedAthleteId as string) || `ath-${existingReg.id}` : null);
+
+      const userRecord: Record<string, unknown> = {
+        ...(existingUser || {}),
+        id: userId,
+        email: userEmail,
+        name: userName,
+        authProvider: 'google',
+        role: userRole,
+        linkedAthleteId,
+        registrationId: existingReg ? existingReg.id : existingUser?.registrationId || null,
+        isActive: true,
+        mustChangePassword: false,
+        createdAtIso: existingUser?.createdAtIso || nowIso,
+        updatedAtIso: nowIso,
+        lastLoginAtIso: nowIso,
+      };
+
+      const profileRecord: Record<string, unknown> = {
+        ...(existingProfile || {}),
+        id: userId,
+        userId,
+        displayName: (existingProfile?.displayName as string) || userName,
+        avatarUrl: googleAvatar,
+        turma: existingProfile?.turma || (existingReg?.turma as string) || (body.turma as string) || null,
+        turmaLabel: existingProfile?.turmaLabel || (existingReg?.turmaLabel as string) || (body.turmaLabel as string) || null,
+        teamId: existingProfile?.teamId || (existingReg?.teamId as string) || (body.teamId as string) || null,
+        teamName: existingProfile?.teamName || (existingReg?.teamName as string) || (body.teamName as string) || null,
+        bio: existingProfile?.bio || (existingReg?.bio as string) || null,
+        instagramHandle: existingProfile?.instagramHandle || (existingReg?.instagramHandle as string) || null,
+        role: userRole,
+        isAthlete: userRole === 'atleta' || Boolean(existingReg && existingReg.paymentStatus === 'pago'),
+        linkedAthleteId,
+        favoriteModalityIds: existingProfile?.favoriteModalityIds || [],
+        createdAtIso: existingProfile?.createdAtIso || nowIso,
+        updatedAtIso: nowIso,
+      };
+
+      store.users[userId] = userRecord;
+      if (userEmail) {
+        store.users[userEmail] = userRecord;
+      }
+      store.profiles[userId] = profileRecord;
+      store.updatedAtIso = nowIso;
+
+      saveCloudStore(store);
+      await MirrorDocumentToFirestoreRest('users', userId, userRecord);
+      await MirrorDocumentToFirestoreRest('profiles', userId, profileRecord);
+
+      const token = createSignedOperatorToken({
+        role: userRole,
+        email: userEmail,
+        officialName: userName,
+        userId,
+        mustChangePassword: false,
+      });
+
+      return res.status(200).json({
+        ok: true,
+        token,
+        isNewUser: !existingUser,
+        user: {
+          id: userId,
+          email: userEmail,
+          name: userName,
+          role: userRole,
+          linkedAthleteId,
+        },
+        profile: sanitizeUserProfileForPublic(profileRecord),
+      });
+    }
+
     // AÇÃO 2C-2: Login Unificado (/api/cloud-sync -> user_login)
     if (action === 'user_login') {
       const identifierInput = String(body.email || body.identifier || '').trim().toLowerCase();
@@ -740,17 +887,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (!identifierInput || !passwordInput) {
         return res.status(400).json({ ok: false, error: 'E-mail e senha são obrigatórios.' });
-      }
-
-      const launchCfg = store.launch_config || DEFAULT_LAUNCH_CONFIG;
-      const adminUsers = store.admin_users || {};
-      const isAdminAccount = Boolean(adminUsers[identifierInput] || isMasterAccount(identifierInput));
-
-      if (launchCfg.publicLoginEnabled === false && !isAdminAccount) {
-        return res.status(403).json({
-          ok: false,
-          error: 'O login público de participantes está em preparação e será liberado em breve. Acompanhe as informações do evento por aqui!',
-        });
       }
 
       if (!store.users) store.users = {};
@@ -807,6 +943,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         store.users[userEmail] = userRecord;
         store.profiles[userId] = profileRecord;
         saveCloudStore(store);
+        await MirrorDocumentToFirestoreRest('users', userId, userRecord);
+        await MirrorDocumentToFirestoreRest('profiles', userId, profileRecord);
 
         const token = createSignedOperatorToken({
           role: userRole,
@@ -956,9 +1094,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       user.updatedAtIso = new Date().toISOString();
       saveCloudStore(store);
 
-      void MirrorDocumentToFirestoreRest('users', String(user.id), user);
+      await MirrorDocumentToFirestoreRest('users', String(user.id), user);
       if (user.email) {
-        void MirrorDocumentToFirestoreRest('users', String(user.email), user);
+        await MirrorDocumentToFirestoreRest('users', String(user.email), user);
       }
 
       return res.status(200).json({ ok: true, message: 'Senha atualizada com sucesso no banco de dados!' });
@@ -989,6 +1127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ...existingProfile,
         displayName: typeof body.displayName === 'string' && body.displayName.trim() ? body.displayName.trim() : existingProfile.displayName,
         avatarUrl: body.avatarUrl !== undefined ? body.avatarUrl : existingProfile.avatarUrl,
+        coverUrl: body.coverUrl !== undefined ? body.coverUrl : existingProfile.coverUrl,
         turma: body.turma !== undefined ? body.turma : existingProfile.turma,
         turmaLabel: body.turmaLabel !== undefined ? body.turmaLabel : existingProfile.turmaLabel,
         teamId: body.teamId !== undefined ? body.teamId : existingProfile.teamId,
@@ -1003,7 +1142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       store.updatedAtIso = nowIso;
       saveCloudStore(store);
 
-      void MirrorDocumentToFirestoreRest('profiles', targetUserId, updatedProfile);
+      await MirrorDocumentToFirestoreRest('profiles', targetUserId, updatedProfile);
 
       return res.status(200).json({
         ok: true,
@@ -1051,6 +1190,688 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // AÇÃO SOCIAL 1: Validação de Sessão Server-Side (/api/cloud-sync -> validate_session)
+    if (action === 'validate_session') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Sessão inválida, inexistente ou expirada.' });
+      }
+      const tokenEmail = (verifiedToken.email || '').toLowerCase().trim();
+      const tokenUid = verifiedToken.userId || '';
+
+      const userRec = (tokenUid && store.users?.[tokenUid]) || (tokenEmail && store.users?.[tokenEmail]);
+      const adminRec = tokenEmail && store.admin_users?.[tokenEmail];
+
+      if (!userRec && !adminRec) {
+        return res.status(401).json({ ok: false, error: 'Usuário não localizado na base oficial central.' });
+      }
+
+      const effectiveUid = tokenUid || (adminRec ? adminRec.id : (userRec ? userRec.id : ''));
+      const effectiveProfile = (effectiveUid && store.profiles?.[effectiveUid]) || (tokenEmail && store.profiles?.[tokenEmail]) || null;
+
+      return res.status(200).json({
+        ok: true,
+        user: {
+          id: effectiveUid,
+          email: tokenEmail || (userRec?.email as string) || '',
+          name: (verifiedToken.officialName || userRec?.name || adminRec?.name || 'Participante') as string,
+          role: verifiedToken.role,
+          linkedAthleteId: userRec?.linkedAthleteId || null,
+        },
+        profile: effectiveProfile ? sanitizeUserProfileForPublic(effectiveProfile) : null,
+      });
+    }
+
+    // AÇÃO SOCIAL 2: Listagem de Publicações do Feed (/api/cloud-sync -> list_posts)
+    if (action === 'list_posts') {
+      const currentUid = verifiedToken?.userId || (verifiedToken?.email ? verifiedToken.email.toLowerCase() : null);
+      const teamFilter = body.teamId ? String(body.teamId).trim() : null;
+      const authorFilter = body.authorUid ? String(body.authorUid).trim() : null;
+      const onlySaved = Boolean(body.onlySaved);
+      const limit = Math.min(Math.max(Number(body.limit) || 25, 1), 60);
+      const offset = Math.max(Number(body.offset) || 0, 0);
+
+      const allPosts = Object.values(store.posts || {});
+
+      // Mapeia salvos pelo usuário logado
+      const mySavedPostIds = new Set<string>();
+      if (currentUid && store.user_saves) {
+        for (const save of Object.values(store.user_saves)) {
+          if (save?.userId === currentUid && save?.postId) {
+            mySavedPostIds.add(String(save.postId));
+          }
+        }
+      }
+
+      // Mapeia curtidas pelo usuário logado
+      const myLikedPostIds = new Set<string>();
+      if (currentUid && store.post_likes) {
+        for (const like of Object.values(store.post_likes)) {
+          if (like?.userId === currentUid && like?.postId) {
+            myLikedPostIds.add(String(like.postId));
+          }
+        }
+      }
+
+      const filtered = allPosts.filter((post) => {
+        if (!post || !post.id) return false;
+        if (authorFilter && post.authorUid !== authorFilter) return false;
+        if (teamFilter && post.authorTeamId !== teamFilter && post.teamTag !== teamFilter) return false;
+        if (onlySaved) {
+          if (!currentUid || !mySavedPostIds.has(String(post.id))) return false;
+        }
+        return true;
+      });
+
+      // Ordena por data decrescente
+      filtered.sort((a, b) => {
+        const tA = new Date(String(a.createdAtIso || 0)).getTime();
+        const tB = new Date(String(b.createdAtIso || 0)).getTime();
+        return tB - tA;
+      });
+
+      const paginated = filtered.slice(offset, offset + limit).map((post) => ({
+        ...post,
+        isLikedByMe: currentUid ? myLikedPostIds.has(String(post.id)) : false,
+        isSavedByMe: currentUid ? mySavedPostIds.has(String(post.id)) : false,
+      }));
+
+      return res.status(200).json({
+        ok: true,
+        posts: paginated,
+        total: filtered.length,
+        hasMore: offset + limit < filtered.length,
+      });
+    }
+
+    // AÇÃO SOCIAL 3: Criação de Publicação (/api/cloud-sync -> create_post)
+    if (action === 'create_post') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Apenas usuários autenticados podem publicar no feed.' });
+      }
+      const authorUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+      const content = String(body.content || '').trim();
+      const images = Array.isArray(body.images) ? body.images.slice(0, 4) : [];
+
+      if (!content && images.length === 0) {
+        return res.status(400).json({ ok: false, error: 'A publicação precisa conter texto ou pelo menos uma imagem.' });
+      }
+      if (content.length > 2000) {
+        return res.status(400).json({ ok: false, error: 'O texto da publicação não pode ultrapassar 2.000 caracteres.' });
+      }
+
+      const profile = (authorUid && store.profiles?.[authorUid]) || null;
+      const user = (authorUid && store.users?.[authorUid]) || null;
+      const postId = `post_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const nowIso = new Date().toISOString();
+
+      const newPost: Record<string, unknown> = {
+        id: postId,
+        authorUid,
+        authorName: (profile?.displayName || verifiedToken.officialName || user?.name || 'Participante') as string,
+        authorAvatarUrl: (profile?.avatarUrl || null) as string | null,
+        authorTurma: (profile?.turma || null) as string | null,
+        authorTurmaLabel: (profile?.turmaLabel || null) as string | null,
+        authorTeamId: (profile?.teamId || null) as string | null,
+        authorTeamName: (profile?.teamName || null) as string | null,
+        isAuthorAthlete: Boolean(profile?.isAthlete || profile?.linkedAthleteId || user?.linkedAthleteId),
+        authorRole: verifiedToken.role,
+        content,
+        images,
+        likesCount: 0,
+        commentsCount: 0,
+        sharesCount: 0,
+        teamTag: body.teamTag ? String(body.teamTag).trim() : (profile?.teamId || null),
+        modalityTag: body.modalityTag ? String(body.modalityTag).trim() : null,
+        createdAtIso: nowIso,
+        updatedAtIso: nowIso,
+      };
+
+      if (!store.posts) store.posts = {};
+      store.posts[postId] = newPost;
+
+      if (profile) {
+        profile.postsCount = (Number(profile.postsCount) || 0) + 1;
+        profile.updatedAtIso = nowIso;
+        store.profiles[authorUid] = profile;
+        await MirrorDocumentToFirestoreRest('profiles', authorUid, profile);
+      }
+
+      store.updatedAtIso = nowIso;
+      saveCloudStore(store);
+      await MirrorDocumentToFirestoreRest('posts', postId, newPost);
+
+      return res.status(201).json({
+        ok: true,
+        post: { ...newPost, isLikedByMe: false, isSavedByMe: false },
+      });
+    }
+
+    // AÇÃO SOCIAL 4: Edição de Publicação (/api/cloud-sync -> update_post)
+    if (action === 'update_post') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para editar publicações.' });
+      }
+      const postId = String(body.postId || '').trim();
+      const newContent = String(body.content || '').trim();
+
+      const existingPost = store.posts?.[postId];
+      if (!existingPost) {
+        return res.status(404).json({ ok: false, error: 'Publicação não encontrada.' });
+      }
+
+      const authorUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+      const isAuthor = String(existingPost.authorUid) === authorUid;
+
+      if (!isAuthor && !isAdmin) {
+        return res.status(403).json({ ok: false, error: 'Você não tem permissão para editar publicações de terceiros.' });
+      }
+
+      if (!newContent && (!Array.isArray(existingPost.images) || existingPost.images.length === 0)) {
+        return res.status(400).json({ ok: false, error: 'O conteúdo da publicação não pode ficar vazio.' });
+      }
+
+      const nowIso = new Date().toISOString();
+      existingPost.content = newContent;
+      if (Array.isArray(body.images)) {
+        existingPost.images = body.images.slice(0, 4);
+      }
+      existingPost.updatedAtIso = nowIso;
+
+      store.posts[postId] = existingPost;
+      store.updatedAtIso = nowIso;
+      saveCloudStore(store);
+      await MirrorDocumentToFirestoreRest('posts', postId, existingPost);
+
+      return res.status(200).json({
+        ok: true,
+        post: existingPost,
+      });
+    }
+
+    // AÇÃO SOCIAL 5: Exclusão de Publicação (/api/cloud-sync -> delete_post)
+    if (action === 'delete_post') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para excluir publicações.' });
+      }
+      const postId = String(body.postId || '').trim();
+      const existingPost = store.posts?.[postId];
+
+      if (!existingPost) {
+        return res.status(404).json({ ok: false, error: 'Publicação não encontrada.' });
+      }
+
+      const authorUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+      const isAuthor = String(existingPost.authorUid) === authorUid;
+
+      if (!isAuthor && !isAdmin) {
+        return res.status(403).json({ ok: false, error: 'Você não tem permissão para excluir esta publicação.' });
+      }
+
+      delete store.posts[postId];
+      await DeleteDocumentFromFirestoreRest('posts', postId);
+
+      // Decrementa o contador de posts do autor
+      const postAuthorUid = String(existingPost.authorUid);
+      if (store.profiles?.[postAuthorUid]) {
+        const prof = store.profiles[postAuthorUid];
+        prof.postsCount = Math.max((Number(prof.postsCount) || 1) - 1, 0);
+        prof.updatedAtIso = new Date().toISOString();
+        await MirrorDocumentToFirestoreRest('profiles', postAuthorUid, prof);
+      }
+
+      // Remove comentários e curtidas associados
+      if (store.post_comments) {
+        for (const [cId, comm] of Object.entries(store.post_comments)) {
+          if (comm?.postId === postId) {
+            delete store.post_comments[cId];
+            await DeleteDocumentFromFirestoreRest('post_comments', cId);
+          }
+        }
+      }
+      if (store.post_likes) {
+        for (const [lId, like] of Object.entries(store.post_likes)) {
+          if (like?.postId === postId) {
+            delete store.post_likes[lId];
+            await DeleteDocumentFromFirestoreRest('post_likes', lId);
+          }
+        }
+      }
+
+      saveCloudStore(store);
+      return res.status(200).json({ ok: true, deletedPostId: postId });
+    }
+
+    // AÇÃO SOCIAL 6: Curtir / Descurtir Publicação (/api/cloud-sync -> toggle_like)
+    if (action === 'toggle_like') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para curtir publicações.' });
+      }
+      const postId = String(body.postId || '').trim();
+      const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+
+      const post = store.posts?.[postId];
+      if (!post) {
+        return res.status(404).json({ ok: false, error: 'Publicação não encontrada.' });
+      }
+
+      if (!store.post_likes) store.post_likes = {};
+      const likeKey = `${postId}_${currentUid}`;
+      const existingLike = store.post_likes[likeKey];
+      const nowIso = new Date().toISOString();
+
+      if (existingLike) {
+        // Remover curtida
+        delete store.post_likes[likeKey];
+        await DeleteDocumentFromFirestoreRest('post_likes', likeKey);
+        post.likesCount = Math.max((Number(post.likesCount) || 1) - 1, 0);
+        post.updatedAtIso = nowIso;
+        store.posts[postId] = post;
+        saveCloudStore(store);
+        await MirrorDocumentToFirestoreRest('posts', postId, post);
+
+        return res.status(200).json({ ok: true, isLiked: false, likesCount: post.likesCount });
+      } else {
+        // Inserir curtida idempotente
+        const likeRecord = {
+          id: likeKey,
+          postId,
+          userId: currentUid,
+          createdAtIso: nowIso,
+        };
+        store.post_likes[likeKey] = likeRecord;
+        await MirrorDocumentToFirestoreRest('post_likes', likeKey, likeRecord);
+
+        post.likesCount = (Number(post.likesCount) || 0) + 1;
+        post.updatedAtIso = nowIso;
+        store.posts[postId] = post;
+        saveCloudStore(store);
+        await MirrorDocumentToFirestoreRest('posts', postId, post);
+
+        // Notificação para o autor da publicação (se não for a si mesmo)
+        const authorUid = String(post.authorUid);
+        if (authorUid && authorUid !== currentUid) {
+          if (!store.social_notifications) store.social_notifications = {};
+          const notifId = `notif_like_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          const notifRecord = {
+            id: notifId,
+            recipientUid: authorUid,
+            actorUid: currentUid,
+            actorName: verifiedToken.officialName || 'Um participante',
+            actorAvatarUrl: store.profiles?.[currentUid]?.avatarUrl || null,
+            type: 'like',
+            title: 'Nova curtida',
+            message: `${verifiedToken.officialName || 'Um participante'} curtiu sua publicação.`,
+            targetPostId: postId,
+            isRead: false,
+            createdAtIso: nowIso,
+          };
+          store.social_notifications[notifId] = notifRecord;
+          await MirrorDocumentToFirestoreRest('social_notifications', notifId, notifRecord);
+        }
+
+        return res.status(200).json({ ok: true, isLiked: true, likesCount: post.likesCount });
+      }
+    }
+
+    // AÇÃO SOCIAL 7: Listar Comentários (/api/cloud-sync -> list_comments)
+    if (action === 'list_comments') {
+      const postId = String(body.postId || '').trim();
+      if (!postId) {
+        return res.status(400).json({ ok: false, error: 'ID da publicação é obrigatório.' });
+      }
+
+      const allComments = Object.values(store.post_comments || {});
+      const postComments = allComments.filter((c) => c && c.postId === postId);
+
+      postComments.sort((a, b) => {
+        const tA = new Date(String(a.createdAtIso || 0)).getTime();
+        const tB = new Date(String(b.createdAtIso || 0)).getTime();
+        return tA - tB;
+      });
+
+      return res.status(200).json({
+        ok: true,
+        comments: postComments,
+        total: postComments.length,
+      });
+    }
+
+    // AÇÃO SOCIAL 8: Criar Comentário (/api/cloud-sync -> create_comment)
+    if (action === 'create_comment') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para comentar.' });
+      }
+      const postId = String(body.postId || '').trim();
+      const content = String(body.content || '').trim();
+
+      if (!postId || !content) {
+        return res.status(400).json({ ok: false, error: 'Publicação e conteúdo do comentário são obrigatórios.' });
+      }
+      if (content.length > 500) {
+        return res.status(400).json({ ok: false, error: 'O comentário deve possuir no máximo 500 caracteres.' });
+      }
+
+      const post = store.posts?.[postId];
+      if (!post) {
+        return res.status(404).json({ ok: false, error: 'Publicação não localizada.' });
+      }
+
+      const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+      const profile = (currentUid && store.profiles?.[currentUid]) || null;
+      const commentId = `comm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const nowIso = new Date().toISOString();
+
+      const newComment = {
+        id: commentId,
+        postId,
+        authorUid: currentUid,
+        authorName: (profile?.displayName || verifiedToken.officialName || 'Participante') as string,
+        authorAvatarUrl: (profile?.avatarUrl || null) as string | null,
+        authorTurma: (profile?.turma || null) as string | null,
+        authorTeamId: (profile?.teamId || null) as string | null,
+        isAuthorAthlete: Boolean(profile?.isAthlete || profile?.linkedAthleteId),
+        content,
+        createdAtIso: nowIso,
+      };
+
+      if (!store.post_comments) store.post_comments = {};
+      store.post_comments[commentId] = newComment;
+
+      post.commentsCount = (Number(post.commentsCount) || 0) + 1;
+      post.updatedAtIso = nowIso;
+      store.posts[postId] = post;
+
+      saveCloudStore(store);
+      await MirrorDocumentToFirestoreRest('post_comments', commentId, newComment);
+      await MirrorDocumentToFirestoreRest('posts', postId, post);
+
+      // Notificação para o autor da publicação (se diferente de quem comentou)
+      const authorUid = String(post.authorUid);
+      if (authorUid && authorUid !== currentUid) {
+        if (!store.social_notifications) store.social_notifications = {};
+        const notifId = `notif_comm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const snippet = content.length > 40 ? `${content.slice(0, 37)}...` : content;
+        const notifRecord = {
+          id: notifId,
+          recipientUid: authorUid,
+          actorUid: currentUid,
+          actorName: verifiedToken.officialName || 'Um participante',
+          actorAvatarUrl: profile?.avatarUrl || null,
+          type: 'comment',
+          title: 'Novo comentário',
+          message: `${verifiedToken.officialName || 'Um participante'} comentou: "${snippet}"`,
+          targetPostId: postId,
+          targetCommentId: commentId,
+          isRead: false,
+          createdAtIso: nowIso,
+        };
+        store.social_notifications[notifId] = notifRecord;
+        await MirrorDocumentToFirestoreRest('social_notifications', notifId, notifRecord);
+      }
+
+      return res.status(201).json({
+        ok: true,
+        comment: newComment,
+        commentsCount: post.commentsCount,
+      });
+    }
+
+    // AÇÃO SOCIAL 9: Excluir Comentário (/api/cloud-sync -> delete_comment)
+    if (action === 'delete_comment') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para excluir comentário.' });
+      }
+      const commentId = String(body.commentId || '').trim();
+      const comment = store.post_comments?.[commentId];
+
+      if (!comment) {
+        return res.status(404).json({ ok: false, error: 'Comentário não encontrado.' });
+      }
+
+      const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+      const post = comment.postId ? store.posts?.[String(comment.postId)] : null;
+      const isCommentAuthor = comment.authorUid === currentUid;
+      const isPostAuthor = post && post.authorUid === currentUid;
+
+      if (!isCommentAuthor && !isPostAuthor && !isAdmin) {
+        return res.status(403).json({ ok: false, error: 'Você não tem permissão para excluir este comentário.' });
+      }
+
+      delete store.post_comments[commentId];
+      await DeleteDocumentFromFirestoreRest('post_comments', commentId);
+
+      if (post) {
+        post.commentsCount = Math.max((Number(post.commentsCount) || 1) - 1, 0);
+        post.updatedAtIso = new Date().toISOString();
+        store.posts[post.id as string] = post;
+        await MirrorDocumentToFirestoreRest('posts', post.id as string, post);
+      }
+
+      saveCloudStore(store);
+      return res.status(200).json({ ok: true, deletedCommentId: commentId, commentsCount: post?.commentsCount || 0 });
+    }
+
+    // AÇÃO SOCIAL 10: Seguir / Deixar de Seguir (/api/cloud-sync -> toggle_follow)
+    if (action === 'toggle_follow') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para seguir participantes.' });
+      }
+      const targetUid = String(body.targetUid || '').trim();
+      const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+
+      if (!targetUid || targetUid === currentUid) {
+        return res.status(400).json({ ok: false, error: 'Você não pode seguir a si mesmo ou perfil inválido.' });
+      }
+
+      if (!store.user_follows) store.user_follows = {};
+      const followKey = `${currentUid}_${targetUid}`;
+      const existingFollow = store.user_follows[followKey];
+      const nowIso = new Date().toISOString();
+
+      const targetProfile = store.profiles?.[targetUid];
+      const myProfile = store.profiles?.[currentUid];
+
+      if (existingFollow) {
+        // Deixar de seguir
+        delete store.user_follows[followKey];
+        await DeleteDocumentFromFirestoreRest('user_follows', followKey);
+
+        if (targetProfile) {
+          targetProfile.followersCount = Math.max((Number(targetProfile.followersCount) || 1) - 1, 0);
+          targetProfile.updatedAtIso = nowIso;
+          await MirrorDocumentToFirestoreRest('profiles', targetUid, targetProfile);
+        }
+        if (myProfile) {
+          myProfile.followingCount = Math.max((Number(myProfile.followingCount) || 1) - 1, 0);
+          myProfile.updatedAtIso = nowIso;
+          await MirrorDocumentToFirestoreRest('profiles', currentUid, myProfile);
+        }
+
+        saveCloudStore(store);
+        return res.status(200).json({
+          ok: true,
+          isFollowing: false,
+          followersCount: targetProfile?.followersCount || 0,
+        });
+      } else {
+        // Começar a seguir
+        const followRecord = {
+          id: followKey,
+          followerUid: currentUid,
+          followingUid: targetUid,
+          createdAtIso: nowIso,
+        };
+        store.user_follows[followKey] = followRecord;
+        await MirrorDocumentToFirestoreRest('user_follows', followKey, followRecord);
+
+        if (targetProfile) {
+          targetProfile.followersCount = (Number(targetProfile.followersCount) || 0) + 1;
+          targetProfile.updatedAtIso = nowIso;
+          await MirrorDocumentToFirestoreRest('profiles', targetUid, targetProfile);
+        }
+        if (myProfile) {
+          myProfile.followingCount = (Number(myProfile.followingCount) || 0) + 1;
+          myProfile.updatedAtIso = nowIso;
+          await MirrorDocumentToFirestoreRest('profiles', currentUid, myProfile);
+        }
+
+        // Notificação para a pessoa seguida
+        if (!store.social_notifications) store.social_notifications = {};
+        const notifId = `notif_flw_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const notifRecord = {
+          id: notifId,
+          recipientUid: targetUid,
+          actorUid: currentUid,
+          actorName: verifiedToken.officialName || 'Um participante',
+          actorAvatarUrl: myProfile?.avatarUrl || null,
+          type: 'follow',
+          title: 'Novo seguidor',
+          message: `${verifiedToken.officialName || 'Um participante'} começou a seguir seu perfil.`,
+          isRead: false,
+          createdAtIso: nowIso,
+        };
+        store.social_notifications[notifId] = notifRecord;
+        await MirrorDocumentToFirestoreRest('social_notifications', notifId, notifRecord);
+      }
+
+      saveCloudStore(store);
+      return res.status(200).json({
+        ok: true,
+        isFollowing: true,
+        followersCount: targetProfile?.followersCount || 0,
+      });
+    }
+
+    // AÇÃO SOCIAL 11: Listar Seguidores e Seguindo (/api/cloud-sync -> list_network)
+    if (action === 'list_network') {
+      const targetUid = String(body.targetUid || verifiedToken?.userId || '').trim();
+      const currentUid = verifiedToken?.userId || (verifiedToken?.email ? verifiedToken.email.toLowerCase() : null);
+      const mode = body.mode === 'following' ? 'following' : 'followers';
+
+      if (!targetUid) {
+        return res.status(400).json({ ok: false, error: 'Identificador do participante não informado.' });
+      }
+
+      const allFollows = Object.values(store.user_follows || {});
+      const matchedUids: string[] = [];
+
+      for (const f of allFollows) {
+        if (!f) continue;
+        if (mode === 'followers' && f.followingUid === targetUid) {
+          matchedUids.push(String(f.followerUid));
+        } else if (mode === 'following' && f.followerUid === targetUid) {
+          matchedUids.push(String(f.followingUid));
+        }
+      }
+
+      const profiles = matchedUids
+        .map((uid) => {
+          const prof = store.profiles?.[uid];
+          if (!prof) return null;
+          const sanitized = sanitizeUserProfileForPublic(prof);
+          const isFollowing = currentUid ? Boolean(store.user_follows?.[`${currentUid}_${uid}`]) : false;
+          const isFollower = currentUid ? Boolean(store.user_follows?.[`${uid}_${currentUid}`]) : false;
+          return {
+            ...sanitized,
+            isFollowing,
+            isFollower,
+          };
+        })
+        .filter(Boolean);
+
+      return res.status(200).json({
+        ok: true,
+        mode,
+        profiles,
+        total: profiles.length,
+      });
+    }
+
+    // AÇÃO SOCIAL 12: Salvar / Desalvar Publicação (/api/cloud-sync -> toggle_save_post)
+    if (action === 'toggle_save_post') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para salvar publicações.' });
+      }
+      const postId = String(body.postId || '').trim();
+      const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+
+      if (!store.user_saves) store.user_saves = {};
+      const saveKey = `${currentUid}_${postId}`;
+      const existingSave = store.user_saves[saveKey];
+      const nowIso = new Date().toISOString();
+
+      if (existingSave) {
+        delete store.user_saves[saveKey];
+        await DeleteDocumentFromFirestoreRest('user_saves', saveKey);
+        saveCloudStore(store);
+        return res.status(200).json({ ok: true, isSaved: false });
+      } else {
+        const saveRecord = {
+          id: saveKey,
+          userId: currentUid,
+          postId,
+          savedAtIso: nowIso,
+        };
+        store.user_saves[saveKey] = saveRecord;
+        saveCloudStore(store);
+        await MirrorDocumentToFirestoreRest('user_saves', saveKey, saveRecord);
+        return res.status(200).json({ ok: true, isSaved: true });
+      }
+    }
+
+    // AÇÃO SOCIAL 13: Listar Notificações Sociais (/api/cloud-sync -> list_social_notifications)
+    if (action === 'list_social_notifications') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para ler notificações.' });
+      }
+      const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+      const allNotifs = Object.values(store.social_notifications || {});
+      const userNotifs = allNotifs.filter((n) => n && n.recipientUid === currentUid);
+
+      userNotifs.sort((a, b) => {
+        const tA = new Date(String(a.createdAtIso || 0)).getTime();
+        const tB = new Date(String(b.createdAtIso || 0)).getTime();
+        return tB - tA;
+      });
+
+      const unreadCount = userNotifs.filter((n) => !n.isRead).length;
+
+      return res.status(200).json({
+        ok: true,
+        notifications: userNotifs.slice(0, 50),
+        unreadCount,
+      });
+    }
+
+    // AÇÃO SOCIAL 14: Marcar Notificação como Lida (/api/cloud-sync -> mark_notification_read)
+    if (action === 'mark_notification_read') {
+      if (!verifiedToken) {
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária.' });
+      }
+      const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
+      const notifId = String(body.notificationId || '').trim();
+
+      if (!store.social_notifications) store.social_notifications = {};
+
+      if (notifId === 'all') {
+        for (const n of Object.values(store.social_notifications)) {
+          if (n && n.recipientUid === currentUid) {
+            n.isRead = true;
+            await MirrorDocumentToFirestoreRest('social_notifications', n.id as string, n);
+          }
+        }
+      } else if (store.social_notifications[notifId]) {
+        const notif = store.social_notifications[notifId];
+        if (notif.recipientUid === currentUid) {
+          notif.isRead = true;
+          await MirrorDocumentToFirestoreRest('social_notifications', notifId, notif);
+        }
+      }
+
+      saveCloudStore(store);
+      return res.status(200).json({ ok: true });
+    }
+
     // AÇÃO 2C-6: Atualização Centralizada do Modo de Lançamento Público (Restrito à Comissão / Master)
     if (action === 'update_launch_config') {
       if (!isAdminRequest) {
@@ -1066,7 +1887,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ...newConfig,
       };
       saveCloudStore(store);
-      void MirrorDocumentToFirestoreRest('system_config', 'launch_config', store.launch_config as any);
+      await MirrorDocumentToFirestoreRest('system_config', 'launch_config', store.launch_config as any);
 
       return res.status(200).json({
         ok: true,
@@ -1097,7 +1918,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!store.brackets) store.brackets = {};
       store.brackets[modalityId] = bracketData;
       saveCloudStore(store);
-      void MirrorDocumentToFirestoreRest('brackets', modalityId, bracketData);
+      await MirrorDocumentToFirestoreRest('brackets', modalityId, bracketData);
 
       return res.status(200).json({
         ok: true,
@@ -1538,7 +2359,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       saveCloudStore(store);
-      void MirrorDocumentToFirestoreRest('registrations', registrationId, reg);
+      await MirrorDocumentToFirestoreRest('registrations', registrationId, reg);
 
       return res.status(200).json({
         ok: true,
@@ -1677,7 +2498,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           if (check.allowed) {
             store[targetCol][id] = check.sanitizedData;
-            void MirrorDocumentToFirestoreRest(col, id, check.sanitizedData);
+            await MirrorDocumentToFirestoreRest(col, id, check.sanitizedData);
             if (col === 'matches' && typeof payload.tableOfficialPassword === 'string' && payload.tableOfficialPassword.trim()) {
               const cleanPin = payload.tableOfficialPassword.trim().toUpperCase();
               store.match_secrets[id] = {
@@ -1733,7 +2554,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       saveCloudStore(store);
-      void MirrorDocumentToFirestoreRest(colStr, idStr, check.sanitizedData);
+      await MirrorDocumentToFirestoreRest(colStr, idStr, check.sanitizedData);
 
       return res.status(200).json({
         success: true,

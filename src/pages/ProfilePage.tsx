@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Shield,
@@ -21,6 +21,11 @@ import {
   Clock,
   ArrowRight,
   Lock,
+  UserPlus,
+  UserMinus,
+  Bookmark,
+  Flame,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { Avatar } from '../components/ui/Avatar';
@@ -29,6 +34,9 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { TURMAS_MEDICINA } from '../data/registrationData';
+import { PostCard } from '../components/social/PostCard';
+import { FollowersModal } from '../components/social/FollowersModal';
+import { SocialPost } from '../types/domain';
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
@@ -46,6 +54,8 @@ export const ProfilePage: React.FC = () => {
     visibleAthletes,
     getTeamById,
     launchConfig,
+    fetchFeedPosts,
+    toggleFollowUser,
   } = useCompetitionStore();
 
   const isAdmin = canOperateOfficialData();
@@ -206,8 +216,83 @@ export const ProfilePage: React.FC = () => {
   const [editInstagram, setEditInstagram] = useState('');
   const [editTurma, setEditTurma] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState<string | null>(null);
+  const [editCoverUrl, setEditCoverUrl] = useState<string | null>(null);
+  const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const [profileFeedback, setProfileFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [isSubmittingProfile, setIsSubmittingProfile] = useState(false);
+
+  // Estados sociais do perfil
+  const [profileTab, setProfileTab] = useState<'posts' | 'sports' | 'saved'>('posts');
+  const [userPosts, setUserPosts] = useState<SocialPost[]>([]);
+  const [savedPosts, setSavedPosts] = useState<SocialPost[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+  const [isFollowModalOpen, setIsFollowModalOpen] = useState(false);
+  const [followModalMode, setFollowModalMode] = useState<'followers' | 'following'>('followers');
+  const [isFollowing, setIsFollowing] = useState(Boolean(targetProfile?.isFollowing));
+  const [followersCount, setFollowersCount] = useState(targetProfile?.followersCount || 0);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
+
+  // Carrega publicações do usuário
+  useEffect(() => {
+    if (!targetProfile) return;
+    const effectiveUid = targetProfile.userId || targetProfile.id;
+    setIsFollowing(Boolean(targetProfile.isFollowing));
+    setFollowersCount(targetProfile.followersCount || 0);
+
+    let isMounted = true;
+    setIsLoadingPosts(true);
+
+    fetchFeedPosts({ authorUid: effectiveUid })
+      .then((posts) => {
+        if (isMounted) {
+          setUserPosts(posts);
+          setIsLoadingPosts(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) setIsLoadingPosts(false);
+      });
+
+    if (isViewingSelf) {
+      fetchFeedPosts({ onlySaved: true })
+        .then((posts) => {
+          if (isMounted) setSavedPosts(posts);
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [targetProfile?.id, targetProfile?.userId, isViewingSelf, fetchFeedPosts]);
+
+  const handleToggleFollow = async () => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    if (!targetProfile || isFollowLoading) return;
+    const targetUid = targetProfile.userId || targetProfile.id;
+
+    setIsFollowLoading(true);
+    const prevFollowing = isFollowing;
+    const prevCount = followersCount;
+
+    // Atualização otimista
+    setIsFollowing(!prevFollowing);
+    setFollowersCount(prevFollowing ? Math.max(0, prevCount - 1) : prevCount + 1);
+
+    const res = await toggleFollowUser(targetUid);
+    setIsFollowLoading(false);
+
+    if (res.ok) {
+      setIsFollowing(res.isFollowing);
+      setFollowersCount(res.followersCount);
+    } else {
+      setIsFollowing(prevFollowing);
+      setFollowersCount(prevCount);
+    }
+  };
 
   const openEditModal = () => {
     if (!targetProfile) return;
@@ -216,6 +301,7 @@ export const ProfilePage: React.FC = () => {
     setEditInstagram(targetProfile.instagramHandle || '');
     setEditTurma(targetProfile.turma || '');
     setEditAvatarUrl(targetProfile.avatarUrl || null);
+    setEditCoverUrl(targetProfile.coverUrl || null);
     setProfileFeedback(null);
     setIsEditProfileModalOpen(true);
   };
@@ -243,6 +329,29 @@ export const ProfilePage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const handleCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setProfileFeedback({ type: 'error', msg: 'Selecione um arquivo de imagem válido (PNG ou JPG).' });
+      return;
+    }
+
+    if (file.size > 3.5 * 1024 * 1024) {
+      setProfileFeedback({ type: 'error', msg: 'A imagem de capa deve possuir tamanho menor que 3.5MB.' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setEditCoverUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileFeedback(null);
@@ -263,6 +372,7 @@ export const ProfilePage: React.FC = () => {
       turmaLabel: selectedTurmaObj ? selectedTurmaObj.fullName : null,
       teamId: selectedTurmaObj ? selectedTurmaObj.teamId : targetProfile?.teamId || null,
       avatarUrl: editAvatarUrl,
+      coverUrl: editCoverUrl,
     });
 
     setIsSubmittingProfile(false);
@@ -349,137 +459,324 @@ export const ProfilePage: React.FC = () => {
         />
       </div>
 
-      {/* Card Principal: Foto, Nome e Ações */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0B218A] via-[#102a9e] to-[#1E3A8A] text-white p-6 sm:p-8 shadow-elevated border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
-        <img
-          src="/assets/atletica/face-monocor.png"
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none select-none absolute -right-6 -bottom-8 w-44 h-44 object-contain opacity-[0.07]"
-        />
+      {/* Card Principal: Capa, Foto, Nome, Métricas e Ações */}
+      <div className="relative rounded-3xl overflow-hidden bg-white border border-slate-200/90 shadow-md">
+        {/* Banner de Capa */}
+        <div className="relative h-36 sm:h-52 bg-gradient-to-r from-[#0B218A] via-[#102a9e] to-[#1E3A8A] overflow-hidden">
+          {targetProfile?.coverUrl ? (
+            <img
+              src={targetProfile.coverUrl}
+              alt="Capa do perfil"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center opacity-10">
+              <img
+                src="/assets/atletica/face-monocor.png"
+                alt=""
+                className="w-64 h-64 object-contain"
+              />
+            </div>
+          )}
+          {isViewingSelf && (
+            <button
+              type="button"
+              onClick={() => coverFileInputRef.current?.click()}
+              className="absolute top-3 right-3 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 backdrop-blur-xs transition-colors shadow-sm"
+              title="Alterar capa do perfil"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
+          )}
+          <input
+            ref={coverFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleCoverFileChange}
+            className="hidden"
+          />
+        </div>
 
-        <div className="relative z-10 flex items-center gap-4">
-          <div className="relative">
-            <Avatar src={targetProfile?.avatarUrl} alt={targetProfile?.displayName} size="xl" className="border-2 border-white shadow-md" />
-            {isViewingSelf && (
-              <button
-                type="button"
-                onClick={openEditModal}
-                className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-brand-yellow text-slate-900 shadow-lg hover:scale-110 transition-transform"
-                title="Alterar foto de perfil"
-              >
-                <Camera className="w-3.5 h-3.5" />
-              </button>
-            )}
+        {/* Informações do Perfil */}
+        <div className="px-5 sm:px-8 pb-6">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-12 sm:-mt-16 mb-4">
+            <div className="relative inline-block">
+              <Avatar
+                src={targetProfile?.avatarUrl}
+                alt={targetProfile?.displayName}
+                size="xl"
+                className="ring-4 ring-white shadow-xl bg-white w-24 h-24 sm:w-28 sm:h-28 text-2xl"
+              />
+              {isViewingSelf && (
+                <button
+                  type="button"
+                  onClick={openEditModal}
+                  className="absolute bottom-1 right-1 p-2 rounded-full bg-brand-yellow text-slate-900 shadow-md hover:scale-110 transition-transform"
+                  title="Alterar foto de perfil"
+                >
+                  <Camera className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Ações */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {isViewingSelf ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+                  onClick={openEditModal}
+                >
+                  Editar Perfil
+                </Button>
+              ) : currentUser ? (
+                <Button
+                  variant={isFollowing ? 'secondary' : 'primary'}
+                  size="sm"
+                  leftIcon={isFollowing ? <UserCheck className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                  isLoading={isFollowLoading}
+                  onClick={handleToggleFollow}
+                >
+                  {isFollowing ? 'Seguindo' : targetProfile?.isFollower ? 'Seguir de Volta' : 'Seguir'}
+                </Button>
+              ) : (
+                <Button
+                  variant="accent"
+                  size="sm"
+                  leftIcon={<LogIn className="w-4 h-4" />}
+                  onClick={() => navigate('/login')}
+                >
+                  Entrar para Seguir
+                </Button>
+              )}
+
+              {targetProfile?.linkedAthleteId && (
+                <Button
+                  variant="accent"
+                  size="sm"
+                  leftIcon={<Trophy className="w-4 h-4" />}
+                  onClick={() => navigate(`/atleta/${targetProfile.linkedAthleteId}`)}
+                >
+                  Ficha Esportiva
+                </Button>
+              )}
+            </div>
           </div>
 
+          {/* Nome e Metadados */}
           <div className="space-y-1">
-            <h3 className="text-lg sm:text-xl font-display font-extrabold text-white">
-              {targetProfile ? targetProfile.displayName : 'Participante Não Encontrado'}
-            </h3>
-            <p className="text-xs text-white/80">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-xl sm:text-2xl font-display font-extrabold text-slate-900">
+                {targetProfile?.displayName || 'Participante'}
+              </h3>
+              {targetProfile?.isAthlete && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-black uppercase tracking-wider">
+                  Atleta Oficial
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs sm:text-sm text-slate-500 font-medium">
               {targetProfile?.turmaLabel || (targetProfile?.turma ? `Turma ${targetProfile.turma}` : 'Medicina UEMA')}
+              {linkedTeam ? ` • ${linkedTeam.name}` : ''}
             </p>
+
             {targetProfile?.instagramHandle && (
               <a
                 href={`https://instagram.com/${targetProfile.instagramHandle}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-brand-yellow hover:underline"
+                className="inline-flex items-center gap-1 text-xs text-[#0B218A] font-semibold hover:underline mt-1"
               >
-                <Instagram className="w-3 h-3" />
+                <Instagram className="w-3.5 h-3.5" />
                 <span>@{targetProfile.instagramHandle}</span>
               </a>
             )}
+
+            {targetProfile?.bio && (
+              <p className="text-xs sm:text-sm text-slate-700 italic pt-2 max-w-xl">
+                "{targetProfile.bio}"
+              </p>
+            )}
           </div>
-        </div>
 
-        <div className="relative z-10 flex flex-wrap items-center gap-2 self-start sm:self-center">
-          {isViewingSelf && (
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-              onClick={openEditModal}
-              className="border-white/30 text-white hover:bg-white/15"
+          {/* Barra de Métricas Sociais */}
+          <div className="flex items-center gap-6 pt-5 mt-4 border-t border-slate-100 text-xs sm:text-sm">
+            <div>
+              <span className="font-extrabold text-slate-900">{userPosts.length}</span>{' '}
+              <span className="text-slate-500">publicações</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setFollowModalMode('followers');
+                setIsFollowModalOpen(true);
+              }}
+              className="hover:text-[#0B218A] transition-colors"
             >
-              Editar Perfil
-            </Button>
-          )}
-
-          {targetProfile?.linkedAthleteId && (
-            <Button
-              variant="accent"
-              size="sm"
-              leftIcon={<Trophy className="w-4 h-4" />}
-              onClick={() => navigate(`/atleta/${targetProfile.linkedAthleteId}`)}
+              <span className="font-extrabold text-slate-900">{followersCount}</span>{' '}
+              <span className="text-slate-500">seguidores</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFollowModalMode('following');
+                setIsFollowModalOpen(true);
+              }}
+              className="hover:text-[#0B218A] transition-colors"
             >
-              Ficha Esportiva
-            </Button>
-          )}
-
-          {!currentUser && (
-            <Button
-              variant="accent"
-              size="md"
-              leftIcon={<LogIn className="w-4 h-4" />}
-              onClick={() => navigate('/login')}
-            >
-              Entrar na Conta
-            </Button>
-          )}
+              <span className="font-extrabold text-slate-900">{targetProfile?.followingCount || 0}</span>{' '}
+              <span className="text-slate-500">seguindo</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Biografia do Participante */}
-      {targetProfile?.bio && (
-        <div className="bg-white rounded-2xl border border-brand-surface-border p-5 shadow-card space-y-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Sobre o Participante
-          </span>
-          <p className="text-sm text-slate-700 leading-relaxed italic bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-            "{targetProfile.bio}"
-          </p>
+      {/* Abas do Perfil (Publicações / Ficha Esportiva / Salvos) */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setProfileTab('posts')}
+          className={`px-4 py-2 rounded-2xl transition-all whitespace-nowrap ${
+            profileTab === 'posts'
+              ? 'bg-[#0B218A] text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+          }`}
+        >
+          Publicações ({userPosts.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setProfileTab('sports')}
+          className={`px-4 py-2 rounded-2xl transition-all whitespace-nowrap ${
+            profileTab === 'sports'
+              ? 'bg-[#0B218A] text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+          }`}
+        >
+          Ficha Esportiva
+        </button>
+
+        {isViewingSelf && (
+          <button
+            type="button"
+            onClick={() => setProfileTab('saved')}
+            className={`px-4 py-2 rounded-2xl transition-all whitespace-nowrap inline-flex items-center gap-1.5 ${
+              profileTab === 'saved'
+                ? 'bg-[#0B218A] text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/80'
+            }`}
+          >
+            <Bookmark className="w-3.5 h-3.5" />
+            <span>Salvos ({savedPosts.length})</span>
+          </button>
+        )}
+      </div>
+
+      {/* Conteúdo da Aba Ativa */}
+      {profileTab === 'posts' && (
+        <div className="space-y-4">
+          {isLoadingPosts ? (
+            <div className="py-8 text-center text-xs text-slate-400">
+              Carregando publicações...
+            </div>
+          ) : userPosts.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center">
+              <Flame className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-700">Nenhuma publicação realizada ainda.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {isViewingSelf
+                  ? 'Vá até o Feed Social e compartilhe seu primeiro momento!'
+                  : 'Este participante ainda não publicou nada no campeonato.'}
+              </p>
+            </div>
+          ) : (
+            userPosts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onPostUpdated={(updated) =>
+                  setUserPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+                }
+                onPostDeleted={(deletedId) =>
+                  setUserPosts((prev) => prev.filter((p) => p.id !== deletedId))
+                }
+              />
+            ))
+          )}
         </div>
       )}
 
-      {/* Grid de Informações Esportivas: Equipe + Modalidades */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div
-          onClick={() => targetProfile?.teamId && navigate(`/equipe/${targetProfile.teamId}`)}
-          className={`rounded-2xl bg-white border border-brand-surface-border p-5 shadow-card space-y-3 ${
-            targetProfile?.teamId ? 'cursor-pointer hover:border-brand-blue' : ''
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-brand-text-secondary">
-              Equipe Vinculada
-            </span>
-            <Shield className="w-4 h-4 text-brand-blue" />
-          </div>
-          <div className="p-3.5 rounded-xl bg-brand-surface-muted/70 border border-dashed border-brand-surface-border">
-            <p className="text-sm font-semibold text-slate-800">
-              {linkedTeam?.name || targetProfile?.teamName || 'Nenhuma equipe vinculada.'}
-            </p>
-          </div>
+      {profileTab === 'saved' && isViewingSelf && (
+        <div className="space-y-4">
+          {savedPosts.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center">
+              <Bookmark className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm font-bold text-slate-700">Nenhuma publicação salva.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Toque no ícone de marcador nas publicações do feed para salvá-las aqui.
+              </p>
+            </div>
+          ) : (
+            savedPosts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onPostUpdated={(updated) =>
+                  setSavedPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+                }
+                onPostDeleted={(deletedId) =>
+                  setSavedPosts((prev) => prev.filter((p) => p.id !== deletedId))
+                }
+              />
+            ))
+          )}
         </div>
+      )}
 
-        <div className="rounded-2xl bg-white border border-brand-surface-border p-5 shadow-card space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-brand-text-secondary">
-              Condição Esportiva
-            </span>
-            <Trophy className="w-4 h-4 text-brand-blue" />
-          </div>
-          <div className="p-3.5 rounded-xl bg-brand-surface-muted/70 border border-dashed border-brand-surface-border">
-            <p className="text-sm font-semibold text-slate-800">
-              {targetProfile?.isAthlete
-                ? 'Atleta Oficial do INTRAMED IX'
-                : 'Membro da Comunidade / Torcida'}
-            </p>
+      {profileTab === 'sports' && (
+        <div className="space-y-4">
+          {/* Grid de Informações Esportivas: Equipe + Modalidades */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div
+              onClick={() => targetProfile?.teamId && navigate(`/equipe/${targetProfile.teamId}`)}
+              className={`rounded-2xl bg-white border border-brand-surface-border p-5 shadow-card space-y-3 ${
+                targetProfile?.teamId ? 'cursor-pointer hover:border-brand-blue' : ''
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-brand-text-secondary">
+                  Equipe Vinculada
+                </span>
+                <Shield className="w-4 h-4 text-brand-blue" />
+              </div>
+              <div className="p-3.5 rounded-xl bg-brand-surface-muted/70 border border-dashed border-brand-surface-border">
+                <p className="text-sm font-semibold text-slate-800">
+                  {linkedTeam?.name || targetProfile?.teamName || 'Nenhuma equipe vinculada.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-white border border-brand-surface-border p-5 shadow-card space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-brand-text-secondary">
+                  Condição Esportiva
+                </span>
+                <Trophy className="w-4 h-4 text-brand-blue" />
+              </div>
+              <div className="p-3.5 rounded-xl bg-brand-surface-muted/70 border border-dashed border-brand-surface-border">
+                <p className="text-sm font-semibold text-slate-800">
+                  {targetProfile?.isAthlete
+                    ? 'Atleta Oficial do INTRAMED IX'
+                    : 'Membro da Comunidade / Torcida'}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Ações Rápidas e Segurança (Apenas para o próprio usuário) */}
       {isViewingSelf && currentUser && (
@@ -770,6 +1067,15 @@ export const ProfilePage: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Modal de Conexões (Seguidores / Seguindo) */}
+      <FollowersModal
+        isOpen={isFollowModalOpen}
+        onClose={() => setIsFollowModalOpen(false)}
+        targetUid={targetProfile?.userId || targetProfile?.id || ''}
+        targetName={targetProfile?.displayName || 'Participante'}
+        initialMode={followModalMode}
+      />
     </div>
   );
 };
