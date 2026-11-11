@@ -34,7 +34,10 @@ import {
   signInWithRedirect,
 } from '../lib/firebase';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
-import { TURMAS_MEDICINA } from '../data/registrationData';
+import {
+  TURMAS_MEDICINA,
+  resolveLotAuthorizedPrice,
+} from '../data/registrationData';
 import { SportIcon } from '../components/sports/SportIcon';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -642,7 +645,14 @@ export const RegistrationPage: React.FC = () => {
   // Opções de parcelamento no Cartão de Crédito (1x a 6x com taxas já embutidas no valor das parcelas)
   const CARD_BASE_FEE_RATE = 0.05;
   const installmentOptions = useMemo(() => {
-    const base = payingRegistration ? payingRegistration.authorizedPrice : 65.0;
+    const base = payingRegistration
+      ? resolveLotAuthorizedPrice(
+          payingRegistration.lotId,
+          payingRegistration.memberStatus,
+          payingRegistration.requestedMemberDiscount,
+          payingRegistration.isGuestAthlete
+        )
+      : 60.0;
     return [1, 2, 3, 4, 5, 6].map((count) => {
       const extraRate = (count - 1) * 0.02;
       const totalRate = CARD_BASE_FEE_RATE + extraRate;
@@ -1900,7 +1910,15 @@ export const RegistrationPage: React.FC = () => {
                     R${' '}
                     {paymentMethod === 'credit_card'
                       ? cardTotalPrice.toFixed(2)
-                      : payingRegistration.authorizedPrice.toFixed(2)}
+                      : (
+                          pixData?.amount ??
+                          resolveLotAuthorizedPrice(
+                            payingRegistration.lotId,
+                            payingRegistration.memberStatus,
+                            payingRegistration.requestedMemberDiscount,
+                            payingRegistration.isGuestAthlete
+                          )
+                        ).toFixed(2)}
                   </span>
                 </div>
               </div>

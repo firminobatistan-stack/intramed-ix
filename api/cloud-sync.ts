@@ -403,7 +403,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const expected = computeAuthorizedServerPrice(
         String(reg.lotId || 'lote-1-cangaceira'),
         String(reg.memberStatus || 'nao_solicitado'),
-        Boolean(reg.requestedMemberDiscount)
+        Boolean(reg.requestedMemberDiscount),
+        Boolean(reg.isGuestAthlete)
       );
       return { ...reg, authorizedPrice: expected };
     };
@@ -439,6 +440,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ...lotVal,
           priceMember: isPublicPricesVisible ? lotVal.priceMember : null,
           priceNonMember: isPublicPricesVisible ? lotVal.priceNonMember : null,
+          priceGuest: isPublicPricesVisible ? lotVal.priceGuest ?? 65.0 : null,
         };
         return acc;
       },
@@ -2376,11 +2378,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reg.isMember = approved;
       reg.memberStatus = approved ? 'aprovado' : 'rejeitado';
       reg.memberVerificationStatus = approved ? 'approved' : 'rejected';
+      reg.paymentStatus = reg.paymentStatus === 'pago' ? 'pago' : 'pendente';
+      reg.authorizedPrice = computeAuthorizedServerPrice(
+        String(reg.lotId || 'lote-1-cangaceira'),
+        String(reg.memberStatus),
+        Boolean(reg.requestedMemberDiscount),
+        Boolean(reg.isGuestAthlete)
+      );
       if (!approved && justification) {
         reg.rejectionReason = justification;
       }
       reg.memberVerifiedAtIso = nowIso;
       reg.memberVerifiedBy = verifiedToken?.email || 'moderação';
+      reg.updatedAtIso = nowIso;
+      reg.revision = Number(reg.revision || 0) + 1;
 
       if (!store.admin_audit_logs) {
         store.admin_audit_logs = [];

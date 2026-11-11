@@ -27,11 +27,11 @@ type HomeTimeFilter = 'all' | 'live' | 'upcoming' | 'finished';
 
 const MATCH_DAYS = [
   { id: 'all', label: 'Hoje • Calendário Oficial', sub: 'INTRAMED IX • Medicina UEMA' },
-  { id: 'dia-1', label: 'Dia 1 • Abertura & Fase de Grupos', sub: 'Ginásio Oficial' },
-  { id: 'dia-2', label: 'Dia 2 • Rodada Classificatória', sub: 'Quadras & Piscina' },
-  { id: 'dia-3', label: 'Dia 3 • Quartas de Final', sub: 'Mata-mata Oficial' },
-  { id: 'dia-4', label: 'Dia 4 • Semifinais', sub: 'Arena Principal' },
-  { id: 'dia-5', label: 'Dia 5 • Grandes Finais', sub: 'Decisão de Título' },
+  { id: '20/11', label: 'Sex • 20/11 • Natação & Vôlei', sub: 'Escola José Castro (07h-11h) & Bayma (15h-20h)' },
+  { id: '21/11', label: 'Sáb • 21/11 • Basquete & Handebol', sub: 'Escola Antenor Viana (08h-18h)' },
+  { id: '22/11', label: 'Dom • 22/11 • Handebol & Futsal', sub: 'Antenor Viana & Quadra Oficial (08h-20h)' },
+  { id: '28/11', label: 'Sáb • 28/11 • Tênis de Mesa, Sinuca & VP', sub: 'Arena AMK Sports & Happy Hour (08h-21h)' },
+  { id: '29/11', label: 'Dom • 29/11 • Grandes Finais & Premiações', sub: 'Finais Coletivas (09h-19h) & Premiação (20h)' },
 ];
 
 /**
@@ -69,12 +69,32 @@ export const HomePage: React.FC = () => {
       ? visibleMatches
       : visibleMatches.filter((m) => m.modalityId === selectedSportFilter);
 
-  const filteredMatches = sportFiltered.filter((m) => {
-    if (timeFilter === 'live') return m.status === 'live' || m.status === 'halftime';
-    if (timeFilter === 'upcoming') return m.status === 'scheduled';
-    if (timeFilter === 'finished') return m.status === 'finished';
-    return true;
-  });
+  const filteredMatches = sportFiltered
+    .filter((m) => {
+      if (currentDay && currentDay.id !== 'all') {
+        const dStr = (m.scheduledDate || '').toLowerCase();
+        if (!dStr.includes(currentDay.id.toLowerCase())) return false;
+      }
+      if (timeFilter === 'live') return m.status === 'live' || m.status === 'halftime';
+      if (timeFilter === 'upcoming') return m.status === 'scheduled';
+      if (timeFilter === 'finished') return m.status === 'finished';
+      return true;
+    })
+    .sort((a, b) => {
+      const dayOrder = (d?: string | null) => {
+        if (!d) return 99;
+        if (d.includes('20/11')) return 1;
+        if (d.includes('21/11')) return 2;
+        if (d.includes('22/11')) return 3;
+        if (d.includes('28/11')) return 4;
+        if (d.includes('29/11')) return 5;
+        return 50;
+      };
+      const da = dayOrder(a.scheduledDate);
+      const db = dayOrder(b.scheduledDate);
+      if (da !== db) return da - db;
+      return (a.scheduledTime || '99:99').localeCompare(b.scheduledTime || '99:99');
+    });
 
   const liveMatches = filteredMatches.filter(
     (m) => m.status === 'live' || m.status === 'halftime'
@@ -131,9 +151,12 @@ export const HomePage: React.FC = () => {
             <div className="flex flex-col items-center">
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white/10 border border-white/20 p-2 flex items-center justify-center shadow-lg">
                 <img
-                  src="/assets/atletica/mascote-cor.png"
+                  src="/assets/atletica/mascote.png"
                   alt="Mascote Cangaceira"
                   className="w-full h-full object-contain drop-shadow"
+                  onError={(e) => {
+                    e.currentTarget.src = '/assets/atletica/brasao-mascote.png';
+                  }}
                 />
               </div>
               <span className="mt-2 text-xs font-display font-bold text-white/90">
@@ -186,7 +209,8 @@ export const HomePage: React.FC = () => {
               {launchConfig?.publicPricesVisible !== false || isAdmin ? (
                 <>
                   Passaporte único com acesso a todas as 16 modalidades (Pix ou Cartão). Sócios Cangaceira:{' '}
-                  <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 55,00</strong> • Não Sócios:{' '}
+                  <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 50,00</strong> • Não Sócios:{' '}
+                  <strong className="font-extrabold text-slate-950">R$ 60,00</strong> • Convidado (T21):{' '}
                   <strong className="font-extrabold text-slate-950">R$ 65,00</strong>.
                 </>
               ) : (
@@ -194,7 +218,7 @@ export const HomePage: React.FC = () => {
                   Passaporte oficial com acesso a todas as 16 modalidades.{' '}
                   <span className="inline-flex items-center gap-1.5 align-middle">
                     <span className="filter blur-[5px] select-none opacity-60 font-extrabold text-slate-950">
-                      R$ 55,00 • R$ 65,00
+                      R$ 50,00 • R$ 60,00
                     </span>
                     <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-950/10 text-slate-900 border border-slate-900/20">
                       Valores em Breve

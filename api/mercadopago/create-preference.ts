@@ -84,6 +84,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     process.env.APP_BASE_URL ||
     (host ? `https://${host}` : PRIMARY_GATEWAY_ORIGIN);
 
+  const serverAuthorizedPrice = computeAuthorizedServerPrice(
+    String(storedReg?.lotId || lotId || 'lote-1-cangaceira'),
+    effectiveMemberStatus,
+    Boolean(storedReg?.requestedMemberDiscount ?? requestedMemberDiscount),
+    Boolean(storedReg?.isGuestAthlete ?? isGuestAthlete)
+  );
+
   if (!mpAccessToken) {
     if (!host.includes('intramedix.vercel.app') && !isProxied) {
       try {
@@ -95,7 +102,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               'Content-Type': 'application/json',
               'X-Intramed-Proxy': '1',
             },
-            body: JSON.stringify(body),
+            body: JSON.stringify({
+              ...body,
+              serverAuthorizedPrice,
+              isGuestAthlete: Boolean(storedReg?.isGuestAthlete ?? isGuestAthlete),
+              requestedMemberDiscount: Boolean(
+                storedReg?.requestedMemberDiscount ?? requestedMemberDiscount
+              ),
+              memberStatus: effectiveMemberStatus,
+            }),
           }
         );
         const { data: proxyData } = await parseJsonSafe(proxyRes);

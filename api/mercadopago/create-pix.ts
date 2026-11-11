@@ -106,7 +106,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               'Content-Type': 'application/json',
               'X-Intramed-Proxy': '1',
             },
-            body: JSON.stringify(body),
+            body: JSON.stringify({
+              ...body,
+              serverAuthorizedPrice,
+              isGuestAthlete: Boolean(storedReg?.isGuestAthlete ?? isGuestAthlete),
+              requestedMemberDiscount: Boolean(
+                storedReg?.requestedMemberDiscount ?? requestedMemberDiscount
+              ),
+              memberStatus: effectiveMemberStatus,
+            }),
           }
         );
         const { data: proxyData } = await parseJsonSafe(proxyRes);

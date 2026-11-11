@@ -698,7 +698,7 @@ export const AdminRegistrationsPage: React.FC = () => {
                 className="border-rose-300 text-rose-600 hover:bg-rose-50 hover:border-rose-400"
                 onClick={handleReject}
               >
-                Rejeitar Desconto (Preço Integral R$ 65,00)
+                Rejeitar Desconto (Preço Integral R$ 60,00)
               </Button>
 
               <Button
@@ -706,7 +706,7 @@ export const AdminRegistrationsPage: React.FC = () => {
                 size="md"
                 onClick={handleApprove}
               >
-                Aprovar Sócio (Preço R$ 55,00)
+                Aprovar Sócio (Preço R$ 50,00)
               </Button>
             </div>
           </div>
