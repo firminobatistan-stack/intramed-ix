@@ -26,12 +26,12 @@ import { StandingsTable } from '../components/sports/StandingsTable';
 type HomeTimeFilter = 'all' | 'live' | 'upcoming' | 'finished';
 
 const MATCH_DAYS = [
-  { id: 'all', label: 'Hoje • Calendário Oficial', sub: 'INTRAMED IX • Medicina UEMA' },
-  { id: '20/11', label: 'Sex • 20/11 • Natação & Vôlei', sub: 'Escola José Castro (07h-11h) & Bayma (15h-20h)' },
-  { id: '21/11', label: 'Sáb • 21/11 • Basquete & Handebol', sub: 'Escola Antenor Viana (08h-18h)' },
-  { id: '22/11', label: 'Dom • 22/11 • Handebol & Futsal', sub: 'Antenor Viana & Quadra Oficial (08h-20h)' },
-  { id: '28/11', label: 'Sáb • 28/11 • Tênis de Mesa, Sinuca & VP', sub: 'Arena AMK Sports & Happy Hour (08h-21h)' },
-  { id: '29/11', label: 'Dom • 29/11 • Grandes Finais & Premiações', sub: 'Finais Coletivas (09h-19h) & Premiação (20h)' },
+  { id: 'all', label: 'Todos os Jogos', sub: 'Calendário Geral' },
+  { id: '20/11', label: 'Sex • 20/11', sub: 'Natação & Vôlei' },
+  { id: '21/11', label: 'Sáb • 21/11', sub: 'Basquete & Handebol' },
+  { id: '22/11', label: 'Dom • 22/11', sub: 'Handebol & Futsal' },
+  { id: '28/11', label: 'Sáb • 28/11', sub: 'Tênis de Mesa, Sinuca & Vôlei de Praia' },
+  { id: '29/11', label: 'Dom • 29/11', sub: 'Finais & Premiação' },
 ];
 
 /**
@@ -190,64 +190,54 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* BANNER OFICIAL: INSCRIÇÕES E PAGAMENTOS (FASE 1) */}
+      {/* BANNER: INSCRIÇÕES E PAGAMENTOS */}
       {!hasCompletedRegistration ? (
-        <section className="bg-gradient-to-r from-amber-500 via-brand-yellow to-yellow-400 rounded-3xl p-5 sm:p-6 shadow-lg border border-amber-300 text-slate-900 flex flex-col md:flex-row items-center justify-between gap-5 relative overflow-hidden">
-          <div className="space-y-1.5 z-10 text-center md:text-left">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-900 text-brand-yellow text-[11px] font-display font-extrabold uppercase tracking-wider shadow-sm">
-              <Sparkles className="w-3.5 h-3.5" />
+        <section className="bg-gradient-to-r from-amber-500 via-brand-yellow to-yellow-400 rounded-3xl p-4 sm:p-5 shadow-lg border border-amber-300 text-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
+          <div className="space-y-1 z-10 text-center sm:text-left">
+            <h2 className="text-lg sm:text-xl font-display font-black tracking-tight text-slate-950">
               {launchConfig?.publicRegistrationEnabled !== false
-                ? '1º Lote Oficial Disponível'
-                : 'Fase de Divulgação • Em Breve'}
-            </div>
-            <h2 className="text-xl sm:text-2xl font-display font-black tracking-tight text-slate-950">
-              {launchConfig?.publicRegistrationEnabled !== false
-                ? 'Inscrições Abertas • INTRAMED IX'
-                : 'Inscrições Em Breve • INTRAMED IX'}
+                ? 'Inscrições Abertas'
+                : 'Inscrições Em Breve'}
             </h2>
-            <p className="text-xs sm:text-sm font-medium text-slate-800 max-w-xl">
+            <p className="text-xs sm:text-sm font-medium text-slate-800">
               {launchConfig?.publicPricesVisible !== false || isAdmin ? (
                 <>
-                  Passaporte único com acesso a todas as 16 modalidades (Pix ou Cartão). Sócios Cangaceira:{' '}
-                  <strong className="font-extrabold text-slate-950 underline decoration-slate-900">R$ 50,00</strong> • Não Sócios:{' '}
-                  <strong className="font-extrabold text-slate-950">R$ 60,00</strong> • Convidado (T21):{' '}
-                  <strong className="font-extrabold text-slate-950">R$ 65,00</strong>.
+                  Sócio: <strong className="font-extrabold text-slate-950">R$ 50</strong> • Não Sócio:{' '}
+                  <strong className="font-extrabold text-slate-950">R$ 60</strong> • Convidado (T21):{' '}
+                  <strong className="font-extrabold text-slate-950">R$ 65</strong>
                 </>
               ) : (
-                <>
-                  Passaporte oficial com acesso a todas as 16 modalidades.{' '}
-                  <span className="inline-flex items-center gap-1.5 align-middle">
-                    <span className="filter blur-[5px] select-none opacity-60 font-extrabold text-slate-950">
-                      R$ 50,00 • R$ 60,00
-                    </span>
-                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-950/10 text-slate-900 border border-slate-900/20">
-                      Valores em Breve
-                    </span>
+                <span className="inline-flex items-center gap-1.5 align-middle">
+                  <span className="filter blur-[5px] select-none opacity-60 font-extrabold text-slate-950">
+                    R$ 50 • R$ 60
                   </span>
-                </>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-slate-950/10 text-slate-900 border border-slate-900/20">
+                    Em Breve
+                  </span>
+                </span>
               )}
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0 z-10 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 shrink-0 z-10 w-full sm:w-auto">
             {launchConfig?.publicRegistrationEnabled !== false ? (
               <button
                 type="button"
                 onClick={() => navigate('/inscricao')}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-sm shadow-xl hover:scale-105 transition-all"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-xs sm:text-sm shadow-lg transition-all"
               >
                 <CreditCard className="w-4 h-4 text-brand-yellow" />
-                <span>Fazer Inscrição</span>
+                <span>Inscrever-se</span>
                 <ArrowRight className="w-4 h-4 text-brand-yellow" />
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => navigate('/chaveamento')}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-sm shadow-xl hover:scale-105 transition-all"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-xs sm:text-sm shadow-lg transition-all"
               >
                 <GitBranch className="w-4 h-4 text-brand-yellow" />
-                <span>Ver Chaveamento Oficial</span>
+                <span>Chaveamento</span>
                 <ArrowRight className="w-4 h-4 text-brand-yellow" />
               </button>
             )}
@@ -256,25 +246,25 @@ export const HomePage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => navigate('/admin/inscricoes')}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-white/80 hover:bg-white text-slate-900 font-display font-bold text-xs shadow transition-all border border-amber-200"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-white/80 hover:bg-white text-slate-900 font-display font-bold text-xs shadow transition-all border border-amber-200"
               >
-                <span>Gestão de Sócios</span>
+                <span>Sócios</span>
               </button>
             )}
           </div>
         </section>
       ) : (
-        <section className="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-emerald-300 flex flex-col sm:flex-row items-center justify-between gap-3 bg-emerald-50/40">
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-300 flex flex-col sm:flex-row items-center justify-between gap-3 bg-emerald-50/40">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center justify-center shrink-0 shadow-xs">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            <div className="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-800 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             </div>
             <div className="min-w-0">
               <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 block">
-                Inscrição Registrada • INTRAMED IX
+                Inscrito
               </span>
               <p className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                {myRegistrations[0]?.athleteName} • {myRegistrations[0]?.turmaLabel || myRegistrations[0]?.teamName}
+                {myRegistrations[0]?.athleteName} • {myRegistrations[0]?.teamName || myRegistrations[0]?.turmaLabel}
               </p>
             </div>
           </div>
@@ -283,9 +273,9 @@ export const HomePage: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate('/inscricao')}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-sm transition-all"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-sm transition-all"
             >
-              <span>Ver Minha Inscrição</span>
+              <span>Passaporte</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
             {isAdmin && (
@@ -522,63 +512,6 @@ export const HomePage: React.FC = () => {
               : (selectedSportFilter as any)
           }
         />
-      </section>
-
-      {/* 7. ACESSO RÁPIDO AOS HUBS */}
-      <section className="all-sports-card p-5 sm:p-6 space-y-4">
-        <div className="all-sports-section-pill">
-          Acesso Rápido
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-          <button
-            type="button"
-            onClick={() => navigate('/equipe')}
-            className="group p-4 rounded-2xl bg-[#F8FAFC] hover:bg-[#0B218A] border border-slate-200/80 text-left transition-all"
-          >
-            <div className="w-10 h-10 rounded-xl bg-blue-100 group-hover:bg-white/15 flex items-center justify-center text-[#0B218A] group-hover:text-brand-yellow mb-3">
-              <Shield className="w-5 h-5" />
-            </div>
-            <h4 className="text-sm font-display font-extrabold text-slate-900 group-hover:text-white">
-              Equipes
-            </h4>
-            <p className="text-xs text-slate-500 group-hover:text-white/75 mt-1">
-              Elenco, jogos e classificação.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/atleta')}
-            className="group p-4 rounded-2xl bg-[#F8FAFC] hover:bg-[#0B218A] border border-slate-200/80 text-left transition-all"
-          >
-            <div className="w-10 h-10 rounded-xl bg-blue-100 group-hover:bg-white/15 flex items-center justify-center text-[#0B218A] group-hover:text-brand-yellow mb-3">
-              <User className="w-5 h-5" />
-            </div>
-            <h4 className="text-sm font-display font-extrabold text-slate-900 group-hover:text-white">
-              Atletas
-            </h4>
-            <p className="text-xs text-slate-500 group-hover:text-white/75 mt-1">
-              Estatísticas e histórico na súmula.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/chaveamento')}
-            className="group p-4 rounded-2xl bg-[#F8FAFC] hover:bg-[#0B218A] border border-slate-200/80 text-left transition-all"
-          >
-            <div className="w-10 h-10 rounded-xl bg-blue-100 group-hover:bg-white/15 flex items-center justify-center text-[#0B218A] group-hover:text-brand-yellow mb-3">
-              <Trophy className="w-5 h-5" />
-            </div>
-            <h4 className="text-sm font-display font-extrabold text-slate-900 group-hover:text-white">
-              Chaveamento
-            </h4>
-            <p className="text-xs text-slate-500 group-hover:text-white/75 mt-1">
-              Confrontos e mata-mata por modalidade.
-            </p>
-          </button>
-        </div>
       </section>
     </div>
   );

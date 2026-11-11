@@ -578,8 +578,25 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             <p className="text-xs sm:text-sm text-slate-500 font-medium">
-              {targetProfile?.turmaLabel || (targetProfile?.turma ? `Turma ${targetProfile.turma}` : 'Medicina UEMA')}
-              {linkedTeam ? ` • ${linkedTeam.name}` : ''}
+              {(() => {
+                const rawTurma =
+                  targetProfile?.turmaLabel ||
+                  (targetProfile?.turma ? `Turma ${targetProfile.turma}` : '');
+                if (
+                  linkedTeam &&
+                  rawTurma &&
+                  rawTurma.toLowerCase().includes(linkedTeam.name.toLowerCase())
+                ) {
+                  return rawTurma;
+                }
+                if (linkedTeam && rawTurma) {
+                  return `${rawTurma} • ${linkedTeam.name}`;
+                }
+                if (linkedTeam) {
+                  return linkedTeam.name;
+                }
+                return rawTurma || 'Medicina UEMA';
+              })()}
             </p>
 
             {targetProfile?.instagramHandle && (

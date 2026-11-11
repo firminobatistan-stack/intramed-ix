@@ -128,21 +128,15 @@ export const FeedPage: React.FC = () => {
   return (
     <div className="max-w-2xl mx-auto space-y-5 pb-12">
       {/* 1. Header do Feed */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0B218A] via-[#102a9e] to-[#1E3A8A] text-white p-6 sm:p-7 shadow-elevated border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="relative z-10 space-y-1">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-display font-bold uppercase tracking-wider text-brand-yellow">
-            <Flame className="w-3.5 h-3.5" />
-            <span>Comunidade Esportiva • INTRAMED IX</span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-display font-extrabold text-white tracking-tight">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#0B218A] via-[#102a9e] to-[#1E3A8A] text-white p-5 sm:p-6 shadow-elevated border border-white/10 flex items-center justify-between gap-4">
+        <div className="relative z-10 flex items-center gap-2.5">
+          <Flame className="w-5 h-5 text-brand-yellow shrink-0" />
+          <h1 className="text-lg sm:text-xl font-display font-extrabold text-white tracking-tight">
             Feed Social
           </h1>
-          <p className="text-xs sm:text-sm text-white/80 max-w-md">
-            Acompanhe fotos, torcidas, lances e bastidores das atléticas da Medicina UEMA.
-          </p>
         </div>
 
-        <div className="relative z-10 flex items-center gap-2 self-start sm:self-center">
+        <div className="relative z-10 flex items-center gap-2">
           <button
             type="button"
             onClick={() => loadPosts(false)}

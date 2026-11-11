@@ -1,6 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trophy } from 'lucide-react';
 import { StandingEntry, ModalitySlug } from '../../types/domain';
 import { TeamCrest } from './TeamCrest';
 
@@ -85,29 +84,13 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
   return (
     <div className="space-y-4">
       <div className="rounded-3xl bg-white border border-brand-surface-border shadow-card overflow-hidden">
-        {/* Cabeçalho Editorial da Tabela */}
-        <div className="px-5 py-4 bg-gradient-to-r from-brand-blue-dark via-brand-blue to-brand-blue-medium text-white flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-brand-yellow">
-              <Trophy className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-display font-extrabold text-white">
-                Tabela de Classificação {modalityName ? `• ${modalityName}` : ''}
-              </h3>
-              <p className="text-[11px] text-white/75">
-                Critérios oficiais adaptados à modalidade
-              </p>
-            </div>
+        {modalityName && (
+          <div className="px-5 py-3 bg-gradient-to-r from-brand-blue-dark via-brand-blue to-brand-blue-medium text-white flex items-center justify-between gap-3">
+            <h3 className="text-sm font-display font-extrabold text-white">
+              {modalityName}
+            </h3>
           </div>
-
-          <div className="flex items-center gap-2 text-[11px] font-semibold">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/15 text-brand-yellow">
-              <span className="w-2 h-2 rounded-full bg-brand-yellow" />
-              <span>Zona de Classificação</span>
-            </span>
-          </div>
-        </div>
+        )}
 
         {/* Grade Responsiva da Tabela */}
         <div className="overflow-x-auto">
@@ -115,7 +98,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
             <thead>
               <tr className="border-b border-brand-surface-border bg-brand-surface-muted/80 text-[11px] font-display font-extrabold uppercase tracking-wider text-brand-text-secondary">
                 <th className="py-3 pl-5 pr-2 w-12">#</th>
-                <th className="py-3 px-3">Período / Equipe</th>
+                <th className="py-3 px-3">Equipe</th>
                 <th className="py-3 px-2.5 text-center w-12 font-extrabold text-brand-blue">
                   {cols.pts}
                 </th>
@@ -213,7 +196,7 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
                       <div className="flex items-center gap-2.5">
                         <TeamCrest size="sm" />
                         <span className="text-xs italic text-brand-text-muted">
-                          Aguardando período/equipe
+                          A definir
                         </span>
                       </div>
                     </td>
@@ -232,29 +215,6 @@ export const StandingsTable: React.FC<StandingsTableProps> = ({
               )}
             </tbody>
           </table>
-        </div>
-
-        {/* Rodapé de Legenda da Tabela */}
-        <div className="px-5 py-3 bg-brand-surface-muted/70 border-t border-brand-surface-border flex flex-wrap items-center justify-between gap-2 text-[11px] text-brand-text-secondary">
-          <div className="flex flex-wrap items-center gap-3">
-            <span>
-              <strong>{cols.pts}:</strong> Pontos
-            </span>
-            <span>
-              <strong>{cols.played}:</strong> Jogos
-            </span>
-            <span>
-              <strong>{cols.won}:</strong> Vitórias
-            </span>
-            <span>
-              <strong>{cols.diffLabel}:</strong> Saldo
-            </span>
-          </div>
-          {standings.length === 0 && (
-            <span className="text-brand-blue font-semibold">
-              Nenhuma equipe cadastrada até o momento
-            </span>
-          )}
         </div>
       </div>
     </div>

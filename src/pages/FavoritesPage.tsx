@@ -57,7 +57,7 @@ export const FavoritesPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Banner de Cabeçalho */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-blue-dark via-brand-blue to-brand-blue-medium text-white p-6 sm:p-7 shadow-elevated border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-blue-dark via-brand-blue to-brand-blue-medium text-white p-5 sm:p-6 shadow-elevated border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <img
           src="/assets/atletica/face-monocor.png"
           alt=""
@@ -65,16 +65,13 @@ export const FavoritesPage: React.FC = () => {
           className="pointer-events-none select-none absolute -right-4 -bottom-6 w-40 h-40 object-contain opacity-[0.07]"
         />
         <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-display font-bold uppercase tracking-wider text-brand-yellow mb-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-display font-bold uppercase tracking-wider text-brand-yellow mb-1.5">
             <Heart className="w-3.5 h-3.5 fill-brand-yellow text-brand-yellow" />
-            <span>Personalização • INTRAMED IX</span>
+            <span>INTRAMED IX</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-display font-extrabold text-white">
-            Meus Favoritos
+            Favoritos
           </h2>
-          <p className="text-xs sm:text-sm text-white/80 mt-1 max-w-xl">
-            Selecione as modalidades, períodos e atletas de seu interesse para destacar seus jogos e alertas.
-          </p>
         </div>
 
         <div className="relative z-10 flex items-center gap-2">
@@ -82,7 +79,7 @@ export const FavoritesPage: React.FC = () => {
             {favoriteModalityIds.length +
               favoriteTeamIds.length +
               favoriteAthleteIds.length}{' '}
-            favorito(s) salvo(s)
+            salvo(s)
           </span>
         </div>
       </div>
@@ -101,14 +98,9 @@ export const FavoritesPage: React.FC = () => {
         <div className="space-y-6">
           <div className="rounded-3xl bg-white border border-brand-surface-border p-5 sm:p-6 shadow-card space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
-                  Escolha suas Modalidades Favoritas
-                </h3>
-                <p className="text-xs text-brand-text-secondary">
-                  Toque no coração para fixar ou remover uma modalidade do seu feed personalizado.
-                </p>
-              </div>
+              <h3 className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
+                Modalidades
+              </h3>
               <Sparkles className="w-5 h-5 text-brand-yellow-dark shrink-0" />
             </div>
 
@@ -209,14 +201,9 @@ export const FavoritesPage: React.FC = () => {
       {activeTab === 'equipes' && (
         <div className="rounded-3xl bg-white border border-brand-surface-border p-5 sm:p-6 shadow-card space-y-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
-                Escolha sua Atlética / Período Favorito
-              </h3>
-              <p className="text-xs text-brand-text-secondary">
-                Siga sua turma (Colossal, Soberana, Sanguinária, Predadora ou Tormenta) para destacar seus jogos.
-              </p>
-            </div>
+            <h3 className="text-sm sm:text-base font-display font-extrabold text-brand-text-primary">
+              Equipes
+            </h3>
             <Shield className="w-5 h-5 text-brand-blue shrink-0" />
           </div>
 

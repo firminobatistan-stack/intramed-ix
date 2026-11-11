@@ -741,51 +741,31 @@ export const RegistrationPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-brand-surface-muted pb-16 space-y-6">
       {/* Banner Superior Institucional */}
-      <section className="bg-gradient-to-r from-[#0B218A] via-[#1030B5] to-[#0B218A] text-white p-6 sm:p-8 rounded-b-3xl sm:rounded-3xl shadow-card">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-display font-extrabold tracking-tight">
-              {tournamentEvent.title}
+      <section className="bg-gradient-to-r from-[#0B218A] via-[#1030B5] to-[#0B218A] text-white p-5 sm:p-6 rounded-b-3xl sm:rounded-3xl shadow-card">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-display font-extrabold tracking-tight">
+              Inscrições • INTRAMED IX
             </h1>
-            <p className="text-xs sm:text-sm text-white/80 max-w-xl">
-              Faça sua inscrição, crie sua conta de acesso e participe da comunidade das 5 turmas.
+            <p className="text-xs text-white/80">
+              Passaporte único de atleta para as 16 modalidades.
             </p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-5 py-3.5 rounded-2xl shrink-0 text-center space-y-0.5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-white/70 block">
-              {activeLot?.name || '1º Lote'}
-            </span>
+          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-4 py-2.5 rounded-2xl shrink-0 text-center">
             {launchConfig?.publicPricesVisible !== false || isAdmin ? (
-              <>
-                <div className="flex items-baseline justify-center gap-1">
-                  <span className="text-xs font-bold">R$</span>
-                  <span className="text-2xl font-display font-extrabold text-brand-yellow">
-                    {(activeLot?.priceMember ?? 50.0).toFixed(2)}
-                  </span>
-                  <span className="text-xs text-white/80">(Sócio)</span>
+              <div className="text-xs text-white/90 space-y-0.5">
+                <div className="font-display font-extrabold text-brand-yellow text-sm">
+                  Sócio: R$ {(activeLot?.priceMember ?? 50.0).toFixed(2)}
                 </div>
-                <span className="text-[11px] text-white/80 block">
-                  Não sócio: R$ {(activeLot?.priceNonMember ?? 60.0).toFixed(2)}
-                </span>
-                <span className="text-[10px] text-amber-200 font-semibold block">
-                  Atleta Convidado (T21): R$ {(activeLot?.priceGuest ?? 65.0).toFixed(2)}
-                </span>
-              </>
+                <div className="text-[11px]">
+                  Não sócio: R$ {(activeLot?.priceNonMember ?? 60.0).toFixed(2)} • Convidado (T21): R$ {(activeLot?.priceGuest ?? 65.0).toFixed(2)}
+                </div>
+              </div>
             ) : (
-              <>
-                <div className="flex items-center justify-center gap-1.5 py-1">
-                  <span className="text-xl font-display font-extrabold text-brand-yellow/80 filter blur-[4px] select-none">
-                    R$ ••,••
-                  </span>
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand-yellow text-slate-900 shadow-sm">
-                    Em Breve
-                  </span>
-                </div>
-                <span className="text-[11px] text-white/70 block filter blur-[3px] select-none">
-                  Não sócio: R$ ••,••
-                </span>
-              </>
+              <span className="text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-brand-yellow text-slate-900">
+                Valores em Breve
+              </span>
             )}
           </div>
         </div>
@@ -868,30 +848,24 @@ export const RegistrationPage: React.FC = () => {
         {/* ============================================================ */}
         {activeTab === 'nova_inscricao' && (
           !currentUser ? (
-            <div className="rounded-3xl bg-white border border-brand-surface-border shadow-card p-8 sm:p-12 text-center max-w-2xl mx-auto space-y-6">
-              <div className="w-16 h-16 rounded-3xl bg-brand-blue/10 border border-brand-blue/20 text-brand-blue flex items-center justify-center mx-auto shadow-sm">
-                <ShieldCheck className="w-8 h-8" />
+            <div className="rounded-3xl bg-white border border-brand-surface-border shadow-card p-6 sm:p-10 text-center max-w-xl mx-auto space-y-5">
+              <div className="w-14 h-14 rounded-2xl bg-brand-blue/10 border border-brand-blue/20 text-brand-blue flex items-center justify-center mx-auto">
+                <ShieldCheck className="w-7 h-7" />
               </div>
-              <div>
-                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-brand-yellow/30 text-brand-blue-dark text-xs font-bold uppercase tracking-wider mb-2">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Passaporte Oficial de Atleta</span>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-display font-black text-slate-900 tracking-tight">
-                  CRIE SUA CONTA PARA SE INSCREVER COMO ATLETA
+              <div className="space-y-1.5">
+                <h2 className="text-xl sm:text-2xl font-display font-black text-slate-900 tracking-tight">
+                  Entre na sua conta para se inscrever
                 </h2>
+                <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+                  Crie ou acesse sua conta gratuita para liberar a inscrição e o pagamento de atleta.
+                </p>
               </div>
-              <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-lg mx-auto">
-                Qualquer pessoa pode criar uma conta gratuita no IntraMed.
-                <br />
-                <strong>Somente após se registrar e entrar na sua conta</strong>, a aba exclusiva para efetuar o pagamento e se registrar como atleta oficial será liberada para você garantir o seu passaporte em todas as 16 modalidades!
-              </p>
-              <div className="pt-3 max-w-md mx-auto space-y-3">
+              <div className="pt-1 max-w-sm mx-auto space-y-2.5">
                 <button
                   type="button"
                   onClick={handleQuickGoogleLogin}
                   disabled={isGoogleAuthLoading}
-                  className="w-full flex items-center justify-center gap-3 px-5 py-3.5 rounded-2xl bg-white hover:bg-slate-50 active:scale-[0.99] border-2 border-slate-200 hover:border-slate-300 shadow-sm text-slate-800 text-xs sm:text-sm font-display font-bold transition-all disabled:opacity-60"
+                  className="w-full flex items-center justify-center gap-3 px-5 py-3 rounded-2xl bg-white hover:bg-slate-50 active:scale-[0.99] border-2 border-slate-200 hover:border-slate-300 shadow-sm text-slate-800 text-xs sm:text-sm font-display font-bold transition-all disabled:opacity-60"
                 >
                   <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                     <path
@@ -913,27 +887,27 @@ export const RegistrationPage: React.FC = () => {
                   </svg>
                   <span>
                     {isGoogleAuthLoading
-                      ? 'Conectando com sua conta Google...'
-                      : 'Continuar com o Google (1 Clique)'}
+                      ? 'Conectando...'
+                      : 'Continuar com Google'}
                   </span>
                 </button>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <div className="grid grid-cols-2 gap-2.5">
                   <Button
                     variant="primary"
                     size="md"
                     onClick={() => navigate('/login?mode=register&returnTo=/inscricao')}
-                    className="w-full sm:w-auto font-bold justify-center"
+                    className="w-full font-bold justify-center"
                   >
-                    Criar Conta com E-mail
+                    Criar Conta
                   </Button>
                   <Button
                     variant="outline"
                     size="md"
                     onClick={() => navigate('/login?mode=login&returnTo=/inscricao')}
-                    className="w-full sm:w-auto justify-center"
+                    className="w-full justify-center"
                   >
-                    Já tenho conta • Entrar
+                    Entrar
                   </Button>
                 </div>
               </div>
@@ -1320,37 +1294,32 @@ export const RegistrationPage: React.FC = () => {
                     <div className="space-y-1 flex-1">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-sm font-display font-extrabold block">
-                          Atleta Convidado (Restrito Turma 21) • R$ {(activeLot?.priceGuest ?? 65.0).toFixed(2)}
+                          Atleta Convidado (T21) • R$ {(activeLot?.priceGuest ?? 65.0).toFixed(2)}
                         </span>
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-200/80 text-amber-900">
-                          Limite: 1 Masc / 1 Fem
-                        </span>
+                        <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                          <span
+                            className={`px-2 py-0.5 rounded-full border ${
+                              t21GuestMascTaken
+                                ? 'bg-red-50 border-red-200 text-red-700'
+                                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            }`}
+                          >
+                            Masc: {t21GuestMascTaken ? 'Ocupada' : '1 vaga'}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full border ${
+                              t21GuestFemTaken
+                                ? 'bg-red-50 border-red-200 text-red-700'
+                                : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            }`}
+                          >
+                            Fem: {t21GuestFemTaken ? 'Ocupada' : '1 vaga'}
+                          </span>
+                        </div>
                       </div>
                       <p className="text-[11px] text-slate-600">
-                        Modalidade exclusiva para a <strong>Turma 21 (Sanguinária)</strong>, limitada a{' '}
-                        <strong>1 atleta convidado Masculino</strong> e{' '}
-                        <strong>1 atleta convidada Feminino</strong>.
+                        Restrito à Turma 21 (1 vaga masculina e 1 feminina).
                       </p>
-                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] font-bold">
-                        <span
-                          className={`px-2 py-0.5 rounded-lg border ${
-                            t21GuestMascTaken
-                              ? 'bg-red-50 border-red-200 text-red-700'
-                              : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                          }`}
-                        >
-                          Vaga Masculino: {t21GuestMascTaken ? 'Preenchida' : 'Disponível (1/1)'}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded-lg border ${
-                            t21GuestFemTaken
-                              ? 'bg-red-50 border-red-200 text-red-700'
-                              : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                          }`}
-                        >
-                          Vaga Feminino: {t21GuestFemTaken ? 'Preenchida' : 'Disponível (1/1)'}
-                        </span>
-                      </div>
                     </div>
                   </div>
                 )}
@@ -1418,13 +1387,7 @@ export const RegistrationPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-brand-text-secondary">Turma:</span>
-                    <span className="font-bold text-brand-text-primary">
-                      {selectedTurmaObj.name} (T{selectedTurmaObj.number})
-                    </span>
-                  </div>
+                <div className="space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-brand-text-secondary">Categoria:</span>
                     <span className="font-bold text-brand-text-primary">{categoryName}</span>
@@ -1432,16 +1395,16 @@ export const RegistrationPage: React.FC = () => {
                   <div className="flex justify-between">
                     <span className="text-brand-text-secondary">Modalidades:</span>
                     <span className="font-bold text-emerald-600">
-                      {selectedModalities.length} selecionadas
+                      {selectedModalities.length}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-brand-text-secondary">Tipo:</span>
                     <span className="font-bold text-brand-text-primary">
                       {selectedTurma === '21' && isGuestAthlete
-                        ? 'Atleta Convidado (T21)'
+                        ? 'Convidado (T21)'
                         : isSocioClaim
-                        ? 'Sócio Cangaceira'
+                        ? 'Sócio'
                         : 'Não Sócio'}
                     </span>
                   </div>
@@ -1899,10 +1862,10 @@ export const RegistrationPage: React.FC = () => {
               <div className="p-3.5 rounded-2xl bg-brand-surface-muted border border-brand-surface-border flex items-center justify-between">
                 <div>
                   <span className="text-xs font-bold text-brand-text-primary block">
-                    {payingRegistration.modalityName} ({payingRegistration.categoryName})
+                    {payingRegistration.athleteName}
                   </span>
                   <span className="text-[11px] text-brand-text-secondary">
-                    Atleta: {payingRegistration.athleteName}
+                    {payingRegistration.teamName || payingRegistration.turmaLabel} • {payingRegistration.categoryName}
                   </span>
                 </div>
                 <div className="text-right">
@@ -2056,9 +2019,8 @@ export const RegistrationPage: React.FC = () => {
                     </>
                   ) : null}
 
-                  <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 leading-relaxed text-left">
-                    <strong>Instruções:</strong> Abra o app do seu banco, escolha{' '}
-                    <strong>Pix Copia e Cola</strong> ou aponte a câmera para o QR Code acima. O valor será creditado diretamente para <strong>Intramed Cangaceira</strong> e a confirmação é automática.
+                  <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 text-center">
+                    Escaneie o QR Code ou use o <strong>Pix Copia e Cola</strong> no app do seu banco.
                   </div>
                 </div>
               ) : (

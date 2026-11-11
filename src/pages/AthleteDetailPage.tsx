@@ -379,11 +379,9 @@ export const AthleteDetailPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="rounded-2xl bg-blue-50/80 border border-blue-200 px-4 py-3 flex items-center gap-2.5 text-xs text-[#0B218A]">
+          <div className="rounded-2xl bg-blue-50/80 border border-blue-200 px-4 py-2.5 flex items-center gap-2 text-xs text-[#0B218A]">
             <Info className="w-4 h-4 shrink-0 text-[#1D63FF]" />
-            <span>
-              No <strong>{activeModObj.name}</strong> do INTRAMED IX, a pontuação é contabilizada de forma <strong>coletiva por sets e parciais da equipe</strong> (sem contagem individual de ataques ou bloqueios).
-            </span>
+            <span>Pontuação coletiva por sets e parciais da equipe.</span>
           </div>
         </div>
       );
@@ -787,7 +785,7 @@ export const AthleteDetailPage: React.FC = () => {
           <section className="grid grid-cols-3 gap-3 sm:gap-4">
             <div
               onClick={() => team && navigate(`/equipe/${team.id}`)}
-              className={`all-sports-card p-4 text-left space-y-2 ${
+              className={`all-sports-card p-4 text-left space-y-1.5 ${
                 team ? 'cursor-pointer hover:border-[#1D63FF]' : ''
               }`}
             >
@@ -795,42 +793,29 @@ export const AthleteDetailPage: React.FC = () => {
                 <Award className="w-3.5 h-3.5 text-[#1D63FF]" />
                 <span>Equipe</span>
               </div>
-              <div>
-                <p className="text-sm sm:text-base font-display font-extrabold text-slate-900 truncate">
-                  {team?.name || 'A definir'}
-                </p>
-                <p className="text-[11px] text-[#1D63FF] font-semibold">
-                  {team ? 'Ver página da equipe ›' : 'Medicina UEMA'}
-                </p>
-              </div>
+              <p className="text-sm sm:text-base font-display font-extrabold text-slate-900 truncate">
+                {team?.name || 'A definir'}
+              </p>
             </div>
 
-            <div className="all-sports-card p-4 text-left space-y-2">
+            <div className="all-sports-card p-4 text-left space-y-1.5">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F3F4F9] text-[11px] font-bold text-slate-600">
                 <Trophy className="w-3.5 h-3.5 text-[#1D63FF]" />
                 <span>Modalidades</span>
               </div>
-              <div>
-                <p className="text-sm sm:text-base font-display font-extrabold text-slate-900">
-                  {resolvedAthlete?.modalityIds.length || 0} inscritas
-                </p>
-                <p className="text-[11px] text-slate-400 truncate">
-                  {activeModObj.name}
-                </p>
-              </div>
+              <p className="text-sm sm:text-base font-display font-extrabold text-slate-900">
+                {resolvedAthlete?.modalityIds.length || 0} inscritas
+              </p>
             </div>
 
-            <div className="all-sports-card p-4 text-left space-y-2">
+            <div className="all-sports-card p-4 text-left space-y-1.5">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F3F4F9] text-[11px] font-bold text-slate-600">
                 <Shirt className="w-3.5 h-3.5 text-[#1D63FF]" />
                 <span>Camisa</span>
               </div>
-              <div>
-                <p className="text-sm sm:text-base font-display font-extrabold text-slate-900">
-                  #{resolvedAthlete?.jerseyNumber || '—'}
-                </p>
-                <p className="text-[11px] text-slate-400">{activeModObj.name}</p>
-              </div>
+              <p className="text-sm sm:text-base font-display font-extrabold text-slate-900">
+                #{resolvedAthlete?.jerseyNumber || '—'}
+              </p>
             </div>
           </section>
 
@@ -839,22 +824,20 @@ export const AthleteDetailPage: React.FC = () => {
             <section className="space-y-3">
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-xs font-display font-extrabold uppercase tracking-wider text-slate-500">
-                  Estatísticas em {activeModObj.name}
+                  Estatísticas • {activeModObj.name}
                 </h3>
                 {stats && stats.liveMatchesPlayed > 0 && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
                     <Clock className="w-3 h-3 animate-pulse" />
-                    <span>Ao Vivo • Provisório</span>
+                    <span>Ao Vivo</span>
                   </span>
                 )}
               </div>
 
               {stats?.hasProvisionalLiveStats && (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>
-                    <strong>Dados Provisórios:</strong> Este atleta possui registros em partida ao vivo em andamento. Os números oficiais do torneio são consolidados apenas após a validação da súmula.
-                  </span>
+                  <span>Dados provisórios de partida em andamento.</span>
                 </div>
               )}
               {renderBasicStatsGrid()}

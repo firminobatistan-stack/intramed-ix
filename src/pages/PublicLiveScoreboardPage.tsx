@@ -181,12 +181,12 @@ export const PublicLiveScoreboardPage: React.FC = () => {
             </button>
             <div>
               <h1 className="text-base sm:text-lg font-display font-extrabold text-white leading-tight">
-                Match Info
+                {resolvedMatch?.modalityName || 'Partida'}
               </h1>
               <span className="block text-[11px] text-white/75">
                 {resolvedMatch
-                  ? `${resolvedMatch.modalityName} • ${resolvedMatch.phaseLabel}`
-                  : 'Central da Partida • INTRAMED IX'}
+                  ? `${resolvedMatch.phaseLabel}${resolvedMatch.scheduledDate ? ` • ${resolvedMatch.scheduledDate}` : ''}`
+                  : 'INTRAMED IX'}
               </span>
             </div>
           </div>
@@ -271,31 +271,18 @@ export const PublicLiveScoreboardPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Subtítulo da Competição no Topo do Conteúdo (Ex: Champions League ⚽ Group H, Round 1) */}
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4">
-        <div className="flex items-center justify-center gap-2 text-xs font-semibold text-[#4F6BED]">
-          <span>{resolvedMatch?.modalityName || 'Competição Oficial'}</span>
-          <CircleDot className="w-3.5 h-3.5 text-slate-300" />
-          <span>
-            {resolvedMatch?.categoryName
-              ? `${resolvedMatch.categoryName}, ${resolvedMatch.phaseLabel}`
-              : 'INTRAMED IX • Medicina UEMA'}
-          </span>
+      {!resolvedMatch && !isTestMode && isAdmin && (
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setTestMode(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-950 text-xs font-display font-extrabold transition-colors"
+          >
+            <FlaskConical className="w-4 h-4 text-amber-700" />
+            <span>Simular Partida</span>
+          </button>
         </div>
-
-        {!resolvedMatch && !isTestMode && isAdmin && (
-          <div className="mt-3 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setTestMode(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-100 hover:bg-amber-200 border border-amber-300 text-amber-950 text-xs font-display font-extrabold transition-colors"
-            >
-              <FlaskConical className="w-4 h-4 text-amber-700" />
-              <span>Ativar Modo de Teste para Simular Partida Ao Vivo</span>
-            </button>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* CONTEÚDO PRINCIPAL */}
       <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-4 space-y-5">
@@ -389,18 +376,12 @@ export const PublicLiveScoreboardPage: React.FC = () => {
 
           <div className="mt-4 pt-3 border-t border-slate-100 text-center space-y-0.5">
             <p className="text-xs font-bold text-slate-600">
-              {resolvedMatch?.venue || 'Ginásio Oficial • Medicina UEMA'}
-            </p>
-            <p className="text-[11px] font-medium text-[#64748B]">
-              {resolvedMatch
-                ? `${resolvedMatch.modalityName} • ${
-                    resolvedMatch.scheduledTime || 'Horário Oficial'
-                  }`
-                : 'Aguardando início da partida'}
+              {resolvedMatch?.venue || 'Local a definir'}
+              {resolvedMatch?.scheduledTime ? ` • ${resolvedMatch.scheduledTime}` : ''}
             </p>
             {sheet?.tableOfficialName && (
-              <p className="text-[11px] font-bold text-emerald-700 pt-1">
-                Mesário Oficial: {sheet.tableOfficialName}
+              <p className="text-[11px] font-bold text-emerald-700 pt-0.5">
+                Mesário: {sheet.tableOfficialName}
               </p>
             )}
           </div>
@@ -409,9 +390,9 @@ export const PublicLiveScoreboardPage: React.FC = () => {
         {/* LINHA DO TEMPO COMPLETA LANCE A LANCE (Estilo Sofascore / Flashscore) */}
         <section className="all-sports-card p-5 sm:p-6 space-y-4">
           <div className="all-sports-section-pill flex items-center justify-between gap-2 px-4">
-            <span>Linha do Tempo ao Vivo (Lance a Lance)</span>
+            <span>Lances</span>
             <span className="text-[10px] font-mono font-bold text-[#0B218A]">
-              {events.length} lance(s)
+              {events.length}
             </span>
           </div>
 
@@ -490,24 +471,21 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               })}
             </div>
           ) : (
-            <div className="py-6 text-center space-y-1.5">
-              <p className="text-xs font-display font-bold text-slate-600">
-                Aguardando início dos lances na Súmula Ao Vivo
-              </p>
-              <p className="text-[11px] text-slate-400 max-w-md mx-auto">
-                Assim que o mesário iniciar o cronômetro e marcar gols, pontos, cartões ou substituições, todos os lances aparecerão aqui em tempo real!
+            <div className="py-5 text-center">
+              <p className="text-xs font-display font-bold text-slate-400">
+                Sem lances registrados
               </p>
             </div>
           )}
         </section>
 
-        {/* ABA 1: DETALHES (Inclui Pressing Threat, Who Will Win?, Short Analysis e Referee) */}
+        {/* ABA 1: DETALHES */}
         {activeTab === 'details' && (
           <>
-            {/* 3. CARD "PRESSING THREAT & STAR PERFORMERS" (Idêntico à Imagem 5) */}
+            {/* 3. CARD "PRESSING THREAT & STAR PERFORMERS" */}
             <section className="all-sports-card p-5 sm:p-6 space-y-4">
               <div className="all-sports-section-pill">
-                Pressão e Ritmo de Jogo (Pressing Threat)
+                Ritmo de Jogo
               </div>
 
               {/* Gráfico de Barras Verticais Espelhadas (Verde em cima / Azul embaixo) */}
@@ -590,16 +568,16 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   className="inline-flex items-center gap-1 text-xs font-display font-extrabold text-[#10B981] hover:underline"
                 >
                   <CircleDot className="w-3.5 h-3.5" />
-                  <span>INTRAMED Ratings &amp; Estatísticas</span>
+                  <span>Estatísticas</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </section>
 
-            {/* 4. CARD "WHO WILL WIN? / QUEM VAI VENCER?" COM BOLHAS SOBREPOSTAS (Idêntico à Imagem 4) */}
+            {/* 4. CARD "WHO WILL WIN?" */}
             <section className="all-sports-card p-5 sm:p-6 space-y-5">
               <div className="all-sports-section-pill">
-                Quem Vai Vencer? • Palpite da Torcida
+                Palpite da Torcida
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.3fr] items-center gap-6">
@@ -723,12 +701,10 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               </div>
             </section>
 
-            {/* 5. CARD "SHORT ANALYSIS / CARTÕES & SUBSTITUIÇÕES" (Idêntico à base da Imagem 5) */}
+            {/* 5. CARD "CARTÕES & SUBSTITUIÇÕES" */}
             <section className="all-sports-card p-5 sm:p-6 space-y-4">
               <div className="all-sports-section-pill flex items-center justify-center gap-2">
-                <span>
-                  ({homeScore} - {awayScore}) • Resumo Disciplinar &amp; Alterações
-                </span>
+                <span>Cartões &amp; Alterações</span>
               </div>
 
               {cardAndSubEvents.length > 0 ? (
@@ -776,40 +752,28 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-center text-slate-400 py-4">
-                  Nenhum cartão ou substituição registrado na súmula até o momento.
+                <p className="text-xs text-center text-slate-400 py-3">
+                  Sem cartões ou substituições.
                 </p>
               )}
             </section>
 
-            {/* 6. CARD "MATCH REFEREE / MESA OFICIAL" (Idêntico à base da Imagem 4) */}
+            {/* 6. CARD "MESA OFICIAL" */}
             <section className="all-sports-card p-5 sm:p-6 space-y-4">
               <div className="all-sports-section-pill">
-                Arbitragem &amp; Mesa Oficial da Partida
-              </div>
-
-              <div className="flex justify-center">
-                <div className="w-14 h-14 rounded-full bg-slate-100 border-2 border-white shadow-md flex items-center justify-center text-[#0B218A]">
-                  <User className="w-6 h-6" />
-                </div>
+                Arbitragem &amp; Mesa
               </div>
 
               <div className="space-y-2.5 text-xs max-w-sm mx-auto">
                 <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                  <span className="font-semibold text-slate-500">Comissão:</span>
+                  <span className="font-semibold text-slate-500">Árbitro / Mesa:</span>
                   <span className="font-display font-extrabold text-slate-800">
-                    {sheet?.refereeName || 'Arbitragem Oficial INTRAMED IX'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                  <span className="font-semibold text-slate-500">Organização:</span>
-                  <span className="font-semibold text-slate-600">
-                    A.A.A. Cangaceira • Medicina UEMA
+                    {sheet?.refereeName || 'Comissão Oficial'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-1">
                   <span className="font-semibold text-slate-500">
-                    Cartões na Partida:
+                    Cartões:
                   </span>
                   <div className="flex items-center gap-3 font-display font-bold text-slate-700">
                     <span className="inline-flex items-center gap-1">
@@ -832,7 +796,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#F3F4F9] hover:bg-blue-50 border border-slate-200 text-xs font-display font-bold text-[#0B218A] transition-colors"
                   >
                     <FileText className="w-4 h-4 text-[#1D63FF]" />
-                    <span>Abrir Documento da Súmula Oficial (PDF / Impressão)</span>
+                    <span>Ver Súmula (PDF)</span>
                   </button>
                 </div>
               )}

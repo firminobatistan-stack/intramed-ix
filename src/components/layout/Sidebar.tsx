@@ -96,29 +96,29 @@ export const Sidebar: React.FC = () => {
     },
     {
       to: '/chaveamento',
-      label: 'Chaveamento Oficial',
+      label: 'Chaveamento',
       icon: GitBranch,
       matchPrefix: '/chaveamento',
     },
     {
       to: '/inscricao',
       label: !currentUser
-        ? 'Inscrição de Atletas'
+        ? 'Inscrições'
         : isAthlete
-        ? 'Meu Passaporte de Atleta'
-        : 'Tornar-se Atleta (Pagamento)',
+        ? 'Meu Passaporte'
+        : 'Inscrição de Atleta',
       icon: CreditCard,
       matchPrefix: '/inscricao',
     },
     {
       to: '/competicoes',
-      label: 'Competições & Esportes',
+      label: 'Modalidades',
       icon: Trophy,
       matchPrefix: '/competicoes',
     },
     {
       to: '/jogos',
-      label: 'Calendário de Jogos',
+      label: 'Jogos',
       icon: Calendar,
       matchPrefix: '/jogos',
     },
@@ -138,7 +138,7 @@ export const Sidebar: React.FC = () => {
           },
           {
             to: '/comunidade',
-            label: 'Comunidade & Perfis',
+            label: 'Comunidade',
             icon: Users,
             matchPrefix: '/comunidade',
           },
@@ -146,7 +146,7 @@ export const Sidebar: React.FC = () => {
       : []),
     {
       to: '/notificacoes',
-      label: 'Central de Alertas',
+      label: 'Notificações',
       icon: Bell,
       matchPrefix: '/notificacoes',
     },
@@ -269,20 +269,6 @@ export const Sidebar: React.FC = () => {
             <NavLink
               to="/placar"
               className={({ isActive }) =>
-                `group flex items-center gap-3 px-3.5 py-3 rounded-2xl text-sm transition-all duration-150 ${
-                  isActive
-                    ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
-                    : 'text-white/75 hover:text-white hover:bg-white/10 font-medium'
-                }`
-              }
-            >
-              <Tv className="w-5 h-5 shrink-0 text-brand-yellow" />
-              <span>Match Center Ao Vivo</span>
-            </NavLink>
-
-            <NavLink
-              to="/chaveamento"
-              className={({ isActive }) =>
                 `group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-sm transition-all duration-150 ${
                   isActive
                     ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
@@ -290,8 +276,8 @@ export const Sidebar: React.FC = () => {
                 }`
               }
             >
-              <GitBranch className="w-5 h-5 shrink-0 text-brand-yellow" />
-              <span>Chaveamento</span>
+              <Tv className="w-5 h-5 shrink-0 text-brand-yellow" />
+              <span>Placar Ao Vivo</span>
             </NavLink>
 
             <NavLink
@@ -305,7 +291,7 @@ export const Sidebar: React.FC = () => {
               }
             >
               <Shield className="w-5 h-5 shrink-0 text-brand-yellow" />
-              <span>Página de Equipe</span>
+              <span>Equipes</span>
             </NavLink>
           </div>
         </div>

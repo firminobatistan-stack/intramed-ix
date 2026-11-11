@@ -132,15 +132,9 @@ export const ModalityDetailPage: React.FC = () => {
             />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-display font-bold uppercase tracking-wider text-brand-yellow">
-                INTRAMED IX
-              </span>
-              <span className="text-white/40">•</span>
-              <span className="text-xs font-medium text-white/80">
-                Modalidade Oficial
-              </span>
-            </div>
+            <span className="text-xs font-display font-bold uppercase tracking-wider text-brand-yellow">
+              INTRAMED IX
+            </span>
             <h2 className="text-2xl sm:text-3xl font-display font-extrabold text-white mt-0.5">
               {modality.name}
             </h2>

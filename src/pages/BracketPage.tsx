@@ -42,16 +42,11 @@ export const BracketPage: React.FC = () => {
     <div className="space-y-6">
       {/* Cabeçalho da Página com Botão do Regulamento */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-brand-surface-border">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-4 rounded-full bg-brand-yellow" aria-hidden="true" />
-            <h2 className="text-lg sm:text-xl font-display font-extrabold text-brand-text-primary">
-              Chaveamento Oficial • INTRAMED IX
-            </h2>
-          </div>
-          <p className="text-xs sm:text-sm text-brand-text-secondary mt-1">
-            Mata-mata para 5 Atléticas: 1 jogo de Quartas de Final, 2 Semifinais e Grande Final.
-          </p>
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-4 rounded-full bg-brand-yellow" aria-hidden="true" />
+          <h2 className="text-lg sm:text-xl font-display font-extrabold text-brand-text-primary">
+            Chaveamento
+          </h2>
         </div>
 
         <Button
@@ -61,7 +56,7 @@ export const BracketPage: React.FC = () => {
           onClick={() => setIsRulesModalOpen(true)}
           className="shrink-0"
         >
-          Regulamento de Sorteio &amp; Pontuações
+          Regulamento &amp; Pontos
         </Button>
       </div>
 
@@ -132,15 +127,6 @@ export const BracketPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-1">
                   <span
-                    className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
-                      isConfigured
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        : 'bg-slate-100 text-slate-400'
-                    }`}
-                  >
-                    {isConfigured ? 'Oficial' : 'Em breve'}
-                  </span>
-                  <span
                     className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
                       mod.weight === 2
                         ? 'bg-amber-100 text-amber-900'
@@ -159,35 +145,19 @@ export const BracketPage: React.FC = () => {
         })}
       </div>
 
-      {/* Banner Informativo da Modalidade Ativa */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-900 to-indigo-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="text-base font-display font-extrabold text-brand-yellow">
-              {currentMod.name}
-            </h3>
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 border border-white/15">
-              {currentMod.type === 'coletiva' ? 'Coletiva • Peso 2' : 'Individual • Peso 1'}
-            </span>
-            {CONFIGURED_MODALITY_IDS.has(currentMod.id) ? (
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                Confrontos Homologados
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30">
-                Aguardando Sorteio
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-white/80">
-            Pontuação: <strong>1º Lugar ({currentMod.points1st} pts)</strong> • 2º ({currentMod.points2nd} pts) • 3º ({currentMod.points3rd} pts) • 4º ({currentMod.points4th} pts).
-          </p>
+      {/* Resumo Compacto da Modalidade Ativa */}
+      <div className="px-4 py-3 rounded-2xl bg-gradient-to-r from-blue-900 to-indigo-900 text-white flex flex-wrap items-center justify-between gap-2 shadow-sm">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm sm:text-base font-display font-extrabold text-brand-yellow">
+            {currentMod.name}
+          </h3>
+          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 border border-white/15">
+            {currentMod.type === 'coletiva' ? 'Coletiva • P2' : 'Individual • P1'}
+          </span>
         </div>
-
-        <div className="flex items-center gap-1.5 text-xs text-brand-yellow bg-white/10 px-3 py-1.5 rounded-xl border border-white/15">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Formato: 5 Equipes (1 Quartas + 2 Semis)</span>
-        </div>
+        <span className="text-xs text-white/85">
+          1º ({currentMod.points1st} pts) • 2º ({currentMod.points2nd} pts) • 3º ({currentMod.points3rd} pts) • 4º ({currentMod.points4th} pts)
+        </span>
       </div>
 
       {/* Componente de Chaveamento Visual */}

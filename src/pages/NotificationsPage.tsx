@@ -51,18 +51,15 @@ export const NotificationsPage: React.FC = () => {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Cabeçalho */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-brand-blue-dark via-brand-blue to-brand-blue-medium text-white p-6 sm:p-7 shadow-elevated border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-brand-blue-dark via-brand-blue to-brand-blue-medium text-white p-5 sm:p-6 shadow-elevated border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-display font-bold uppercase tracking-wider text-brand-yellow mb-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-display font-bold uppercase tracking-wider text-brand-yellow mb-1.5">
             <Bell className="w-3.5 h-3.5" />
-            <span>Central de Alertas • INTRAMED IX</span>
+            <span>INTRAMED IX</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-display font-extrabold text-white">
-            Notificações Esportivas
+            Notificações
           </h2>
-          <p className="text-xs sm:text-sm text-white/80 mt-1">
-            Acompanhe avisos de início de jogo, placares ao vivo, encerramento de súmulas e comunicados oficiais.
-          </p>
         </div>
 
         {activeTab === 'sports' && notifications.length > 0 && (

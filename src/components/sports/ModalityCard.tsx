@@ -28,9 +28,6 @@ export const ModalityCard: React.FC<ModalityCardProps> = ({ modality, onClick })
           />
         </div>
         <div className="min-w-0">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-brand-text-muted block">
-            INTRAMED IX
-          </span>
           <h3 className="text-base sm:text-lg font-display font-extrabold text-brand-text-primary group-hover:text-brand-blue transition-colors truncate">
             {modality.name}
           </h3>

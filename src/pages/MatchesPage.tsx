@@ -16,12 +16,12 @@ import { SportIcon } from '../components/sports/SportIcon';
 type PeriodFilter = 'todos' | 'hoje' | 'proximos' | 'finalizados';
 
 const TOURNAMENT_DAYS = [
-  { id: 'todos', dayLabel: 'Todos os Dias', sub: 'Calendário Oficial IX INTRAMED Cangaceira' },
-  { id: '20/11', dayLabel: 'Sex • 20/11', sub: 'Natação (07h-11h) & Vôlei de Quadra (15h-20h)' },
-  { id: '21/11', dayLabel: 'Sáb • 21/11', sub: 'Basquete & Handebol (Escola Antenor Viana)' },
-  { id: '22/11', dayLabel: 'Dom • 22/11', sub: 'Semifinais Handebol & Futsal (08h-20h)' },
-  { id: '28/11', dayLabel: 'Sáb • 28/11', sub: 'Tênis de Mesa (08h-12h) & Sinuca / VP / Happy Hour (16h-21h)' },
-  { id: '29/11', dayLabel: 'Dom • 29/11', sub: 'Grandes Finais Coletivas (09h-19h) & Premiações (20h-22h)' },
+  { id: 'todos', dayLabel: 'Todos os Dias', sub: 'Calendário Geral' },
+  { id: '20/11', dayLabel: 'Sex • 20/11', sub: 'Natação & Vôlei' },
+  { id: '21/11', dayLabel: 'Sáb • 21/11', sub: 'Basquete & Handebol' },
+  { id: '22/11', dayLabel: 'Dom • 22/11', sub: 'Handebol & Futsal' },
+  { id: '28/11', dayLabel: 'Sáb • 28/11', sub: 'Tênis de Mesa, Sinuca & Vôlei de Praia' },
+  { id: '29/11', dayLabel: 'Dom • 29/11', sub: 'Finais & Premiação' },
 ];
 
 /**

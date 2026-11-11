@@ -29,15 +29,12 @@ export const CompetitionsPage: React.FC = () => {
           className="pointer-events-none select-none absolute -right-4 -bottom-6 w-40 h-40 object-contain opacity-[0.07]"
         />
         <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-display font-bold uppercase tracking-wider text-brand-yellow mb-2">
-            <span>16 Modalidades Oficiais • INTRAMED IX</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-display font-bold uppercase tracking-wider text-brand-yellow mb-1.5">
+            <span>16 Modalidades • INTRAMED IX</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-display font-extrabold text-white">
             Modalidades Esportivas
           </h2>
-          <p className="text-xs sm:text-sm text-white/80 mt-1 max-w-xl">
-            Selecione uma modalidade para acessar jogos, resultados, chaveamento, classificação e estatísticas.
-          </p>
         </div>
 
         <button
@@ -46,7 +43,7 @@ export const CompetitionsPage: React.FC = () => {
           className="relative z-10 inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-yellow text-brand-blue-dark hover:bg-brand-yellow-dark text-xs font-display font-extrabold transition-colors self-start sm:self-center shrink-0 shadow-sm"
         >
           <GitBranch className="w-4 h-4" />
-          <span>Visualizar Chaveamento</span>
+          <span>Chaveamento</span>
         </button>
       </div>
 

@@ -95,11 +95,8 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           </div>
         </div>
 
-        <div className="mt-5 text-center space-y-1">
-          <p className="text-xs font-semibold text-slate-600">{emptyMessage}</p>
-          <p className="text-[11px] font-medium text-[#4F6BED]">
-            Local e horário serão exibidos após o sorteio oficial
-          </p>
+        <div className="mt-4 text-center">
+          <p className="text-xs font-semibold text-slate-500">{emptyMessage}</p>
         </div>
       </div>
     );
@@ -112,12 +109,16 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     <div
       className={`all-sports-card p-5 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl ${className}`}
     >
-      {/* 1. Pílula Cinza-Lavanda no Topo (Ex: UEFA Champions League -> Modalidade • Categoria) */}
+      {/* 1. Pílula Cinza-Lavanda no Topo */}
       <div className="all-sports-section-pill mb-4 flex items-center justify-center gap-2">
         <span className="truncate">
           {match.modalityName}
-          {match.categoryName ? ` • ${match.categoryName}` : ''}
-          {match.phaseLabel ? ` — ${match.phaseLabel}` : ''}
+          {match.categoryName &&
+          match.categoryName.trim().toLowerCase() !==
+            match.modalityName.trim().toLowerCase()
+            ? ` • ${match.categoryName}`
+            : ''}
+          {match.phaseLabel ? ` • ${match.phaseLabel}` : ''}
         </span>
       </div>
 
@@ -230,26 +231,23 @@ export const MatchCard: React.FC<MatchCardProps> = ({
         </div>
       )}
 
-      {/* 5. Rodapé Centralizado: Local + Subtítulo Azul + Botão Verde "See all >" */}
+      {/* 5. Rodapé Centralizado Minimalista: Local + Ações */}
       <div className="mt-4 pt-3 border-t border-slate-100 text-center space-y-1">
         <p className="text-xs font-bold text-slate-600">
           {match.venue || 'Local a definir'}
-        </p>
-        <p className="text-[11px] font-semibold text-[#64748B]">
-          {match.modalityName} •{' '}
-          {match.scheduledDate
-            ? `${match.scheduledDate}${match.scheduledTime ? ` às ${match.scheduledTime}` : ''}`
-            : 'Data e horário a definir'}
+          {(isLive || isFinished) && match.scheduledDate
+            ? ` • ${match.scheduledDate}${match.scheduledTime ? ` (${match.scheduledTime})` : ''}`
+            : ''}
         </p>
 
-        <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+        <div className="pt-1.5 flex flex-wrap items-center justify-center gap-3">
           <button
             type="button"
             onClick={() => navigate(`/placar/${match.id}`)}
             className="inline-flex items-center gap-1 text-xs font-display font-extrabold text-[#10B981] hover:text-[#059669] transition-colors"
           >
             <CircleDot className="w-3.5 h-3.5" />
-            <span>Ver detalhes</span>
+            <span>Detalhes</span>
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
 
@@ -262,7 +260,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 className="inline-flex items-center gap-1 text-xs font-display font-bold text-[#0B218A] hover:underline"
               >
                 <Play className="w-3 h-3" />
-                <span>{isAdmin ? 'Abrir Súmula (Admin)' : 'Sou Mesário (Operar)'}</span>
+                <span>{isAdmin ? 'Súmula' : 'Mesário'}</span>
               </button>
             </>
           )}
@@ -275,7 +273,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
                 className="inline-flex items-center gap-1 text-xs font-display font-bold text-amber-600 hover:underline"
               >
                 <FileText className="w-3 h-3" />
-                <span>Baixar Súmula Oficial</span>
+                <span>PDF</span>
               </button>
             </>
           )}
