@@ -110,9 +110,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ? computeAuthorizedServerPrice(
                 String(storedReg.lotId || 'lote-1-cangaceira'),
                 String(storedReg.memberStatus || 'nao_solicitado'),
-                Boolean(storedReg.requestedMemberDiscount)
+                Boolean(storedReg.requestedMemberDiscount),
+                Boolean(storedReg.isGuestAthlete)
               )
-            : 55.0;
+            : 50.0;
 
           if (amount + 0.01 >= minPrice) {
             const method: 'pix' | 'credit_card' =

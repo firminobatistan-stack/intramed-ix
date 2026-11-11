@@ -241,6 +241,367 @@ export const CONFIGURED_MODALITY_IDS = new Set(
   OFFICIAL_CONFIGURED_SEEDS.map((s) => s.modalityId)
 );
 
+/**
+ * TABELA OFICIAL DE HORÁRIOS E LOCAIS — IX INTRAMED CANGACEIRA
+ * Mapeamento exato conforme planilha oficial da Comissão Organizadora.
+ * Locais:
+ * - Natação: Escola José Castro (Sexta 20/11 das 07:00 às 11:00)
+ * - Vôlei de Quadra: Bayma
+ * - Basquete e Handebol: Escola Antenor Viana
+ * - Futsal: Quadra Oficial
+ * - Sinuca e Vôlei de Praia: Arena AMK Sports (Sábado 28/11 a partir das 16:00)
+ */
+export const OFFICIAL_MATCH_SCHEDULE_MAP: Record<
+  string,
+  { scheduledDate: string; scheduledTime: string; venue: string }
+> = {
+  // =========================================================================
+  // SEXTA-FEIRA, 20/11/2026 — NATAÇÃO (07h-11h) & VÔLEI DE QUADRA (Bayma)
+  // =========================================================================
+  'match_volei-fem_qf': {
+    scheduledDate: '20/11 (Sex)',
+    scheduledTime: '15:00',
+    venue: 'Bayma',
+  },
+  'match_volei-masc_qf': {
+    scheduledDate: '20/11 (Sex)',
+    scheduledTime: '16:00',
+    venue: 'Bayma',
+  },
+  'match_volei-fem_sf2': {
+    scheduledDate: '20/11 (Sex)',
+    scheduledTime: '17:00',
+    venue: 'Bayma',
+  },
+  'match_volei-masc_sf2': {
+    scheduledDate: '20/11 (Sex)',
+    scheduledTime: '18:00',
+    venue: 'Bayma',
+  },
+  'match_volei-fem_sf1': {
+    scheduledDate: '20/11 (Sex)',
+    scheduledTime: '19:00',
+    venue: 'Bayma',
+  },
+  'match_volei-masc_sf1': {
+    scheduledDate: '20/11 (Sex)',
+    scheduledTime: '20:00',
+    venue: 'Bayma',
+  },
+
+  // =========================================================================
+  // SÁBADO, 21/11/2026 — BASQUETE & HANDEBOL (Escola Antenor Viana)
+  // =========================================================================
+  'match_basquete-masc_qf': {
+    scheduledDate: '21/11 (Sáb)',
+    scheduledTime: '08:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_basquete-fem_qf': {
+    scheduledDate: '21/11 (Sáb)',
+    scheduledTime: '09:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_handebol-masc_qf': {
+    scheduledDate: '21/11 (Sáb)',
+    scheduledTime: '10:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_handebol-fem_qf': {
+    scheduledDate: '21/11 (Sáb)',
+    scheduledTime: '11:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_basquete-masc_sf2': {
+    scheduledDate: '21/11 (Sáb)',
+    scheduledTime: '15:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_basquete-fem_sf2': {
+    scheduledDate: '21/11 (Sáb)',
+    scheduledTime: '16:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_basquete-masc_sf1': {
+    scheduledDate: '21/11 (Sáb)',
+    scheduledTime: '17:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_basquete-fem_sf1': {
+    scheduledDate: '21/11 (Sáb)',
+    scheduledTime: '18:00',
+    venue: 'Escola Antenor Viana',
+  },
+
+  // =========================================================================
+  // DOMINGO, 22/11/2026 — SEMIFINAIS HANDEBOL & FUTSAL (Quartas + Semifinais)
+  // =========================================================================
+  'match_handebol-masc_sf2': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '08:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_handebol-fem_sf2': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '09:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_handebol-masc_sf1': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '10:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_handebol-fem_sf1': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '11:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_futsal-masc_qf': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '15:00',
+    venue: 'Quadra Oficial',
+  },
+  'match_futsal-fem_qf': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '16:00',
+    venue: 'Quadra Oficial',
+  },
+  'match_futsal-masc_sf2': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '17:00',
+    venue: 'Quadra Oficial',
+  },
+  'match_futsal-fem_sf2': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '18:00',
+    venue: 'Quadra Oficial',
+  },
+  'match_futsal-masc_sf1': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '19:00',
+    venue: 'Quadra Oficial',
+  },
+  'match_futsal-fem_sf1': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '20:00',
+    venue: 'Quadra Oficial',
+  },
+
+  // =========================================================================
+  // SÁBADO, 28/11/2026 — TÊNIS DE MESA (08h-12h) & SINUCA / VÔLEI DE PRAIA (16h-21h)
+  // =========================================================================
+  'match_tenis-mesa-masc_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '08:00',
+    venue: 'Arena Tênis de Mesa',
+  },
+  'match_tenis-mesa-fem_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '08:30',
+    venue: 'Arena Tênis de Mesa',
+  },
+  'match_tenis-mesa-masc_sf2': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '09:00',
+    venue: 'Arena Tênis de Mesa',
+  },
+  'match_tenis-mesa-fem_sf2': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '09:30',
+    venue: 'Arena Tênis de Mesa',
+  },
+  'match_tenis-mesa-masc_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '10:00',
+    venue: 'Arena Tênis de Mesa',
+  },
+  'match_tenis-mesa-fem_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '10:30',
+    venue: 'Arena Tênis de Mesa',
+  },
+  'match_tenis-mesa-masc_final': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '11:00',
+    venue: 'Arena Tênis de Mesa',
+  },
+  'match_tenis-mesa-fem_final': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '11:30',
+    venue: 'Arena Tênis de Mesa',
+  },
+
+  // Sinuca — Arena AMK Sports (Inscrição das duplas até sexta-feira 27/11/2026)
+  'match_sinuca-masc_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '16:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_sinuca-fem_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '16:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_sinuca-masc_sf2': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '17:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_sinuca-fem_sf2': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '17:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_sinuca-masc_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '18:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_sinuca-fem_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '18:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_sinuca-masc_final': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '19:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_sinuca-fem_final': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '20:00',
+    venue: 'Arena AMK Sports',
+  },
+
+  // Vôlei de Praia (VP) & Happy Hour — Arena AMK Sports (16h às 21h)
+  'match_volei-praia-masc_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '16:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-fem_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '16:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-masc_sf2': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '17:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-fem_sf2': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '18:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-masc_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '19:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-fem_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '19:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-masc_final': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '20:15',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-fem_final': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '20:45',
+    venue: 'Arena AMK Sports',
+  },
+
+  // Truco — Arena AMK Sports (Happy Hour 28/11)
+  'match_truco-fem_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '16:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_truco-masc_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '16:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_truco-fem_sf2': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '17:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_truco-masc_sf2': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '18:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_truco-fem_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '19:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_truco-masc_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '19:30',
+    venue: 'Arena AMK Sports',
+  },
+  'match_truco-fem_final': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '20:15',
+    venue: 'Arena AMK Sports',
+  },
+  'match_truco-masc_final': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '20:45',
+    venue: 'Arena AMK Sports',
+  },
+
+  // =========================================================================
+  // DOMINGO, 29/11/2026 — GRANDES FINAIS COLETIVAS & PREMIAÇÕES (20h-22h)
+  // =========================================================================
+  'match_basquete-masc_final': {
+    scheduledDate: '29/11 (Dom)',
+    scheduledTime: '09:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_basquete-fem_final': {
+    scheduledDate: '29/11 (Dom)',
+    scheduledTime: '10:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_volei-fem_final': {
+    scheduledDate: '29/11 (Dom)',
+    scheduledTime: '11:00',
+    venue: 'Bayma',
+  },
+  'match_volei-masc_final': {
+    scheduledDate: '29/11 (Dom)',
+    scheduledTime: '12:00',
+    venue: 'Bayma',
+  },
+  'match_handebol-fem_final': {
+    scheduledDate: '29/11 (Dom)',
+    scheduledTime: '16:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_handebol-masc_final': {
+    scheduledDate: '29/11 (Dom)',
+    scheduledTime: '17:00',
+    venue: 'Escola Antenor Viana',
+  },
+  'match_futsal-fem_final': {
+    scheduledDate: '29/11 (Dom)',
+    scheduledTime: '18:00',
+    venue: 'Quadra Oficial',
+  },
+  'match_futsal-masc_final': {
+    scheduledDate: '29/11 (Dom)',
+    scheduledTime: '19:00',
+    venue: 'Quadra Oficial',
+  },
+};
+
 function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
   matches: Match[];
   bracket: BracketStructure;
@@ -257,6 +618,11 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
   const sf2MatchId = `match_${def.modalityId}_sf2`;
   const finalMatchId = `match_${def.modalityId}_final`;
 
+  const qfSched = OFFICIAL_MATCH_SCHEDULE_MAP[qfMatchId];
+  const sf1Sched = OFFICIAL_MATCH_SCHEDULE_MAP[sf1MatchId];
+  const sf2Sched = OFFICIAL_MATCH_SCHEDULE_MAP[sf2MatchId];
+  const finalSched = OFFICIAL_MATCH_SCHEDULE_MAP[finalMatchId];
+
   // 1. Quartas de Final: Cabeça 1 × Cabeça 2
   const qfMatch: Match = {
     id: qfMatchId,
@@ -267,9 +633,9 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
     phase: 'quarterfinals',
     phaseLabel: 'Quartas de Final',
     status: 'scheduled',
-    scheduledDate: null,
-    scheduledTime: null,
-    venue: null,
+    scheduledDate: qfSched?.scheduledDate ?? null,
+    scheduledTime: qfSched?.scheduledTime ?? null,
+    venue: qfSched?.venue ?? null,
     homeTeam: {
       teamId: t1.id,
       teamName: t1.name,
@@ -294,9 +660,9 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
     phase: 'semifinals',
     phaseLabel: 'Semifinal 1',
     status: 'scheduled',
-    scheduledDate: null,
-    scheduledTime: null,
-    venue: null,
+    scheduledDate: sf1Sched?.scheduledDate ?? null,
+    scheduledTime: sf1Sched?.scheduledTime ?? null,
+    venue: sf1Sched?.venue ?? null,
     homeTeam: {
       teamId: t3.id,
       teamName: t3.name,
@@ -321,9 +687,9 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
     phase: 'semifinals',
     phaseLabel: 'Semifinal 2',
     status: 'scheduled',
-    scheduledDate: null,
-    scheduledTime: null,
-    venue: null,
+    scheduledDate: sf2Sched?.scheduledDate ?? null,
+    scheduledTime: sf2Sched?.scheduledTime ?? null,
+    venue: sf2Sched?.venue ?? null,
     homeTeam: {
       teamId: t4.id,
       teamName: t4.name,
@@ -348,9 +714,9 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
     phase: 'final',
     phaseLabel: 'Grande Final',
     status: 'scheduled',
-    scheduledDate: null,
-    scheduledTime: null,
-    venue: null,
+    scheduledDate: finalSched?.scheduledDate ?? null,
+    scheduledTime: finalSched?.scheduledTime ?? null,
+    venue: finalSched?.venue ?? null,
     homeTeam: {
       teamId: null,
       teamName: 'Vencedor Semifinal 1',
@@ -423,9 +789,9 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
             phase: 'quarterfinals',
             phaseLabel: 'Quartas de Final',
             orderIndex: 0,
-            scheduledDate: null,
-            scheduledTime: null,
-            venue: null,
+            scheduledDate: qfMatch.scheduledDate ?? null,
+            scheduledTime: qfMatch.scheduledTime ?? null,
+            venue: qfMatch.venue ?? null,
             status: 'scheduled',
             homeTeam: qfMatch.homeTeam,
             awayTeam: qfMatch.awayTeam,
@@ -447,9 +813,9 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
             phase: 'semifinals',
             phaseLabel: 'Semifinal 1',
             orderIndex: 0,
-            scheduledDate: null,
-            scheduledTime: null,
-            venue: null,
+            scheduledDate: sf1Match.scheduledDate ?? null,
+            scheduledTime: sf1Match.scheduledTime ?? null,
+            venue: sf1Match.venue ?? null,
             status: 'scheduled',
             homeTeam: sf1Match.homeTeam,
             awayTeam: sf1Match.awayTeam,
@@ -464,9 +830,9 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
             phase: 'semifinals',
             phaseLabel: 'Semifinal 2',
             orderIndex: 1,
-            scheduledDate: null,
-            scheduledTime: null,
-            venue: null,
+            scheduledDate: sf2Match.scheduledDate ?? null,
+            scheduledTime: sf2Match.scheduledTime ?? null,
+            venue: sf2Match.venue ?? null,
             status: 'scheduled',
             homeTeam: sf2Match.homeTeam,
             awayTeam: sf2Match.awayTeam,
@@ -488,9 +854,9 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
             phase: 'final',
             phaseLabel: 'Grande Final',
             orderIndex: 0,
-            scheduledDate: null,
-            scheduledTime: null,
-            venue: null,
+            scheduledDate: finalMatch.scheduledDate ?? null,
+            scheduledTime: finalMatch.scheduledTime ?? null,
+            venue: finalMatch.venue ?? null,
             status: 'scheduled',
             homeTeam: finalMatch.homeTeam,
             awayTeam: finalMatch.awayTeam,
@@ -507,7 +873,37 @@ function buildModalityMatchesAndBracket(def: BracketSeedDefinition): {
 
 const allBuilt = OFFICIAL_CONFIGURED_SEEDS.map(buildModalityMatchesAndBracket);
 
-export const OFFICIAL_TOURNAMENT_MATCHES: Match[] = allBuilt.flatMap((b) => b.matches);
+// Prova Oficial de Natação (Sexta-feira, 20/11/2026 das 07:00 às 11:00 — Escola José Castro)
+export const OFFICIAL_SWIMMING_MATCH: Match = {
+  id: 'match_natacao_geral_final',
+  modalityId: 'natacao',
+  modalityName: 'Natação (Provas Oficiais)',
+  categoryId: 'natacao-geral',
+  categoryName: 'Natação Masc. & Fem.',
+  phase: 'final',
+  phaseLabel: 'Baterias & Finais (07h às 11h)',
+  status: 'scheduled',
+  scheduledDate: '20/11 (Sex)',
+  scheduledTime: '07:00',
+  venue: 'Escola José Castro',
+  homeTeam: {
+    teamId: 'sanguinaria',
+    teamName: 'Sanguinária / Predadora / Tormenta',
+    crestUrl: '/assets/teams/sanguinaria.jpg',
+    score: null,
+  },
+  awayTeam: {
+    teamId: 'colossal',
+    teamName: 'Colossal / Soberana',
+    crestUrl: '/assets/teams/colossal.jpg',
+    score: null,
+  },
+};
+
+export const OFFICIAL_TOURNAMENT_MATCHES: Match[] = [
+  OFFICIAL_SWIMMING_MATCH,
+  ...allBuilt.flatMap((b) => b.matches),
+];
 
 export const OFFICIAL_INITIAL_BRACKETS: Record<string, BracketStructure> = {};
 export const OFFICIAL_UNIVERSAL_BRACKETS: Record<string, UniversalModalityBracket> = {};

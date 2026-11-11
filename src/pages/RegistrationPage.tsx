@@ -202,7 +202,43 @@ export const RegistrationPage: React.FC = () => {
   }, [currentUser]);
 
   const [isSocioClaim, setIsSocioClaim] = useState(true);
+  const [isGuestAthlete, setIsGuestAthlete] = useState(false);
   const [socioDocumentProof, setSocioDocumentProof] = useState('');
+
+  // Se o usuário mudar da Turma 21 para outra turma, desativa automaticamente a opção Atleta Convidado
+  useEffect(() => {
+    if (selectedTurma !== '21' && isGuestAthlete) {
+      setIsGuestAthlete(false);
+    }
+  }, [selectedTurma, isGuestAthlete]);
+
+  // Controle de vagas de Atleta Convidado da Turma 21 (Máx 1 Masculino e 1 Feminino)
+  const t21GuestMascTaken = useMemo(
+    () =>
+      registrations.some(
+        (r) =>
+          r.paymentStatus !== 'cancelado' &&
+          Boolean(r.isGuestAthlete) &&
+          (r.turma === '21' || r.teamId === 'sanguinaria') &&
+          r.categoryName.toLowerCase() === 'masculino'
+      ),
+    [registrations]
+  );
+
+  const t21GuestFemTaken = useMemo(
+    () =>
+      registrations.some(
+        (r) =>
+          r.paymentStatus !== 'cancelado' &&
+          Boolean(r.isGuestAthlete) &&
+          (r.turma === '21' || r.teamId === 'sanguinaria') &&
+          r.categoryName.toLowerCase() === 'feminino'
+      ),
+    [registrations]
+  );
+
+  const isCurrentGenderGuestTaken =
+    categoryName === 'Masculino' ? t21GuestMascTaken : t21GuestFemTaken;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -320,10 +356,12 @@ export const RegistrationPage: React.FC = () => {
         teamName: selectedTurmaObj.name,
         selectedModalities,
         categoryName,
-        requestedMemberDiscount: isSocioClaim,
-        memberDocumentProofUrl: isSocioClaim
-          ? socioDocumentProof || 'Declaração de Sócio da Atlética Cangaceira'
-          : undefined,
+        requestedMemberDiscount: isGuestAthlete ? false : isSocioClaim,
+        isGuestAthlete: selectedTurma === '21' ? isGuestAthlete : false,
+        memberDocumentProofUrl:
+          !isGuestAthlete && isSocioClaim
+            ? socioDocumentProof || 'Declaração de Sócio da Atlética Cangaceira'
+            : undefined,
         avatarUrl,
         jerseyNumber: parsedJersey && !Number.isNaN(parsedJersey) ? parsedJersey : null,
         position: 'Atleta',
@@ -496,6 +534,7 @@ export const RegistrationPage: React.FC = () => {
         athleteDocument: payingRegistration.athleteDocument,
         turmaLabel: payingRegistration.turmaLabel,
         requestedMemberDiscount: payingRegistration.requestedMemberDiscount,
+        isGuestAthlete: payingRegistration.isGuestAthlete,
         memberStatus: payingRegistration.memberStatus,
       }),
     })
@@ -639,6 +678,7 @@ export const RegistrationPage: React.FC = () => {
             athleteDocument: payingRegistration.athleteDocument,
             turmaLabel: payingRegistration.turmaLabel,
             requestedMemberDiscount: payingRegistration.requestedMemberDiscount,
+            isGuestAthlete: payingRegistration.isGuestAthlete,
             memberStatus: payingRegistration.memberStatus,
             isCreditCard: true,
             installments: selectedInstallments,
@@ -681,9 +721,12 @@ export const RegistrationPage: React.FC = () => {
     });
   }, [visibleAthletes, communitySearch, communityTeamFilter]);
 
-  const currentDisplayPrice = isSocioClaim
-    ? activeLot?.priceMember ?? 55.0
-    : activeLot?.priceNonMember ?? 65.0;
+  const currentDisplayPrice =
+    selectedTurma === '21' && isGuestAthlete
+      ? activeLot?.priceGuest ?? 65.0
+      : isSocioClaim
+      ? activeLot?.priceMember ?? 50.0
+      : activeLot?.priceNonMember ?? 60.0;
 
   return (
     <div className="min-h-screen bg-brand-surface-muted pb-16 space-y-6">
@@ -708,12 +751,15 @@ export const RegistrationPage: React.FC = () => {
                 <div className="flex items-baseline justify-center gap-1">
                   <span className="text-xs font-bold">R$</span>
                   <span className="text-2xl font-display font-extrabold text-brand-yellow">
-                    {activeLot?.priceMember.toFixed(2)}
+                    {(activeLot?.priceMember ?? 50.0).toFixed(2)}
                   </span>
                   <span className="text-xs text-white/80">(Sócio)</span>
                 </div>
-                <span className="text-[11px] text-white/70 block">
-                  Não sócio: R$ {activeLot?.priceNonMember.toFixed(2)}
+                <span className="text-[11px] text-white/80 block">
+                  Não sócio: R$ {(activeLot?.priceNonMember ?? 60.0).toFixed(2)}
+                </span>
+                <span className="text-[10px] text-amber-200 font-semibold block">
+                  Atleta Convidado (T21): R$ {(activeLot?.priceGuest ?? 65.0).toFixed(2)}
                 </span>
               </>
             ) : (
@@ -1161,37 +1207,145 @@ export const RegistrationPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Seção de Sócio da Atlética */}
+              {/* Seção de Modalidade de Inscrição (Sócio, Não Sócio ou Atleta Convidado T21) */}
               <div className="border-t border-brand-surface-border pt-5 space-y-3">
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
-                  5. Sócio da Atlética Cangaceira
+                  5. Categoria de Inscrição &amp; Valor
                 </h2>
 
-                <div
-                  onClick={() => setIsSocioClaim(!isSocioClaim)}
-                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
-                    isSocioClaim
-                      ? 'bg-emerald-50/70 border-emerald-400 text-emerald-950'
-                      : 'bg-brand-surface-muted border-brand-surface-border text-brand-text-secondary'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSocioClaim}
-                    onChange={(e) => setIsSocioClaim(e.target.checked)}
-                    className="mt-1 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <div className="space-y-0.5">
-                    <span className="text-sm font-display font-extrabold block">
-                      Sou Sócio da Atlética Cangaceira (R$ {activeLot?.priceMember.toFixed(2)})
-                    </span>
-                    <p className="text-xs text-brand-text-secondary">
-                      Sujeito à validação da diretoria antes da liberação do pagamento com desconto.
-                    </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Opção 1: Sócio da Atlética Cangaceira (R$ 50,00) */}
+                  <div
+                    onClick={() => {
+                      setIsGuestAthlete(false);
+                      setIsSocioClaim(true);
+                    }}
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                      !isGuestAthlete && isSocioClaim
+                        ? 'bg-emerald-50/80 border-emerald-500 text-emerald-950 shadow-xs'
+                        : 'bg-white border-brand-surface-border text-brand-text-secondary hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="registrationTier"
+                      checked={!isGuestAthlete && isSocioClaim}
+                      onChange={() => {
+                        setIsGuestAthlete(false);
+                        setIsSocioClaim(true);
+                      }}
+                      className="mt-1 w-4 h-4 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="text-sm font-display font-extrabold block">
+                        Sócio Cangaceira • R$ {(activeLot?.priceMember ?? 50.0).toFixed(2)}
+                      </span>
+                      <p className="text-[11px] text-brand-text-secondary">
+                        Sujeito à validação da diretoria antes da liberação do pagamento com desconto.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Opção 2: Não Sócio (R$ 60,00) */}
+                  <div
+                    onClick={() => {
+                      setIsGuestAthlete(false);
+                      setIsSocioClaim(false);
+                    }}
+                    className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                      !isGuestAthlete && !isSocioClaim
+                        ? 'bg-blue-50/80 border-brand-blue text-slate-900 shadow-xs'
+                        : 'bg-white border-brand-surface-border text-brand-text-secondary hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="registrationTier"
+                      checked={!isGuestAthlete && !isSocioClaim}
+                      onChange={() => {
+                        setIsGuestAthlete(false);
+                        setIsSocioClaim(false);
+                      }}
+                      className="mt-1 w-4 h-4 text-brand-blue focus:ring-brand-blue"
+                    />
+                    <div className="space-y-0.5">
+                      <span className="text-sm font-display font-extrabold block">
+                        Não Sócio • R$ {(activeLot?.priceNonMember ?? 60.0).toFixed(2)}
+                      </span>
+                      <p className="text-[11px] text-brand-text-secondary">
+                        Liberação imediata para pagamento via Pix ou Cartão de Crédito.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                {isSocioClaim && (
+                {/* Opção 3: Atleta Convidado (R$ 65,00) — Exclusivo Turma 21 (1 Masculino e 1 Feminino) */}
+                {selectedTurma === '21' && (
+                  <div
+                    onClick={() => {
+                      if (isCurrentGenderGuestTaken) return;
+                      setIsGuestAthlete(true);
+                      setIsSocioClaim(false);
+                    }}
+                    className={`p-4 rounded-2xl border-2 transition-all flex items-start gap-3 ${
+                      isCurrentGenderGuestTaken
+                        ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed opacity-75'
+                        : isGuestAthlete
+                        ? 'bg-amber-50/90 border-amber-500 text-amber-950 shadow-xs cursor-pointer'
+                        : 'bg-white border-amber-300/80 text-slate-700 hover:border-amber-400 cursor-pointer'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="registrationTier"
+                      disabled={isCurrentGenderGuestTaken}
+                      checked={isGuestAthlete}
+                      onChange={() => {
+                        if (isCurrentGenderGuestTaken) return;
+                        setIsGuestAthlete(true);
+                        setIsSocioClaim(false);
+                      }}
+                      className="mt-1 w-4 h-4 text-amber-600 focus:ring-amber-500"
+                    />
+                    <div className="space-y-1 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-sm font-display font-extrabold block">
+                          Atleta Convidado (Restrito Turma 21) • R$ {(activeLot?.priceGuest ?? 65.0).toFixed(2)}
+                        </span>
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-200/80 text-amber-900">
+                          Limite: 1 Masc / 1 Fem
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600">
+                        Modalidade exclusiva para a <strong>Turma 21 (Sanguinária)</strong>, limitada a{' '}
+                        <strong>1 atleta convidado Masculino</strong> e{' '}
+                        <strong>1 atleta convidada Feminino</strong>.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] font-bold">
+                        <span
+                          className={`px-2 py-0.5 rounded-lg border ${
+                            t21GuestMascTaken
+                              ? 'bg-red-50 border-red-200 text-red-700'
+                              : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                          }`}
+                        >
+                          Vaga Masculino: {t21GuestMascTaken ? 'Preenchida' : 'Disponível (1/1)'}
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded-lg border ${
+                            t21GuestFemTaken
+                              ? 'bg-red-50 border-red-200 text-red-700'
+                              : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                          }`}
+                        >
+                          Vaga Feminino: {t21GuestFemTaken ? 'Preenchida' : 'Disponível (1/1)'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!isGuestAthlete && isSocioClaim && (
                   <Input
                     label="Matrícula ou Nº de Associado (opcional)"
                     placeholder="Ex: Matrícula 2023.2"
@@ -1274,7 +1428,11 @@ export const RegistrationPage: React.FC = () => {
                   <div className="flex justify-between">
                     <span className="text-brand-text-secondary">Tipo:</span>
                     <span className="font-bold text-brand-text-primary">
-                      {isSocioClaim ? 'Sócio Cangaceira' : 'Não Sócio'}
+                      {selectedTurma === '21' && isGuestAthlete
+                        ? 'Atleta Convidado (T21)'
+                        : isSocioClaim
+                        ? 'Sócio Cangaceira'
+                        : 'Não Sócio'}
                     </span>
                   </div>
                 </div>
@@ -1394,7 +1552,9 @@ export const RegistrationPage: React.FC = () => {
                           </p>
                           <p>
                             <strong>Condição:</strong>{' '}
-                            {reg.requestedMemberDiscount
+                            {reg.isGuestAthlete
+                              ? `Atleta Convidado • Turma 21 (${reg.categoryName})`
+                              : reg.requestedMemberDiscount
                               ? `Sócio da Atlética (${reg.memberStatus.toUpperCase()})`
                               : 'Não Sócio'}
                           </p>

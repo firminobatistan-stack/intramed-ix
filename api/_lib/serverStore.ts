@@ -217,20 +217,29 @@ declare global {
 // Configura preços oficiais centralizados no servidor (Item 5 e 38 da Auditoria)
 export const OFFICIAL_SERVER_LOTS: Record<
   string,
-  { id: string; name: string; priceMember: number; priceNonMember: number; isActive: boolean }
+  {
+    id: string;
+    name: string;
+    priceMember: number;
+    priceNonMember: number;
+    priceGuest?: number;
+    isActive: boolean;
+  }
 > = {
   'lote-1-cangaceira': {
     id: 'lote-1-cangaceira',
     name: '1º Lote Oficial — IntraMed IX',
-    priceMember: 55.0,
-    priceNonMember: 65.0,
+    priceMember: 50.0,
+    priceNonMember: 60.0,
+    priceGuest: 65.0,
     isActive: true,
   },
   'lote-2-cangaceira': {
     id: 'lote-2-cangaceira',
     name: '2º Lote Final — IntraMed IX',
-    priceMember: 65.0,
-    priceNonMember: 80.0,
+    priceMember: 60.0,
+    priceNonMember: 75.0,
+    priceGuest: 80.0,
     isActive: false,
   },
 };
@@ -318,11 +327,15 @@ export const PRIMARY_GATEWAY_ORIGIN = 'https://intramedix.vercel.app';
 export function computeAuthorizedServerPrice(
   lotId?: string,
   memberStatus?: string,
-  requestedMemberDiscount?: boolean
+  requestedMemberDiscount?: boolean,
+  isGuestAthlete?: boolean
 ): number {
   const lot =
     (lotId && OFFICIAL_SERVER_LOTS[lotId]) ||
     OFFICIAL_SERVER_LOTS['lote-1-cangaceira'];
+  if (isGuestAthlete) {
+    return lot.priceGuest ?? 65.0;
+  }
   if (memberStatus === 'aprovado') {
     return lot.priceMember;
   }
@@ -671,8 +684,15 @@ export function ensureMasterAccountProvisioned(store: CloudCollectionMap): void 
 function seedOfficialMatchesAndBrackets(store: CloudCollectionMap) {
   if (!store.matches) store.matches = {};
   for (const m of OFFICIAL_TOURNAMENT_MATCHES) {
-    if (!store.matches[m.id]) {
-      store.matches[m.id] = m as unknown as Record<string, unknown>;
+    const mId = String(m.id || '');
+    if (!store.matches[mId]) {
+      store.matches[mId] = m as unknown as Record<string, unknown>;
+    } else {
+      // Atualiza horários e locais oficiais caso estivessem vazios ou do lote antigo
+      const ex = store.matches[mId];
+      if (m.scheduledDate && !ex.scheduledDate) ex.scheduledDate = m.scheduledDate;
+      if (m.scheduledTime && !ex.scheduledTime) ex.scheduledTime = m.scheduledTime;
+      if (m.venue && !ex.venue) ex.venue = m.venue;
     }
   }
 
@@ -680,6 +700,13 @@ function seedOfficialMatchesAndBrackets(store: CloudCollectionMap) {
   for (const [k, v] of Object.entries(OFFICIAL_UNIVERSAL_BRACKETS)) {
     if (!store.brackets[k]) {
       store.brackets[k] = v as unknown as Record<string, unknown>;
+    } else {
+      // Propaga horários para as etapas do chaveamento universal
+      store.brackets[k] = {
+        ...v,
+        ...store.brackets[k],
+        stages: (v as any).stages,
+      };
     }
   }
 
@@ -1000,6 +1027,17 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
             } else if (colName === 'profiles') {
               if (!store.profiles) store.profiles = {};
               store.profiles[docId] = { ...parsedDoc, id: docId };
+            } else if (colName === 'matches') {
+              if (!store.matches) store.matches = {};
+              const exM = store.matches[docId] || {};
+              store.matches[docId] = {
+                ...exM,
+                ...parsedDoc,
+                id: docId,
+                scheduledDate: parsedDoc.scheduledDate || exM.scheduledDate || null,
+                scheduledTime: parsedDoc.scheduledTime || exM.scheduledTime || null,
+                venue: parsedDoc.venue || exM.venue || null,
+              };
             } else {
               const targetCol = (store as Record<string, any>)[colName] || {};
               if (!targetCol[docId]) {

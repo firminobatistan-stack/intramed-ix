@@ -16,12 +16,12 @@ import { SportIcon } from '../components/sports/SportIcon';
 type PeriodFilter = 'todos' | 'hoje' | 'proximos' | 'finalizados';
 
 const TOURNAMENT_DAYS = [
-  { id: 'todos', dayLabel: 'Todos os Dias', sub: 'Calendário Oficial INTRAMED IX' },
-  { id: 'dia-1', dayLabel: 'Dia 1 • Abertura', sub: 'Fase de Grupos' },
-  { id: 'dia-2', dayLabel: 'Dia 2 • Classificatórias', sub: 'Rodada Geral' },
-  { id: 'dia-3', dayLabel: 'Dia 3 • Quartas de Final', sub: 'Eliminatórias' },
-  { id: 'dia-4', dayLabel: 'Dia 4 • Semifinais', sub: 'Finais de Chave' },
-  { id: 'dia-5', dayLabel: 'Dia 5 • Grandes Finais', sub: 'Disputa de Título' },
+  { id: 'todos', dayLabel: 'Todos os Dias', sub: 'Calendário Oficial IX INTRAMED Cangaceira' },
+  { id: '20/11', dayLabel: 'Sex • 20/11', sub: 'Natação (07h-11h) & Vôlei de Quadra (15h-20h)' },
+  { id: '21/11', dayLabel: 'Sáb • 21/11', sub: 'Basquete & Handebol (Escola Antenor Viana)' },
+  { id: '22/11', dayLabel: 'Dom • 22/11', sub: 'Semifinais Handebol & Futsal (08h-20h)' },
+  { id: '28/11', dayLabel: 'Sáb • 28/11', sub: 'Tênis de Mesa (08h-12h) & Sinuca / VP / Happy Hour (16h-21h)' },
+  { id: '29/11', dayLabel: 'Dom • 29/11', sub: 'Grandes Finais Coletivas (09h-19h) & Premiações (20h-22h)' },
 ];
 
 /**
@@ -60,51 +60,32 @@ export const MatchesPage: React.FC = () => {
       return false;
     }
 
-    // Filtro por dia do campeonato
+    // Filtro por dia do campeonato (20/11, 21/11, 22/11, 28/11, 29/11)
     if (currentDay && currentDay.id !== 'todos') {
       const dateStr = (match.scheduledDate || '').toLowerCase();
-      const phaseStr = (match.phase || '').toLowerCase();
-      const labelStr = (match.phaseLabel || '').toLowerCase();
-
-      if (currentDay.id === 'dia-1') {
-        const isDia1 =
-          dateStr.includes('dia 1') ||
-          dateStr.includes('dia-1') ||
-          dateStr.includes('abertura') ||
-          (phaseStr === 'group_stage' && !dateStr.includes('dia 2'));
-        if (!isDia1) return false;
-      } else if (currentDay.id === 'dia-2') {
-        const isDia2 =
-          dateStr.includes('dia 2') ||
-          dateStr.includes('dia-2') ||
-          dateStr.includes('classific');
-        if (!isDia2) return false;
-      } else if (currentDay.id === 'dia-3') {
-        const isDia3 =
-          dateStr.includes('dia 3') ||
-          dateStr.includes('dia-3') ||
-          phaseStr === 'quarterfinals' ||
-          labelStr.includes('quartas');
-        if (!isDia3) return false;
-      } else if (currentDay.id === 'dia-4') {
-        const isDia4 =
-          dateStr.includes('dia 4') ||
-          dateStr.includes('dia-4') ||
-          phaseStr === 'semifinals' ||
-          labelStr.includes('semi');
-        if (!isDia4) return false;
-      } else if (currentDay.id === 'dia-5') {
-        const isDia5 =
-          dateStr.includes('dia 5') ||
-          dateStr.includes('dia-5') ||
-          phaseStr === 'final' ||
-          phaseStr === 'third_place' ||
-          labelStr.includes('final');
-        if (!isDia5) return false;
+      if (!dateStr.includes(currentDay.id.toLowerCase())) {
+        return false;
       }
     }
 
     return true;
+  })
+  .sort((a, b) => {
+    const dayOrder = (d?: string | null) => {
+      if (!d) return 99;
+      if (d.includes('20/11')) return 1;
+      if (d.includes('21/11')) return 2;
+      if (d.includes('22/11')) return 3;
+      if (d.includes('28/11')) return 4;
+      if (d.includes('29/11')) return 5;
+      return 50;
+    };
+    const da = dayOrder(a.scheduledDate);
+    const db = dayOrder(b.scheduledDate);
+    if (da !== db) return da - db;
+    const ta = a.scheduledTime || '99:99';
+    const tb = b.scheduledTime || '99:99';
+    return ta.localeCompare(tb);
   });
 
   const getEmptyMessageByFilter = (): string => {

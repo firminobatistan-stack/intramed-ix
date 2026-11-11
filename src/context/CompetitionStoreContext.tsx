@@ -456,10 +456,21 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             officialMatches:
               parsed.officialMatches && parsed.officialMatches.length > 0
                 ? (() => {
+                    const initialById = new Map<string, Match>();
+                    for (const m of INITIAL_MATCHES) initialById.set(m.id, m);
                     const byId = new Map<string, Match>();
                     for (const m of INITIAL_MATCHES) byId.set(m.id, m);
                     for (const sm of parsed.officialMatches as Match[]) {
-                      if (sm && sm.id) byId.set(sm.id, sm);
+                      if (sm && sm.id) {
+                        const defM = initialById.get(sm.id);
+                        byId.set(sm.id, {
+                          ...(defM || {}),
+                          ...sm,
+                          scheduledDate: defM?.scheduledDate || sm.scheduledDate || null,
+                          scheduledTime: defM?.scheduledTime || sm.scheduledTime || null,
+                          venue: defM?.venue || sm.venue || null,
+                        });
+                      }
                     }
                     return Array.from(byId.values());
                   })()
@@ -647,9 +658,30 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 (rmRev === exRev &&
                   (ex.status !== rm.status ||
                     ex.homeTeam?.score !== rm.homeTeam?.score ||
-                    ex.awayTeam?.score !== rm.awayTeam?.score))
+                    ex.awayTeam?.score !== rm.awayTeam?.score ||
+                    ex.scheduledDate !== rm.scheduledDate ||
+                    ex.scheduledTime !== rm.scheduledTime ||
+                    ex.venue !== rm.venue))
               ) {
-                byId.set(rm.id, ex ? { ...ex, ...rm, tableOfficialPassword: rm.tableOfficialPassword ?? ex.tableOfficialPassword } : rm);
+                const defMatch = INITIAL_MATCHES.find((im) => im.id === rm.id);
+                byId.set(
+                  rm.id,
+                  ex
+                    ? {
+                        ...ex,
+                        ...rm,
+                        scheduledDate: rm.scheduledDate || defMatch?.scheduledDate || ex.scheduledDate || null,
+                        scheduledTime: rm.scheduledTime || defMatch?.scheduledTime || ex.scheduledTime || null,
+                        venue: rm.venue || defMatch?.venue || ex.venue || null,
+                        tableOfficialPassword: rm.tableOfficialPassword ?? ex.tableOfficialPassword,
+                      }
+                    : {
+                        ...rm,
+                        scheduledDate: rm.scheduledDate || defMatch?.scheduledDate || null,
+                        scheduledTime: rm.scheduledTime || defMatch?.scheduledTime || null,
+                        venue: rm.venue || defMatch?.venue || null,
+                      }
+                );
                 matchChanged = true;
                 changed = true;
               }

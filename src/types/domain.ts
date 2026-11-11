@@ -726,8 +726,9 @@ export interface RegistrationLot {
   id: string;
   eventId: string;
   name: string; // Ex: '1º Lote Antecipado'
-  priceMember: number; // Ex: 40.00
-  priceNonMember: number; // Ex: 70.00
+  priceMember: number; // Ex: 50.00
+  priceNonMember: number; // Ex: 60.00
+  priceGuest?: number; // Ex: 65.00 (Atleta Convidado — Restrito à Turma 21: 1 Masc e 1 Fem)
   startDateIso: string;
   endDateIso: string;
   isActive: boolean;
@@ -777,8 +778,9 @@ export interface Registration {
   bio?: string | null;
   instagramHandle?: string | null;
   
-  // Status e Validação de Sócio
+  // Status e Validação de Sócio / Atleta Convidado
   requestedMemberDiscount: boolean;
+  isGuestAthlete?: boolean;
   memberStatus: MemberStatus;
   memberDocumentProofUrl?: string | null;
   memberNotes?: string | null;

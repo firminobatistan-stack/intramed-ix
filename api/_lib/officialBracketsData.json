@@ -1,6 +1,31 @@
 {
   "matches": [
     {
+      "id": "match_natacao_geral_final",
+      "modalityId": "natacao",
+      "modalityName": "Natação (Provas Oficiais)",
+      "categoryId": "natacao-geral",
+      "categoryName": "Natação Masc. & Fem.",
+      "phase": "final",
+      "phaseLabel": "Baterias & Finais (07h às 11h)",
+      "status": "scheduled",
+      "scheduledDate": "20/11 (Sex)",
+      "scheduledTime": "07:00",
+      "venue": "Escola José Castro",
+      "homeTeam": {
+        "teamId": "sanguinaria",
+        "teamName": "Sanguinária / Predadora / Tormenta",
+        "crestUrl": "/assets/teams/sanguinaria.jpg",
+        "score": null
+      },
+      "awayTeam": {
+        "teamId": "colossal",
+        "teamName": "Colossal / Soberana",
+        "crestUrl": "/assets/teams/colossal.jpg",
+        "score": null
+      }
+    },
+    {
       "id": "match_futsal-masc_qf",
       "modalityId": "futsal",
       "modalityName": "Futsal Masculino",
@@ -9,9 +34,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "15:00",
+      "venue": "Quadra Oficial",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -34,9 +59,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "19:00",
+      "venue": "Quadra Oficial",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -59,9 +84,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "17:00",
+      "venue": "Quadra Oficial",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -84,9 +109,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "29/11 (Dom)",
+      "scheduledTime": "19:00",
+      "venue": "Quadra Oficial",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -109,9 +134,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "16:00",
+      "venue": "Quadra Oficial",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -134,9 +159,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "20:00",
+      "venue": "Quadra Oficial",
       "homeTeam": {
         "teamId": "soberana",
         "teamName": "Soberana",
@@ -159,9 +184,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "18:00",
+      "venue": "Quadra Oficial",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -184,9 +209,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "29/11 (Dom)",
+      "scheduledTime": "18:00",
+      "venue": "Quadra Oficial",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -209,9 +234,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "20/11 (Sex)",
+      "scheduledTime": "15:00",
+      "venue": "Bayma",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -234,9 +259,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "20/11 (Sex)",
+      "scheduledTime": "19:00",
+      "venue": "Bayma",
       "homeTeam": {
         "teamId": "soberana",
         "teamName": "Soberana",
@@ -259,9 +284,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "20/11 (Sex)",
+      "scheduledTime": "17:00",
+      "venue": "Bayma",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -284,9 +309,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "29/11 (Dom)",
+      "scheduledTime": "11:00",
+      "venue": "Bayma",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -309,9 +334,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "20/11 (Sex)",
+      "scheduledTime": "16:00",
+      "venue": "Bayma",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -334,9 +359,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "20/11 (Sex)",
+      "scheduledTime": "20:00",
+      "venue": "Bayma",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -359,9 +384,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "20/11 (Sex)",
+      "scheduledTime": "18:00",
+      "venue": "Bayma",
       "homeTeam": {
         "teamId": "soberana",
         "teamName": "Soberana",
@@ -384,9 +409,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "29/11 (Dom)",
+      "scheduledTime": "12:00",
+      "venue": "Bayma",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -409,9 +434,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "21/11 (Sáb)",
+      "scheduledTime": "09:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -434,9 +459,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "21/11 (Sáb)",
+      "scheduledTime": "18:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -459,9 +484,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "21/11 (Sáb)",
+      "scheduledTime": "16:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -484,9 +509,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "29/11 (Dom)",
+      "scheduledTime": "10:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -509,9 +534,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "08:00",
+      "venue": "Arena Tênis de Mesa",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -534,9 +559,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "10:00",
+      "venue": "Arena Tênis de Mesa",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -559,9 +584,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "09:00",
+      "venue": "Arena Tênis de Mesa",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -584,9 +609,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "11:00",
+      "venue": "Arena Tênis de Mesa",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -609,9 +634,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "08:30",
+      "venue": "Arena Tênis de Mesa",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -634,9 +659,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "10:30",
+      "venue": "Arena Tênis de Mesa",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -659,9 +684,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "09:30",
+      "venue": "Arena Tênis de Mesa",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -684,9 +709,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "11:30",
+      "venue": "Arena Tênis de Mesa",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -709,9 +734,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "16:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "soberana",
         "teamName": "Soberana",
@@ -734,9 +759,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "18:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -759,9 +784,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "17:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -784,9 +809,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "20:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -809,9 +834,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "16:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -834,9 +859,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "18:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "soberana",
         "teamName": "Soberana",
@@ -859,9 +884,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "17:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -884,9 +909,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "19:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -909,9 +934,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "21/11 (Sáb)",
+      "scheduledTime": "10:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -934,9 +959,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "10:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -959,9 +984,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "08:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -984,9 +1009,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "29/11 (Dom)",
+      "scheduledTime": "17:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -1009,9 +1034,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "21/11 (Sáb)",
+      "scheduledTime": "11:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -1034,9 +1059,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "11:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -1059,9 +1084,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "22/11 (Dom)",
+      "scheduledTime": "09:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -1084,9 +1109,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "29/11 (Dom)",
+      "scheduledTime": "16:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -1109,9 +1134,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "21/11 (Sáb)",
+      "scheduledTime": "08:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -1134,9 +1159,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "21/11 (Sáb)",
+      "scheduledTime": "17:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -1159,9 +1184,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "21/11 (Sáb)",
+      "scheduledTime": "15:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -1184,9 +1209,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "29/11 (Dom)",
+      "scheduledTime": "09:00",
+      "venue": "Escola Antenor Viana",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -1209,9 +1234,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "16:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -1234,9 +1259,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "19:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -1259,9 +1284,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "17:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -1284,9 +1309,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "20:15",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -1309,9 +1334,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "16:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -1334,9 +1359,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "19:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -1359,9 +1384,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "18:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "sanguinaria",
         "teamName": "Sanguinária",
@@ -1384,9 +1409,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "20:45",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -1409,9 +1434,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "16:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -1434,9 +1459,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "19:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "soberana",
         "teamName": "Soberana",
@@ -1459,9 +1484,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "17:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -1484,9 +1509,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "20:15",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -1509,9 +1534,9 @@
       "phase": "quarterfinals",
       "phaseLabel": "Quartas de Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "16:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "colossal",
         "teamName": "Colossal",
@@ -1534,9 +1559,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 1",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "19:30",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "predadora",
         "teamName": "Predadora",
@@ -1559,9 +1584,9 @@
       "phase": "semifinals",
       "phaseLabel": "Semifinal 2",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "18:00",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": "tormenta",
         "teamName": "Tormenta",
@@ -1584,9 +1609,9 @@
       "phase": "final",
       "phaseLabel": "Grande Final",
       "status": "scheduled",
-      "scheduledDate": null,
-      "scheduledTime": null,
-      "venue": null,
+      "scheduledDate": "28/11 (Sáb)",
+      "scheduledTime": "20:45",
+      "venue": "Arena AMK Sports",
       "homeTeam": {
         "teamId": null,
         "teamName": "Vencedor Semifinal 1",
@@ -1609,7 +1634,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "futsal-masc",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.191Z",
+      "publishedAtIso": "2026-11-11T14:58:31.795Z",
       "stages": [
         {
           "id": "futsal-masc_stage_qf",
@@ -1622,9 +1647,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "15:00",
+              "venue": "Quadra Oficial",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -1662,9 +1687,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "19:00",
+              "venue": "Quadra Oficial",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -1696,9 +1721,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "17:00",
+              "venue": "Quadra Oficial",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -1736,9 +1761,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "29/11 (Dom)",
+              "scheduledTime": "19:00",
+              "venue": "Quadra Oficial",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -1774,7 +1799,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "futsal-fem",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.193Z",
+      "publishedAtIso": "2026-11-11T14:58:31.797Z",
       "stages": [
         {
           "id": "futsal-fem_stage_qf",
@@ -1787,9 +1812,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "16:00",
+              "venue": "Quadra Oficial",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -1827,9 +1852,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "20:00",
+              "venue": "Quadra Oficial",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "soberana",
@@ -1861,9 +1886,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "18:00",
+              "venue": "Quadra Oficial",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -1901,9 +1926,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "29/11 (Dom)",
+              "scheduledTime": "18:00",
+              "venue": "Quadra Oficial",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -1939,7 +1964,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "volei-fem",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.193Z",
+      "publishedAtIso": "2026-11-11T14:58:31.797Z",
       "stages": [
         {
           "id": "volei-fem_stage_qf",
@@ -1952,9 +1977,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "20/11 (Sex)",
+              "scheduledTime": "15:00",
+              "venue": "Bayma",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -1992,9 +2017,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "20/11 (Sex)",
+              "scheduledTime": "19:00",
+              "venue": "Bayma",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "soberana",
@@ -2026,9 +2051,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "20/11 (Sex)",
+              "scheduledTime": "17:00",
+              "venue": "Bayma",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -2066,9 +2091,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "29/11 (Dom)",
+              "scheduledTime": "11:00",
+              "venue": "Bayma",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -2104,7 +2129,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "volei-masc",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.193Z",
+      "publishedAtIso": "2026-11-11T14:58:31.797Z",
       "stages": [
         {
           "id": "volei-masc_stage_qf",
@@ -2117,9 +2142,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "20/11 (Sex)",
+              "scheduledTime": "16:00",
+              "venue": "Bayma",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -2157,9 +2182,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "20/11 (Sex)",
+              "scheduledTime": "20:00",
+              "venue": "Bayma",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -2191,9 +2216,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "20/11 (Sex)",
+              "scheduledTime": "18:00",
+              "venue": "Bayma",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "soberana",
@@ -2231,9 +2256,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "29/11 (Dom)",
+              "scheduledTime": "12:00",
+              "venue": "Bayma",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -2269,7 +2294,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "basquete-fem",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.193Z",
+      "publishedAtIso": "2026-11-11T14:58:31.797Z",
       "stages": [
         {
           "id": "basquete-fem_stage_qf",
@@ -2282,9 +2307,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "21/11 (Sáb)",
+              "scheduledTime": "09:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -2322,9 +2347,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "21/11 (Sáb)",
+              "scheduledTime": "18:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -2356,9 +2381,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "21/11 (Sáb)",
+              "scheduledTime": "16:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -2396,9 +2421,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "29/11 (Dom)",
+              "scheduledTime": "10:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -2434,7 +2459,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "tenis-mesa-masc",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.193Z",
+      "publishedAtIso": "2026-11-11T14:58:31.797Z",
       "stages": [
         {
           "id": "tenis-mesa-masc_stage_qf",
@@ -2447,9 +2472,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "08:00",
+              "venue": "Arena Tênis de Mesa",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -2487,9 +2512,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "10:00",
+              "venue": "Arena Tênis de Mesa",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -2521,9 +2546,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "09:00",
+              "venue": "Arena Tênis de Mesa",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -2561,9 +2586,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "11:00",
+              "venue": "Arena Tênis de Mesa",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -2599,7 +2624,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "tenis-mesa-fem",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.193Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "tenis-mesa-fem_stage_qf",
@@ -2612,9 +2637,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "08:30",
+              "venue": "Arena Tênis de Mesa",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -2652,9 +2677,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "10:30",
+              "venue": "Arena Tênis de Mesa",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -2686,9 +2711,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "09:30",
+              "venue": "Arena Tênis de Mesa",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -2726,9 +2751,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "11:30",
+              "venue": "Arena Tênis de Mesa",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -2764,7 +2789,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "sinuca-fem",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.194Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "sinuca-fem_stage_qf",
@@ -2777,9 +2802,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "16:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "soberana",
@@ -2817,9 +2842,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "18:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -2851,9 +2876,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "17:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -2891,9 +2916,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "20:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -2929,7 +2954,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "sinuca-masc",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.194Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "sinuca-masc_stage_qf",
@@ -2942,9 +2967,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "16:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -2982,9 +3007,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "18:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "soberana",
@@ -3016,9 +3041,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "17:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -3056,9 +3081,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "19:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -3094,7 +3119,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "handebol-masc",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.194Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "handebol-masc_stage_qf",
@@ -3107,9 +3132,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "21/11 (Sáb)",
+              "scheduledTime": "10:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -3147,9 +3172,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "10:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -3181,9 +3206,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "08:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -3221,9 +3246,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "29/11 (Dom)",
+              "scheduledTime": "17:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -3259,7 +3284,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "handebol-fem",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.194Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "handebol-fem_stage_qf",
@@ -3272,9 +3297,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "21/11 (Sáb)",
+              "scheduledTime": "11:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -3312,9 +3337,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "11:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -3346,9 +3371,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "22/11 (Dom)",
+              "scheduledTime": "09:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -3386,9 +3411,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "29/11 (Dom)",
+              "scheduledTime": "16:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -3424,7 +3449,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "basquete-masc",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.194Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "basquete-masc_stage_qf",
@@ -3437,9 +3462,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "21/11 (Sáb)",
+              "scheduledTime": "08:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -3477,9 +3502,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "21/11 (Sáb)",
+              "scheduledTime": "17:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -3511,9 +3536,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "21/11 (Sáb)",
+              "scheduledTime": "15:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -3551,9 +3576,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "29/11 (Dom)",
+              "scheduledTime": "09:00",
+              "venue": "Escola Antenor Viana",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -3589,7 +3614,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "volei-praia-masc",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.194Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "volei-praia-masc_stage_qf",
@@ -3602,9 +3627,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "16:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -3642,9 +3667,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "19:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -3676,9 +3701,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "17:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -3716,9 +3741,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "20:15",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -3754,7 +3779,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "volei-praia-fem",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.194Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "volei-praia-fem_stage_qf",
@@ -3767,9 +3792,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "16:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -3807,9 +3832,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "19:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -3841,9 +3866,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "18:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "sanguinaria",
@@ -3881,9 +3906,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "20:45",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -3919,7 +3944,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "truco-fem",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.194Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "truco-fem_stage_qf",
@@ -3932,9 +3957,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "16:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -3972,9 +3997,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "19:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "soberana",
@@ -4006,9 +4031,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "17:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -4046,9 +4071,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "20:15",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -4084,7 +4109,7 @@
       "formatLabel": "Mata-mata 5 Equipes",
       "category": "truco-masc",
       "isPublished": true,
-      "publishedAtIso": "2026-11-06T16:37:28.194Z",
+      "publishedAtIso": "2026-11-11T14:58:31.798Z",
       "stages": [
         {
           "id": "truco-masc_stage_qf",
@@ -4097,9 +4122,9 @@
               "phase": "quarterfinals",
               "phaseLabel": "Quartas de Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "16:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "colossal",
@@ -4137,9 +4162,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 1",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "19:30",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "predadora",
@@ -4171,9 +4196,9 @@
               "phase": "semifinals",
               "phaseLabel": "Semifinal 2",
               "orderIndex": 1,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "18:00",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": "tormenta",
@@ -4211,9 +4236,9 @@
               "phase": "final",
               "phaseLabel": "Grande Final",
               "orderIndex": 0,
-              "scheduledDate": null,
-              "scheduledTime": null,
-              "venue": null,
+              "scheduledDate": "28/11 (Sáb)",
+              "scheduledTime": "20:45",
+              "venue": "Arena AMK Sports",
               "status": "scheduled",
               "homeTeam": {
                 "teamId": null,
@@ -4242,2233 +4267,5 @@
         }
       ]
     }
-  },
-  "initialBrackets": {
-    "futsal-masc": {
-      "modalityId": "futsal",
-      "categoryId": "futsal-masc",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_futsal-masc_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_futsal-masc_qf",
-            "modalityId": "futsal",
-            "modalityName": "Futsal Masculino",
-            "categoryId": "futsal-masc",
-            "categoryName": "Futsal Masculino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_futsal-masc_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_futsal-masc_sf1",
-            "modalityId": "futsal",
-            "modalityName": "Futsal Masculino",
-            "categoryId": "futsal-masc",
-            "categoryName": "Futsal Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Sanguinária × Soberana",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_futsal-masc_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_futsal-masc_sf2",
-            "modalityId": "futsal",
-            "modalityName": "Futsal Masculino",
-            "categoryId": "futsal-masc",
-            "categoryName": "Futsal Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_futsal-masc_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_futsal-masc_final",
-          "modalityId": "futsal",
-          "modalityName": "Futsal Masculino",
-          "categoryId": "futsal-masc",
-          "categoryName": "Futsal Masculino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "futsal-fem": {
-      "modalityId": "futsal",
-      "categoryId": "futsal-fem",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_futsal-fem_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_futsal-fem_qf",
-            "modalityId": "futsal",
-            "modalityName": "Futsal Feminino",
-            "categoryId": "futsal-fem",
-            "categoryName": "Futsal Feminino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_futsal-fem_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_futsal-fem_sf1",
-            "modalityId": "futsal",
-            "modalityName": "Futsal Feminino",
-            "categoryId": "futsal-fem",
-            "categoryName": "Futsal Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Tormenta × Sanguinária",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_futsal-fem_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_futsal-fem_sf2",
-            "modalityId": "futsal",
-            "modalityName": "Futsal Feminino",
-            "categoryId": "futsal-fem",
-            "categoryName": "Futsal Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_futsal-fem_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_futsal-fem_final",
-          "modalityId": "futsal",
-          "modalityName": "Futsal Feminino",
-          "categoryId": "futsal-fem",
-          "categoryName": "Futsal Feminino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "volei-fem": {
-      "modalityId": "volei",
-      "categoryId": "volei-fem",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_volei-fem_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_volei-fem_qf",
-            "modalityId": "volei",
-            "modalityName": "Vôlei Feminino",
-            "categoryId": "volei-fem",
-            "categoryName": "Vôlei Feminino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_volei-fem_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_volei-fem_sf1",
-            "modalityId": "volei",
-            "modalityName": "Vôlei Feminino",
-            "categoryId": "volei-fem",
-            "categoryName": "Vôlei Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Sanguinária × Colossal",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_volei-fem_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_volei-fem_sf2",
-            "modalityId": "volei",
-            "modalityName": "Vôlei Feminino",
-            "categoryId": "volei-fem",
-            "categoryName": "Vôlei Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_volei-fem_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_volei-fem_final",
-          "modalityId": "volei",
-          "modalityName": "Vôlei Feminino",
-          "categoryId": "volei-fem",
-          "categoryName": "Vôlei Feminino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "volei-masc": {
-      "modalityId": "volei",
-      "categoryId": "volei-masc",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_volei-masc_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_volei-masc_qf",
-            "modalityId": "volei",
-            "modalityName": "Vôlei Masculino",
-            "categoryId": "volei-masc",
-            "categoryName": "Vôlei Masculino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_volei-masc_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_volei-masc_sf1",
-            "modalityId": "volei",
-            "modalityName": "Vôlei Masculino",
-            "categoryId": "volei-masc",
-            "categoryName": "Vôlei Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Predadora × Sanguinária",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_volei-masc_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_volei-masc_sf2",
-            "modalityId": "volei",
-            "modalityName": "Vôlei Masculino",
-            "categoryId": "volei-masc",
-            "categoryName": "Vôlei Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_volei-masc_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_volei-masc_final",
-          "modalityId": "volei",
-          "modalityName": "Vôlei Masculino",
-          "categoryId": "volei-masc",
-          "categoryName": "Vôlei Masculino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "basquete-fem": {
-      "modalityId": "basquete",
-      "categoryId": "basquete-fem",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_basquete-fem_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_basquete-fem_qf",
-            "modalityId": "basquete",
-            "modalityName": "Basquete Feminino",
-            "categoryId": "basquete-fem",
-            "categoryName": "Basquete Feminino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_basquete-fem_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_basquete-fem_sf1",
-            "modalityId": "basquete",
-            "modalityName": "Basquete Feminino",
-            "categoryId": "basquete-fem",
-            "categoryName": "Basquete Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Predadora × Soberana",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_basquete-fem_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_basquete-fem_sf2",
-            "modalityId": "basquete",
-            "modalityName": "Basquete Feminino",
-            "categoryId": "basquete-fem",
-            "categoryName": "Basquete Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_basquete-fem_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_basquete-fem_final",
-          "modalityId": "basquete",
-          "modalityName": "Basquete Feminino",
-          "categoryId": "basquete-fem",
-          "categoryName": "Basquete Feminino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "tenis-mesa-masc": {
-      "modalityId": "tenis-de-mesa",
-      "categoryId": "tenis-mesa-masc",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_tenis-mesa-masc_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_tenis-mesa-masc_qf",
-            "modalityId": "tenis-de-mesa",
-            "modalityName": "Tênis de Mesa Masculino",
-            "categoryId": "tenis-mesa-masc",
-            "categoryName": "Tênis de Mesa Masculino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_tenis-mesa-masc_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_tenis-mesa-masc_sf1",
-            "modalityId": "tenis-de-mesa",
-            "modalityName": "Tênis de Mesa Masculino",
-            "categoryId": "tenis-mesa-masc",
-            "categoryName": "Tênis de Mesa Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Predadora × Colossal",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_tenis-mesa-masc_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_tenis-mesa-masc_sf2",
-            "modalityId": "tenis-de-mesa",
-            "modalityName": "Tênis de Mesa Masculino",
-            "categoryId": "tenis-mesa-masc",
-            "categoryName": "Tênis de Mesa Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_tenis-mesa-masc_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_tenis-mesa-masc_final",
-          "modalityId": "tenis-de-mesa",
-          "modalityName": "Tênis de Mesa Masculino",
-          "categoryId": "tenis-mesa-masc",
-          "categoryName": "Tênis de Mesa Masculino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "tenis-mesa-fem": {
-      "modalityId": "tenis-de-mesa",
-      "categoryId": "tenis-mesa-fem",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_tenis-mesa-fem_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_tenis-mesa-fem_qf",
-            "modalityId": "tenis-de-mesa",
-            "modalityName": "Tênis de Mesa Feminino",
-            "categoryId": "tenis-mesa-fem",
-            "categoryName": "Tênis de Mesa Feminino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_tenis-mesa-fem_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_tenis-mesa-fem_sf1",
-            "modalityId": "tenis-de-mesa",
-            "modalityName": "Tênis de Mesa Feminino",
-            "categoryId": "tenis-mesa-fem",
-            "categoryName": "Tênis de Mesa Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Sanguinária × Predadora",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_tenis-mesa-fem_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_tenis-mesa-fem_sf2",
-            "modalityId": "tenis-de-mesa",
-            "modalityName": "Tênis de Mesa Feminino",
-            "categoryId": "tenis-mesa-fem",
-            "categoryName": "Tênis de Mesa Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_tenis-mesa-fem_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_tenis-mesa-fem_final",
-          "modalityId": "tenis-de-mesa",
-          "modalityName": "Tênis de Mesa Feminino",
-          "categoryId": "tenis-mesa-fem",
-          "categoryName": "Tênis de Mesa Feminino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "sinuca-fem": {
-      "modalityId": "sinuca",
-      "categoryId": "sinuca-fem",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_sinuca-fem_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_sinuca-fem_qf",
-            "modalityId": "sinuca",
-            "modalityName": "Sinuca Feminina",
-            "categoryId": "sinuca-fem",
-            "categoryName": "Sinuca Feminina",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_sinuca-fem_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_sinuca-fem_sf1",
-            "modalityId": "sinuca",
-            "modalityName": "Sinuca Feminina",
-            "categoryId": "sinuca-fem",
-            "categoryName": "Sinuca Feminina",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Soberana × Predadora",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_sinuca-fem_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_sinuca-fem_sf2",
-            "modalityId": "sinuca",
-            "modalityName": "Sinuca Feminina",
-            "categoryId": "sinuca-fem",
-            "categoryName": "Sinuca Feminina",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_sinuca-fem_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_sinuca-fem_final",
-          "modalityId": "sinuca",
-          "modalityName": "Sinuca Feminina",
-          "categoryId": "sinuca-fem",
-          "categoryName": "Sinuca Feminina",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "sinuca-masc": {
-      "modalityId": "sinuca",
-      "categoryId": "sinuca-masc",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_sinuca-masc_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_sinuca-masc_qf",
-            "modalityId": "sinuca",
-            "modalityName": "Sinuca Masculina",
-            "categoryId": "sinuca-masc",
-            "categoryName": "Sinuca Masculina",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_sinuca-masc_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_sinuca-masc_sf1",
-            "modalityId": "sinuca",
-            "modalityName": "Sinuca Masculina",
-            "categoryId": "sinuca-masc",
-            "categoryName": "Sinuca Masculina",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Sanguinária × Tormenta",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_sinuca-masc_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_sinuca-masc_sf2",
-            "modalityId": "sinuca",
-            "modalityName": "Sinuca Masculina",
-            "categoryId": "sinuca-masc",
-            "categoryName": "Sinuca Masculina",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_sinuca-masc_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_sinuca-masc_final",
-          "modalityId": "sinuca",
-          "modalityName": "Sinuca Masculina",
-          "categoryId": "sinuca-masc",
-          "categoryName": "Sinuca Masculina",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "handebol-masc": {
-      "modalityId": "handebol",
-      "categoryId": "handebol-masc",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_handebol-masc_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_handebol-masc_qf",
-            "modalityId": "handebol",
-            "modalityName": "Handebol Masculino",
-            "categoryId": "handebol-masc",
-            "categoryName": "Handebol Masculino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_handebol-masc_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_handebol-masc_sf1",
-            "modalityId": "handebol",
-            "modalityName": "Handebol Masculino",
-            "categoryId": "handebol-masc",
-            "categoryName": "Handebol Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Tormenta × Soberana",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_handebol-masc_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_handebol-masc_sf2",
-            "modalityId": "handebol",
-            "modalityName": "Handebol Masculino",
-            "categoryId": "handebol-masc",
-            "categoryName": "Handebol Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_handebol-masc_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_handebol-masc_final",
-          "modalityId": "handebol",
-          "modalityName": "Handebol Masculino",
-          "categoryId": "handebol-masc",
-          "categoryName": "Handebol Masculino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "handebol-fem": {
-      "modalityId": "handebol",
-      "categoryId": "handebol-fem",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_handebol-fem_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_handebol-fem_qf",
-            "modalityId": "handebol",
-            "modalityName": "Handebol Feminino",
-            "categoryId": "handebol-fem",
-            "categoryName": "Handebol Feminino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_handebol-fem_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_handebol-fem_sf1",
-            "modalityId": "handebol",
-            "modalityName": "Handebol Feminino",
-            "categoryId": "handebol-fem",
-            "categoryName": "Handebol Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Colossal × Tormenta",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_handebol-fem_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_handebol-fem_sf2",
-            "modalityId": "handebol",
-            "modalityName": "Handebol Feminino",
-            "categoryId": "handebol-fem",
-            "categoryName": "Handebol Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_handebol-fem_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_handebol-fem_final",
-          "modalityId": "handebol",
-          "modalityName": "Handebol Feminino",
-          "categoryId": "handebol-fem",
-          "categoryName": "Handebol Feminino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "basquete-masc": {
-      "modalityId": "basquete",
-      "categoryId": "basquete-masc",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_basquete-masc_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_basquete-masc_qf",
-            "modalityId": "basquete",
-            "modalityName": "Basquete Masculino",
-            "categoryId": "basquete-masc",
-            "categoryName": "Basquete Masculino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_basquete-masc_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_basquete-masc_sf1",
-            "modalityId": "basquete",
-            "modalityName": "Basquete Masculino",
-            "categoryId": "basquete-masc",
-            "categoryName": "Basquete Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Colossal × Predadora",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_basquete-masc_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_basquete-masc_sf2",
-            "modalityId": "basquete",
-            "modalityName": "Basquete Masculino",
-            "categoryId": "basquete-masc",
-            "categoryName": "Basquete Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_basquete-masc_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_basquete-masc_final",
-          "modalityId": "basquete",
-          "modalityName": "Basquete Masculino",
-          "categoryId": "basquete-masc",
-          "categoryName": "Basquete Masculino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "volei-praia-masc": {
-      "modalityId": "volei-de-praia",
-      "categoryId": "volei-praia-masc",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_volei-praia-masc_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_volei-praia-masc_qf",
-            "modalityId": "volei-de-praia",
-            "modalityName": "Vôlei de Praia Masculino",
-            "categoryId": "volei-praia-masc",
-            "categoryName": "Vôlei de Praia Masculino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_volei-praia-masc_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_volei-praia-masc_sf1",
-            "modalityId": "volei-de-praia",
-            "modalityName": "Vôlei de Praia Masculino",
-            "categoryId": "volei-praia-masc",
-            "categoryName": "Vôlei de Praia Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Sanguinária × Soberana",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_volei-praia-masc_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_volei-praia-masc_sf2",
-            "modalityId": "volei-de-praia",
-            "modalityName": "Vôlei de Praia Masculino",
-            "categoryId": "volei-praia-masc",
-            "categoryName": "Vôlei de Praia Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_volei-praia-masc_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_volei-praia-masc_final",
-          "modalityId": "volei-de-praia",
-          "modalityName": "Vôlei de Praia Masculino",
-          "categoryId": "volei-praia-masc",
-          "categoryName": "Vôlei de Praia Masculino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "volei-praia-fem": {
-      "modalityId": "volei-de-praia",
-      "categoryId": "volei-praia-fem",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_volei-praia-fem_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_volei-praia-fem_qf",
-            "modalityId": "volei-de-praia",
-            "modalityName": "Vôlei de Praia Feminino",
-            "categoryId": "volei-praia-fem",
-            "categoryName": "Vôlei de Praia Feminino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_volei-praia-fem_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_volei-praia-fem_sf1",
-            "modalityId": "volei-de-praia",
-            "modalityName": "Vôlei de Praia Feminino",
-            "categoryId": "volei-praia-fem",
-            "categoryName": "Vôlei de Praia Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Colossal × Tormenta",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_volei-praia-fem_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_volei-praia-fem_sf2",
-            "modalityId": "volei-de-praia",
-            "modalityName": "Vôlei de Praia Feminino",
-            "categoryId": "volei-praia-fem",
-            "categoryName": "Vôlei de Praia Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_volei-praia-fem_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_volei-praia-fem_final",
-          "modalityId": "volei-de-praia",
-          "modalityName": "Vôlei de Praia Feminino",
-          "categoryId": "volei-praia-fem",
-          "categoryName": "Vôlei de Praia Feminino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "truco-fem": {
-      "modalityId": "truco",
-      "categoryId": "truco-fem",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_truco-fem_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_truco-fem_qf",
-            "modalityId": "truco",
-            "modalityName": "Truco Feminino",
-            "categoryId": "truco-fem",
-            "categoryName": "Truco Feminino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_truco-fem_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_truco-fem_sf1",
-            "modalityId": "truco",
-            "modalityName": "Truco Feminino",
-            "categoryId": "truco-fem",
-            "categoryName": "Truco Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Tormenta × Predadora",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_truco-fem_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_truco-fem_sf2",
-            "modalityId": "truco",
-            "modalityName": "Truco Feminino",
-            "categoryId": "truco-fem",
-            "categoryName": "Truco Feminino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_truco-fem_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_truco-fem_final",
-          "modalityId": "truco",
-          "modalityName": "Truco Feminino",
-          "categoryId": "truco-fem",
-          "categoryName": "Truco Feminino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    },
-    "truco-masc": {
-      "modalityId": "truco",
-      "categoryId": "truco-masc",
-      "isConfigured": true,
-      "quarterfinals": [
-        {
-          "id": "slot_match_truco-masc_qf",
-          "phase": "quarterfinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_truco-masc_qf",
-            "modalityId": "truco",
-            "modalityName": "Truco Masculino",
-            "categoryId": "truco-masc",
-            "categoryName": "Truco Masculino",
-            "phase": "quarterfinals",
-            "phaseLabel": "Quartas de Final",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "colossal",
-              "teamName": "Colossal",
-              "crestUrl": "/assets/teams/colossal.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "soberana",
-              "teamName": "Soberana",
-              "crestUrl": "/assets/teams/soberana.png",
-              "score": null
-            }
-          }
-        }
-      ],
-      "semifinals": [
-        {
-          "id": "slot_match_truco-masc_sf1",
-          "phase": "semifinals",
-          "orderIndex": 0,
-          "match": {
-            "id": "match_truco-masc_sf1",
-            "modalityId": "truco",
-            "modalityName": "Truco Masculino",
-            "categoryId": "truco-masc",
-            "categoryName": "Truco Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 1",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "predadora",
-              "teamName": "Predadora",
-              "crestUrl": "/assets/teams/predadora.jpg",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": null,
-              "teamName": "Vencedor de Colossal × Soberana",
-              "crestUrl": null,
-              "score": null
-            }
-          }
-        },
-        {
-          "id": "slot_match_truco-masc_sf2",
-          "phase": "semifinals",
-          "orderIndex": 1,
-          "match": {
-            "id": "match_truco-masc_sf2",
-            "modalityId": "truco",
-            "modalityName": "Truco Masculino",
-            "categoryId": "truco-masc",
-            "categoryName": "Truco Masculino",
-            "phase": "semifinals",
-            "phaseLabel": "Semifinal 2",
-            "status": "scheduled",
-            "scheduledDate": null,
-            "scheduledTime": null,
-            "venue": null,
-            "homeTeam": {
-              "teamId": "tormenta",
-              "teamName": "Tormenta",
-              "crestUrl": "/assets/teams/tormenta.png",
-              "score": null
-            },
-            "awayTeam": {
-              "teamId": "sanguinaria",
-              "teamName": "Sanguinária",
-              "crestUrl": "/assets/teams/sanguinaria.jpg",
-              "score": null
-            }
-          }
-        }
-      ],
-      "final": {
-        "id": "slot_match_truco-masc_final",
-        "phase": "final",
-        "orderIndex": 0,
-        "match": {
-          "id": "match_truco-masc_final",
-          "modalityId": "truco",
-          "modalityName": "Truco Masculino",
-          "categoryId": "truco-masc",
-          "categoryName": "Truco Masculino",
-          "phase": "final",
-          "phaseLabel": "Grande Final",
-          "status": "scheduled",
-          "scheduledDate": null,
-          "scheduledTime": null,
-          "venue": null,
-          "homeTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 1",
-            "crestUrl": null,
-            "score": null
-          },
-          "awayTeam": {
-            "teamId": null,
-            "teamName": "Vencedor Semifinal 2",
-            "crestUrl": null,
-            "score": null
-          }
-        }
-      }
-    }
-  },
-  "seeds": [
-    {
-      "modalityId": "futsal-masc",
-      "modalityName": "Futsal Masculino",
-      "sportSlug": "futsal",
-      "seed1": "sanguinaria",
-      "seed2": "soberana",
-      "seed3": "tormenta",
-      "seed4": "colossal",
-      "seed5": "predadora"
-    },
-    {
-      "modalityId": "futsal-fem",
-      "modalityName": "Futsal Feminino",
-      "sportSlug": "futsal",
-      "seed1": "tormenta",
-      "seed2": "sanguinaria",
-      "seed3": "soberana",
-      "seed4": "predadora",
-      "seed5": "colossal"
-    },
-    {
-      "modalityId": "volei-fem",
-      "modalityName": "Vôlei Feminino",
-      "sportSlug": "volei",
-      "seed1": "sanguinaria",
-      "seed2": "colossal",
-      "seed3": "soberana",
-      "seed4": "predadora",
-      "seed5": "tormenta"
-    },
-    {
-      "modalityId": "volei-masc",
-      "modalityName": "Vôlei Masculino",
-      "sportSlug": "volei",
-      "seed1": "predadora",
-      "seed2": "sanguinaria",
-      "seed3": "tormenta",
-      "seed4": "soberana",
-      "seed5": "colossal"
-    },
-    {
-      "modalityId": "basquete-fem",
-      "modalityName": "Basquete Feminino",
-      "sportSlug": "basquete",
-      "seed1": "predadora",
-      "seed2": "soberana",
-      "seed3": "colossal",
-      "seed4": "sanguinaria",
-      "seed5": "tormenta"
-    },
-    {
-      "modalityId": "tenis-mesa-masc",
-      "modalityName": "Tênis de Mesa Masculino",
-      "sportSlug": "tenis-de-mesa",
-      "seed1": "predadora",
-      "seed2": "colossal",
-      "seed3": "sanguinaria",
-      "seed4": "tormenta",
-      "seed5": "soberana"
-    },
-    {
-      "modalityId": "tenis-mesa-fem",
-      "modalityName": "Tênis de Mesa Feminino",
-      "sportSlug": "tenis-de-mesa",
-      "seed1": "sanguinaria",
-      "seed2": "predadora",
-      "seed3": "tormenta",
-      "seed4": "colossal",
-      "seed5": "soberana"
-    },
-    {
-      "modalityId": "sinuca-fem",
-      "modalityName": "Sinuca Feminina",
-      "sportSlug": "sinuca",
-      "seed1": "soberana",
-      "seed2": "predadora",
-      "seed3": "tormenta",
-      "seed4": "sanguinaria",
-      "seed5": "colossal"
-    },
-    {
-      "modalityId": "sinuca-masc",
-      "modalityName": "Sinuca Masculina",
-      "sportSlug": "sinuca",
-      "seed1": "sanguinaria",
-      "seed2": "tormenta",
-      "seed3": "soberana",
-      "seed4": "predadora",
-      "seed5": "colossal"
-    },
-    {
-      "modalityId": "handebol-masc",
-      "modalityName": "Handebol Masculino",
-      "sportSlug": "handebol",
-      "seed1": "tormenta",
-      "seed2": "soberana",
-      "seed3": "colossal",
-      "seed4": "predadora",
-      "seed5": "sanguinaria"
-    },
-    {
-      "modalityId": "handebol-fem",
-      "modalityName": "Handebol Feminino",
-      "sportSlug": "handebol",
-      "seed1": "colossal",
-      "seed2": "tormenta",
-      "seed3": "sanguinaria",
-      "seed4": "predadora",
-      "seed5": "soberana"
-    },
-    {
-      "modalityId": "basquete-masc",
-      "modalityName": "Basquete Masculino",
-      "sportSlug": "basquete",
-      "seed1": "colossal",
-      "seed2": "predadora",
-      "seed3": "sanguinaria",
-      "seed4": "tormenta",
-      "seed5": "soberana"
-    },
-    {
-      "modalityId": "volei-praia-masc",
-      "modalityName": "Vôlei de Praia Masculino",
-      "sportSlug": "volei-de-praia",
-      "seed1": "sanguinaria",
-      "seed2": "soberana",
-      "seed3": "tormenta",
-      "seed4": "colossal",
-      "seed5": "predadora"
-    },
-    {
-      "modalityId": "volei-praia-fem",
-      "modalityName": "Vôlei de Praia Feminino",
-      "sportSlug": "volei-de-praia",
-      "seed1": "colossal",
-      "seed2": "tormenta",
-      "seed3": "predadora",
-      "seed4": "sanguinaria",
-      "seed5": "soberana"
-    },
-    {
-      "modalityId": "truco-fem",
-      "modalityName": "Truco Feminino",
-      "sportSlug": "truco",
-      "seed1": "tormenta",
-      "seed2": "predadora",
-      "seed3": "soberana",
-      "seed4": "colossal",
-      "seed5": "sanguinaria"
-    },
-    {
-      "modalityId": "truco-masc",
-      "modalityName": "Truco Masculino",
-      "sportSlug": "truco",
-      "seed1": "colossal",
-      "seed2": "soberana",
-      "seed3": "predadora",
-      "seed4": "tormenta",
-      "seed5": "sanguinaria"
-    }
-  ]
+  }
 }

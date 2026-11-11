@@ -415,7 +415,11 @@ export const AdminRegistrationsPage: React.FC = () => {
                         </td>
 
                         <td className="py-3 px-3">
-                          {reg.requestedMemberDiscount ? (
+                          {reg.isGuestAthlete ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold inline-block bg-amber-100 text-amber-900 border border-amber-300">
+                              ★ ATLETA CONVIDADO T21 ({reg.categoryName.toUpperCase()})
+                            </span>
+                          ) : reg.requestedMemberDiscount ? (
                             <div className="space-y-0.5">
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold inline-block ${

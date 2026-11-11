@@ -75,6 +75,7 @@ export interface CreateRegistrationPayload {
   selectedModalities?: ModalitySlug[];
   categoryName: string;
   requestedMemberDiscount: boolean;
+  isGuestAthlete?: boolean;
   memberDocumentProofUrl?: string;
   avatarUrl?: string | null;
   jerseyNumber?: number | null;
@@ -149,7 +150,8 @@ function normalizePendingRegistrationPrice(reg: Registration): Registration {
   const expectedPrice = resolveLotAuthorizedPrice(
     reg.lotId,
     reg.memberStatus,
-    reg.requestedMemberDiscount
+    reg.requestedMemberDiscount,
+    reg.isGuestAthlete
   );
   if (reg.authorizedPrice === expectedPrice && normalizedModName === reg.modalityName) {
     return reg;
@@ -472,8 +474,31 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         );
       }
 
-      const isSocioRequested = payload.requestedMemberDiscount;
-      const initialPrice = isSocioRequested
+      const isGuest = Boolean(payload.isGuestAthlete);
+      if (isGuest) {
+        if (payload.turma !== '21' && payload.teamId !== 'sanguinaria') {
+          throw new Error(
+            'A categoria de Atleta Convidado (R$ 65,00) é restrita exclusivamente à Turma 21 (Sanguinária).'
+          );
+        }
+        const existingGuest = registrations.find(
+          (r) =>
+            r.paymentStatus !== 'cancelado' &&
+            Boolean(r.isGuestAthlete) &&
+            (r.turma === '21' || r.teamId === 'sanguinaria') &&
+            r.categoryName.toLowerCase() === payload.categoryName.toLowerCase()
+        );
+        if (existingGuest) {
+          throw new Error(
+            `O limite de 1 Atleta Convidado ${payload.categoryName} para a Turma 21 já foi preenchido (${existingGuest.athleteName}).`
+          );
+        }
+      }
+
+      const isSocioRequested = isGuest ? false : payload.requestedMemberDiscount;
+      const initialPrice = isGuest
+        ? lot.priceGuest ?? 65.0
+        : isSocioRequested
         ? lot.priceMember
         : lot.priceNonMember;
 
@@ -513,9 +538,12 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         selectedModalities: chosenModalities,
         categoryName: payload.categoryName,
         requestedMemberDiscount: isSocioRequested,
+        isGuestAthlete: isGuest,
         memberStatus: isSocioRequested ? 'pendente' : 'nao_solicitado',
         memberDocumentProofUrl: payload.memberDocumentProofUrl || null,
-        memberNotes: isSocioRequested
+        memberNotes: isGuest
+          ? `Atleta Convidado Oficial — Turma 21 (${payload.categoryName})`
+          : isSocioRequested
           ? 'Aguardando validação da diretoria da Atlética Cangaceira.'
           : undefined,
         paymentStatus: isSocioRequested
@@ -524,7 +552,9 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         authorizedPrice: initialPrice,
         avatarUrl: payload.avatarUrl || null,
         jerseyNumber: payload.jerseyNumber ?? null,
-        position: payload.position?.trim() || 'Atleta Inscrito',
+        position:
+          payload.position?.trim() ||
+          (isGuest ? 'Atleta Convidado T21' : 'Atleta Inscrito'),
         bio: payload.bio?.trim() || null,
         instagramHandle: payload.instagramHandle?.trim() || null,
         createdAtIso: nowIso,

@@ -38,6 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     turmaLabel,
     lotId,
     requestedMemberDiscount,
+    isGuestAthlete,
     memberStatus: clientMemberStatus,
     installments: requestedInstallments,
   } = body;
@@ -116,7 +117,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const basePrice = computeAuthorizedServerPrice(
       String(storedReg?.lotId || lotId || 'lote-1-cangaceira'),
       effectiveMemberStatus,
-      Boolean(storedReg?.requestedMemberDiscount ?? requestedMemberDiscount)
+      Boolean(storedReg?.requestedMemberDiscount ?? requestedMemberDiscount),
+      Boolean(storedReg?.isGuestAthlete ?? isGuestAthlete)
     );
     const {
       installments: safeInstallments,

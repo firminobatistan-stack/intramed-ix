@@ -38,6 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     turmaLabel,
     lotId,
     requestedMemberDiscount,
+    isGuestAthlete,
     memberStatus: clientMemberStatus,
   } = body;
 
@@ -77,11 +78,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // Preço calculado estritamente no servidor pelo lote oficial e status de sócio validado
+  // Preço calculado estritamente no servidor pelo lote oficial e status de sócio / convidado validado
   const serverAuthorizedPrice = computeAuthorizedServerPrice(
     String(storedReg?.lotId || lotId || 'lote-1-cangaceira'),
     effectiveMemberStatus,
-    Boolean(storedReg?.requestedMemberDiscount ?? requestedMemberDiscount)
+    Boolean(storedReg?.requestedMemberDiscount ?? requestedMemberDiscount),
+    Boolean(storedReg?.isGuestAthlete ?? isGuestAthlete)
   );
 
   const mpAccessToken = (process.env.MERCADOPAGO_ACCESS_TOKEN || '').trim();

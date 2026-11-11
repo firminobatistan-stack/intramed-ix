@@ -160,8 +160,41 @@ function canClientWriteDocument(
   // 3. Inscrições: criação pública ou edição de perfil social; campos financeiros protegidos!
   if (collectionName === 'registrations') {
     if (!existing) {
+      // Validação de Atleta Convidado (R$ 65,00): restrito à Turma 21, máx 1 Masculino e 1 Feminino
+      const isGuestAthlete = Boolean(incoming.isGuestAthlete);
+      if (isGuestAthlete) {
+        const turmaStr = String(incoming.turma || '').trim();
+        const teamIdStr = String(incoming.teamId || '').trim().toLowerCase();
+        if (turmaStr !== '21' && teamIdStr !== 'sanguinaria') {
+          return {
+            allowed: false,
+            sanitizedData: {},
+            reason:
+              'A categoria de Atleta Convidado (R$ 65,00) é restrita exclusivamente à Turma 21 (Sanguinária).',
+          };
+        }
+        const catStr = String(incoming.categoryName || 'Masculino').trim();
+        const store = getCloudStore();
+        const existingGuestInGender = Object.values(store.registrations || {}).find(
+          (r) =>
+            r &&
+            String(r.id) !== docId &&
+            r.paymentStatus !== 'cancelado' &&
+            Boolean(r.isGuestAthlete) &&
+            (String(r.turma || '') === '21' || String(r.teamId || '') === 'sanguinaria') &&
+            String(r.categoryName || '').toLowerCase() === catStr.toLowerCase()
+        );
+        if (existingGuestInGender) {
+          return {
+            allowed: false,
+            sanitizedData: {},
+            reason: `O limite de 1 Atleta Convidado ${catStr} para a Turma 21 já foi preenchido.`,
+          };
+        }
+      }
+
       // Criação de nova inscrição: calcula preço no servidor e impede que nasça como 'pago' ou 'aprovado' sem ser Admin
-      const requestedSocio = Boolean(incoming.requestedMemberDiscount);
+      const requestedSocio = isGuestAthlete ? false : Boolean(incoming.requestedMemberDiscount);
       const safeMemberStatus = isAdmin
         ? String(incoming.memberStatus || (requestedSocio ? 'pendente' : 'nao_solicitado'))
         : requestedSocio
@@ -177,7 +210,8 @@ function canClientWriteDocument(
       const serverPrice = computeAuthorizedServerPrice(
         String(incoming.lotId || 'lote-1-cangaceira'),
         safeMemberStatus,
-        requestedSocio
+        requestedSocio,
+        isGuestAthlete
       );
 
       const rawAccountPassword =
@@ -202,6 +236,8 @@ function canClientWriteDocument(
               : String(incoming.athleteEmail || '').trim().toLowerCase(),
           ...(accountPasswordHash ? { accountPasswordHash } : {}),
           hasAccountPassword: Boolean(accountPasswordHash),
+          isGuestAthlete,
+          requestedMemberDiscount: requestedSocio,
           memberStatus: safeMemberStatus,
           paymentStatus: safePaymentStatus,
           authorizedPrice: serverPrice,
@@ -214,10 +250,12 @@ function canClientWriteDocument(
     // Atualização de inscrição já existente:
     if (isAdmin) {
       const nextMemberStatus = String(incoming.memberStatus || existing.memberStatus || 'nao_solicitado');
+      const isGuest = Boolean(incoming.isGuestAthlete ?? existing.isGuestAthlete);
       const serverPrice = computeAuthorizedServerPrice(
         String(incoming.lotId || existing.lotId || 'lote-1-cangaceira'),
         nextMemberStatus,
-        Boolean(incoming.requestedMemberDiscount ?? existing.requestedMemberDiscount)
+        Boolean(incoming.requestedMemberDiscount ?? existing.requestedMemberDiscount),
+        isGuest
       );
 
       return {
@@ -226,6 +264,7 @@ function canClientWriteDocument(
           ...existing,
           ...incoming,
           id: docId,
+          isGuestAthlete: isGuest,
           authorizedPrice: serverPrice,
           revision: Math.max(prevRevision + 1, incomingRevision),
           updatedAtIso: nowIso,
@@ -2428,7 +2467,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               const expectedMin = computeAuthorizedServerPrice(
                 String(reg.lotId || 'lote-1-cangaceira'),
                 String(reg.memberStatus || 'nao_solicitado'),
-                Boolean(reg.requestedMemberDiscount)
+                Boolean(reg.requestedMemberDiscount),
+                Boolean(reg.isGuestAthlete)
               );
               if (txAmount + 0.01 >= expectedMin) {
                 const method: 'pix' | 'credit_card' =
