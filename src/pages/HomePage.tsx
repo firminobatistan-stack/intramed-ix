@@ -207,17 +207,21 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* BANNER: INSCRIÇÕES E PAGAMENTOS */}
+      {/* BANNER: CONTA DE TORCEDOR (DESLOGADO) OU INSCRIÇÃO DE ATLETA (LOGADO) */}
       {!hasCompletedRegistration ? (
         <section className="bg-gradient-to-r from-amber-500 via-brand-yellow to-yellow-400 rounded-3xl p-4 sm:p-5 shadow-lg border border-amber-300 text-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
           <div className="space-y-1 z-10 text-center sm:text-left">
             <h2 className="text-lg sm:text-xl font-display font-black tracking-tight text-slate-950">
-              {launchConfig?.publicRegistrationEnabled !== false
-                ? 'Inscrições Abertas'
+              {!currentUser
+                ? 'Crie sua conta no IntraMed IX'
+                : launchConfig?.publicRegistrationEnabled !== false
+                ? 'Vai competir? Inscreva-se como Atleta'
                 : 'Inscrições Em Breve'}
             </h2>
             <p className="text-xs sm:text-sm font-medium text-slate-800">
-              {launchConfig?.publicPricesVisible !== false || isAdmin ? (
+              {!currentUser ? (
+                'Cadastre-se gratuitamente como torcedor para acompanhar jogos, curtir e interagir.'
+              ) : launchConfig?.publicPricesVisible !== false || isAdmin ? (
                 <>
                   Sócio: <strong className="font-extrabold text-slate-950">R$ 50</strong> • Não Sócio:{' '}
                   <strong className="font-extrabold text-slate-950">R$ 60</strong> • Convidado (T21):{' '}
