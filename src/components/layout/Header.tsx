@@ -34,8 +34,14 @@ export const Header: React.FC<HeaderProps> = ({
   const location = useLocation();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
-  const { notifications, currentUser, canOperateOfficialData, syncStatus, launchConfig } =
-    useCompetitionStore();
+  const {
+    notifications,
+    currentUser,
+    canOperateOfficialData,
+    syncStatus,
+    launchConfig,
+    hasActiveLiveMatch,
+  } = useCompetitionStore();
   const unreadCount = notifications.filter((n) => !n.isRead).length;
   const isAdmin = canOperateOfficialData();
 
@@ -65,14 +71,16 @@ export const Header: React.FC<HeaderProps> = ({
       { id: 'chaveamento', label: 'Chaveamento', path: '/chaveamento' },
       { id: 'leagues', label: 'Modalidades', path: '/competicoes' },
       { id: 'teams', label: 'Equipes', path: '/equipe' },
-      { id: 'livetv', label: 'Match Center', path: '/placar' },
     ];
+    if (hasActiveLiveMatch) {
+      tabs.push({ id: 'livetv', label: 'Ao Vivo', path: '/placar' });
+    }
     if (launchConfig?.publicProfilesVisible || isAdmin) {
       tabs.push({ id: 'athletes', label: 'Atletas', path: '/atleta' });
       tabs.push({ id: 'comunidade', label: 'Comunidade', path: '/comunidade' });
     }
     return tabs;
-  }, [launchConfig?.publicProfilesVisible, isAdmin]);
+  }, [launchConfig?.publicProfilesVisible, isAdmin, hasActiveLiveMatch]);
 
   const getActiveTopTab = () => {
     if (location.pathname.startsWith('/placar')) return 'livetv';

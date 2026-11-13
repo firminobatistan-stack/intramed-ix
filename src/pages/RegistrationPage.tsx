@@ -773,25 +773,23 @@ export const RegistrationPage: React.FC = () => {
       </section>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 space-y-6">
-        {/* Navegação entre Formulário, Minhas Inscrições e Comunidade Social */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-brand-surface-border pb-3">
-          <div className="inline-flex flex-wrap items-center justify-center bg-white p-1 rounded-2xl border border-brand-surface-border shadow-sm gap-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('nova_inscricao')}
-              className={`px-4 py-2 rounded-xl text-xs font-display font-bold transition-all ${
-                activeTab === 'nova_inscricao'
-                  ? 'bg-brand-blue text-white shadow-sm'
-                  : 'text-brand-text-secondary hover:text-brand-text-primary'
-              }`}
-            >
-              {!currentUser
-                ? 'Inscrição de Atletas'
-                : hasCompletedRegistration
-                ? 'Nova Inscrição'
-                : 'Inscrição & Pagamento de Atleta'}
-            </button>
-            {currentUser && (
+        {/* Navegação entre Formulário, Minhas Inscrições e Comunidade Social (Exibida somente quando o usuário está logado) */}
+        {currentUser && (
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-brand-surface-border pb-3">
+            <div className="inline-flex flex-wrap items-center justify-center bg-white p-1 rounded-2xl border border-brand-surface-border shadow-sm gap-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab('nova_inscricao')}
+                className={`px-4 py-2 rounded-xl text-xs font-display font-bold transition-all ${
+                  activeTab === 'nova_inscricao'
+                    ? 'bg-brand-blue text-white shadow-sm'
+                    : 'text-brand-text-secondary hover:text-brand-text-primary'
+                }`}
+              >
+                {hasCompletedRegistration
+                  ? 'Nova Inscrição'
+                  : 'Inscrição & Pagamento de Atleta'}
+              </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('minhas_inscricoes')}
@@ -803,46 +801,46 @@ export const RegistrationPage: React.FC = () => {
               >
                 Meu Passaporte ({myRegistrations.length})
               </button>
-            )}
-            {(launchConfig?.publicProfilesVisible || isAdmin) && (
-              <button
-                type="button"
-                onClick={() => setActiveTab('comunidade')}
-                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-display font-bold transition-all ${
-                  activeTab === 'comunidade'
-                    ? 'bg-brand-blue text-white shadow-sm'
-                    : 'text-brand-text-secondary hover:text-brand-text-primary'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Comunidade</span>
-              </button>
-            )}
-          </div>
+              {(launchConfig?.publicProfilesVisible || isAdmin) && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('comunidade')}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-display font-bold transition-all ${
+                    activeTab === 'comunidade'
+                      ? 'bg-brand-blue text-white shadow-sm'
+                      : 'text-brand-text-secondary hover:text-brand-text-primary'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Comunidade</span>
+                </button>
+              )}
+            </div>
 
-          <div className="flex items-center gap-2">
-            {currentUser?.linkedAthleteId && (
-              <Button
-                variant="outline"
-                size="sm"
-                leftIcon={<User className="w-4 h-4 text-brand-blue" />}
-                onClick={() => navigate(`/atleta/${currentUser.linkedAthleteId}`)}
-              >
-                Meu Perfil
-              </Button>
-            )}
-            {isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                leftIcon={<ShieldCheck className="w-4 h-4 text-brand-blue" />}
-                onClick={() => navigate('/admin/inscricoes')}
-              >
-                Gestão de Inscrições
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {currentUser?.linkedAthleteId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<User className="w-4 h-4 text-brand-blue" />}
+                  onClick={() => navigate(`/atleta/${currentUser.linkedAthleteId}`)}
+                >
+                  Meu Perfil
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<ShieldCheck className="w-4 h-4 text-brand-blue" />}
+                  onClick={() => navigate('/admin/inscricoes')}
+                >
+                  Gestão de Inscrições
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ============================================================ */}
         {/* ABA 1: FORMULÁRIO DE INSCRIÇÃO DE ATLETA OU AVISO DE CADASTRO*/}

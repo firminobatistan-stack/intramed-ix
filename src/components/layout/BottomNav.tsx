@@ -5,6 +5,8 @@ import {
   Tv,
   GitBranch,
   CreditCard,
+  Calendar,
+  LogIn,
   Menu,
 } from 'lucide-react';
 import { useRegistrationStore } from '../../context/RegistrationStoreContext';
@@ -16,17 +18,11 @@ interface BottomNavProps {
 
 /**
  * Dock de Navegação Móvel Otimizado para Ergonomia (Floating Dock com Thumb-Zone)
- * - 5 Ações estratégicas com rótulos nítidos em Montserrat:
- *   1. Início (Home)
- *   2. Inscrição (com destaque ANTES de se inscrever, e discreto DEPOIS)
- *   3. Ao Vivo (Match Center & Placar)
- *   4. Chaves (Chaveamento Oficial)
- *   5. Menu (Abre o Drawer completo com esportes, equipes, perfil, favoritos e admin)
  */
 export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
   const location = useLocation();
   const { hasCompletedRegistration } = useRegistrationStore();
-  const { launchConfig } = useCompetitionStore();
+  const { launchConfig, currentUser, hasActiveLiveMatch } = useCompetitionStore();
 
   const triggerHaptic = () => {
     try {
@@ -45,22 +41,39 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
       icon: Home,
       exact: true,
     },
-    {
-      to: '/inscricao',
-      label: !launchConfig.publicRegistrationEnabled
-        ? 'Inscrição'
-        : hasCompletedRegistration
-        ? 'Ingresso'
-        : 'Inscrição',
-      icon: CreditCard,
-      highlight: !hasCompletedRegistration && launchConfig.publicRegistrationEnabled,
-    },
-    {
-      to: '/placar',
-      label: 'Ao Vivo',
-      icon: Tv,
-      isLive: true,
-    },
+    ...(currentUser
+      ? [
+          {
+            to: '/inscricao',
+            label: hasCompletedRegistration ? 'Ingresso' : 'Inscrição',
+            icon: CreditCard,
+            highlight: !hasCompletedRegistration && launchConfig.publicRegistrationEnabled,
+          },
+        ]
+      : [
+          {
+            to: '/login',
+            label: 'Entrar',
+            icon: LogIn,
+            highlight: true,
+          },
+        ]),
+    ...(hasActiveLiveMatch
+      ? [
+          {
+            to: '/placar',
+            label: 'Ao Vivo',
+            icon: Tv,
+            isLive: true,
+          },
+        ]
+      : [
+          {
+            to: '/jogos',
+            label: 'Jogos',
+            icon: Calendar,
+          },
+        ]),
     {
       to: '/chaveamento',
       label: 'Chaves',

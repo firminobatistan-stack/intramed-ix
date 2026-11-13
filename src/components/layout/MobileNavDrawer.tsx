@@ -36,8 +36,14 @@ interface MobileNavDrawerProps {
 export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, setCurrentUser, canOperateOfficialData, notifications, launchConfig } =
-    useCompetitionStore();
+  const {
+    currentUser,
+    setCurrentUser,
+    canOperateOfficialData,
+    notifications,
+    launchConfig,
+    hasActiveLiveMatch,
+  } = useCompetitionStore();
   const { hasCompletedRegistration } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
   const unreadNotifications = notifications.filter((n) => !n.isRead).length;
@@ -209,55 +215,57 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
               <span>Início</span>
             </button>
 
-            {/* Inscrições & Pagamento */}
-            <button
-              type="button"
-              onClick={() => handleNav('/inscricao')}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                location.pathname.startsWith('/inscricao')
-                  ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
-                  : !(hasCompletedRegistration || currentUser?.role === 'atleta')
-                  ? 'text-amber-300 hover:text-white hover:bg-white/10 bg-amber-400/10 border border-amber-400/20'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <span className="flex items-center gap-3">
-                <CreditCard className="w-4 h-4 shrink-0" />
-                <span>
-                  {!currentUser
-                    ? 'Inscrição de Atletas'
-                    : hasCompletedRegistration || currentUser.role === 'atleta'
-                    ? 'Meu Passaporte de Atleta'
-                    : 'Tornar-se Atleta (Pagamento)'}
+            {/* Inscrições & Pagamento (exclusivo para usuários cadastrados e logados) */}
+            {currentUser && (
+              <button
+                type="button"
+                onClick={() => handleNav('/inscricao')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  location.pathname.startsWith('/inscricao')
+                    ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
+                    : !(hasCompletedRegistration || currentUser?.role === 'atleta')
+                    ? 'text-amber-300 hover:text-white hover:bg-white/10 bg-amber-400/10 border border-amber-400/20'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <CreditCard className="w-4 h-4 shrink-0" />
+                  <span>
+                    {hasCompletedRegistration || currentUser.role === 'atleta'
+                      ? 'Meu Passaporte de Atleta'
+                      : 'Inscrição de Atleta'}
+                  </span>
                 </span>
-              </span>
-              {hasCompletedRegistration || currentUser?.role === 'atleta' ? (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold uppercase border border-emerald-500/30">
-                  Confirmado
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-yellow text-brand-blue-dark text-[9px] font-black uppercase">
-                  <Sparkles className="w-2.5 h-2.5" />
-                  {!currentUser ? 'Entrar' : 'Lote 1'}
-                </span>
-              )}
-            </button>
+                {hasCompletedRegistration || currentUser?.role === 'atleta' ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold uppercase border border-emerald-500/30">
+                    Confirmado
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-yellow text-brand-blue-dark text-[9px] font-black uppercase">
+                    <Sparkles className="w-2.5 h-2.5" />
+                    Lote 1
+                  </span>
+                )}
+              </button>
+            )}
 
-            <button
-              type="button"
-              onClick={() => handleNav('/placar')}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                location.pathname.startsWith('/placar')
-                  ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
-                  : 'text-white/80 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              <span className="flex items-center gap-3">
-                <Tv className="w-4 h-4 shrink-0 text-brand-yellow" />
-                <span>Match Center Ao Vivo</span>
-              </span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            </button>
+            {hasActiveLiveMatch && (
+              <button
+                type="button"
+                onClick={() => handleNav('/placar')}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  location.pathname.startsWith('/placar')
+                    ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Tv className="w-4 h-4 shrink-0 text-brand-yellow" />
+                  <span>Placar Ao Vivo</span>
+                </span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              </button>
+            )}
 
             <button
               type="button"

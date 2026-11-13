@@ -52,6 +52,9 @@ export const HomePage: React.FC = () => {
     setTestMode,
     canOperateOfficialData,
     launchConfig,
+    currentUser,
+    hasActiveLiveMatch,
+    activeLiveMatches,
   } = useCompetitionStore();
   const { hasCompletedRegistration, myRegistrations } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
@@ -169,28 +172,38 @@ export const HomePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Botão Pílula Amarela Central "((•)) Watch Live" (Idêntico às Imagens 1 e 2) */}
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate('/placar')}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FACC15] hover:bg-[#EAB308] text-[#0F172A] font-display font-extrabold text-xs sm:text-sm shadow-[0_8px_20px_rgba(250,204,21,0.35)] transition-all hover:scale-105"
-            >
-              <Radio className="w-4 h-4 text-[#0F172A] animate-pulse" />
-              <span>Acompanhar Ao Vivo</span>
-            </button>
+          {/* Botão Pílula Amarela Central "((•)) Watch Live" (Exibido exclusivamente quando houver partida ao vivo na Súmula) */}
+          {(hasActiveLiveMatch || isAdmin) && (
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              {hasActiveLiveMatch && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(
+                      activeLiveMatches[0]?.id
+                        ? `/placar/${activeLiveMatches[0].id}`
+                        : '/placar'
+                    )
+                  }
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FACC15] hover:bg-[#EAB308] text-[#0F172A] font-display font-extrabold text-xs sm:text-sm shadow-[0_8px_20px_rgba(250,204,21,0.35)] transition-all hover:scale-105"
+                >
+                  <Radio className="w-4 h-4 text-[#0F172A] animate-pulse" />
+                  <span>Acompanhar Ao Vivo</span>
+                </button>
+              )}
 
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => navigate('/admin')}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-display font-bold text-xs transition-colors"
-              >
-                <ClipboardList className="w-3.5 h-3.5 text-brand-yellow" />
-                <span>Operar Súmula</span>
-              </button>
-            )}
-          </div>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin')}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-display font-bold text-xs transition-colors"
+                >
+                  <ClipboardList className="w-3.5 h-3.5 text-brand-yellow" />
+                  <span>Operar Súmula</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
@@ -225,15 +238,27 @@ export const HomePage: React.FC = () => {
 
           <div className="flex flex-col sm:flex-row items-center gap-2.5 shrink-0 z-10 w-full sm:w-auto">
             {launchConfig?.publicRegistrationEnabled !== false ? (
-              <button
-                type="button"
-                onClick={() => navigate('/inscricao')}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-xs sm:text-sm shadow-lg transition-all"
-              >
-                <CreditCard className="w-4 h-4 text-brand-yellow" />
-                <span>Inscrever-se</span>
-                <ArrowRight className="w-4 h-4 text-brand-yellow" />
-              </button>
+              currentUser ? (
+                <button
+                  type="button"
+                  onClick={() => navigate('/inscricao')}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-xs sm:text-sm shadow-lg transition-all"
+                >
+                  <CreditCard className="w-4 h-4 text-brand-yellow" />
+                  <span>Inscrição de Atleta</span>
+                  <ArrowRight className="w-4 h-4 text-brand-yellow" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => navigate('/login?mode=register')}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-slate-950 hover:bg-slate-900 text-white font-display font-extrabold text-xs sm:text-sm shadow-lg transition-all"
+                >
+                  <User className="w-4 h-4 text-brand-yellow" />
+                  <span>Criar Conta / Entrar</span>
+                  <ArrowRight className="w-4 h-4 text-brand-yellow" />
+                </button>
+              )
             ) : (
               <button
                 type="button"
@@ -374,7 +399,7 @@ export const HomePage: React.FC = () => {
           <div className="inline-flex items-center gap-1.5 bg-white p-1 rounded-full border border-slate-200/80 shadow-sm">
             {[
               { id: 'all', label: 'Todos' },
-              { id: 'live', label: 'Ao Vivo' },
+              ...(hasActiveLiveMatch ? [{ id: 'live', label: 'Ao Vivo' }] : []),
               { id: 'upcoming', label: 'Agendados' },
               { id: 'finished', label: 'Finalizados' },
             ].map((tab) => {

@@ -81,13 +81,14 @@ const PRIMARY_ITEMS: SidebarItem[] = [
 export const Sidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, canOperateOfficialData, launchConfig } = useCompetitionStore();
+  const { currentUser, canOperateOfficialData, launchConfig, hasActiveLiveMatch } =
+    useCompetitionStore();
   const { hasCompletedRegistration } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
 
   const isAthlete = hasCompletedRegistration || currentUser?.role === 'atleta';
 
-  // Itens dinâmicos baseados no modo de lançamento e privilégios
+  // Itens dinâmicos baseados no modo de lançamento, sessão e privilégios
   const navItems: SidebarItem[] = [
     {
       to: '/',
@@ -100,16 +101,16 @@ export const Sidebar: React.FC = () => {
       icon: GitBranch,
       matchPrefix: '/chaveamento',
     },
-    {
-      to: '/inscricao',
-      label: !currentUser
-        ? 'Inscrições'
-        : isAthlete
-        ? 'Meu Passaporte'
-        : 'Inscrição de Atleta',
-      icon: CreditCard,
-      matchPrefix: '/inscricao',
-    },
+    ...(currentUser
+      ? [
+          {
+            to: '/inscricao',
+            label: isAthlete ? 'Meu Passaporte' : 'Inscrição de Atleta',
+            icon: CreditCard,
+            matchPrefix: '/inscricao',
+          },
+        ]
+      : []),
     {
       to: '/competicoes',
       label: 'Modalidades',
@@ -266,19 +267,24 @@ export const Sidebar: React.FC = () => {
               </>
             )}
 
-            <NavLink
-              to="/placar"
-              className={({ isActive }) =>
-                `group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-sm transition-all duration-150 ${
-                  isActive
-                    ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
-                    : 'text-white/75 hover:text-white hover:bg-white/10 font-medium'
-                }`
-              }
-            >
-              <Tv className="w-5 h-5 shrink-0 text-brand-yellow" />
-              <span>Placar Ao Vivo</span>
-            </NavLink>
+            {hasActiveLiveMatch && (
+              <NavLink
+                to="/placar"
+                className={({ isActive }) =>
+                  `group flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-2xl text-sm transition-all duration-150 ${
+                    isActive
+                      ? 'bg-brand-yellow text-brand-blue-dark font-display font-extrabold shadow-sm'
+                      : 'text-white/75 hover:text-white hover:bg-white/10 font-medium'
+                  }`
+                }
+              >
+                <span className="flex items-center gap-3">
+                  <Tv className="w-5 h-5 shrink-0 text-brand-yellow" />
+                  <span>Placar Ao Vivo</span>
+                </span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              </NavLink>
+            )}
 
             <NavLink
               to="/equipe"

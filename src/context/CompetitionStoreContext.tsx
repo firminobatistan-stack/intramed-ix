@@ -117,6 +117,8 @@ interface CompetitionStoreContextValue {
   isOnline: boolean;
   pendingSyncCount: number;
   visibleMatches: Match[];
+  hasActiveLiveMatch: boolean;
+  activeLiveMatches: Match[];
   getMatchById: (matchId: string) => Match | undefined;
   getSheetByMatchId: (matchId: string) => MatchSheet | undefined;
   favoriteModalityIds: ModalitySlug[];
@@ -385,6 +387,113 @@ const CompetitionStoreContext = createContext<CompetitionStoreContextValue | nul
   null
 );
 
+function buildDefaultOfficialSheetForMatch(
+  match: Match,
+  athletesPool: Athlete[]
+): MatchSheet {
+  const engine = MODALITY_RULE_ENGINE[match.modalityId] || MODALITY_RULE_ENGINE.futsal;
+  const catRule =
+    engine.defaultCategoryRules[match.categoryName || ''] ||
+    Object.values(engine.defaultCategoryRules)[0];
+  const isSwimming = engine.scoringModel === 'swimming_heats';
+  const isPairs = engine.supportsPairs;
+
+  const homePlayers = athletesPool.filter(
+    (a) =>
+      a.teamId === match.homeTeam.teamId &&
+      a.modalityIds?.includes(match.modalityId)
+  );
+  const awayPlayers = athletesPool.filter(
+    (a) =>
+      a.teamId === match.awayTeam.teamId &&
+      a.modalityIds?.includes(match.modalityId)
+  );
+
+  const periodScores = Array.from({ length: catRule.periodsCount }).map(
+    (_, idx) => ({
+      periodNumber: idx + 1,
+      label:
+        engine.scoringModel === 'sets_points' ||
+        engine.scoringModel === 'team_submatches'
+          ? `Set ${idx + 1}`
+          : engine.scoringModel === 'points_quarters'
+          ? `P${idx + 1}`
+          : `${idx + 1}º Período`,
+      homeScore: 0,
+      awayScore: 0,
+      isFinished: false,
+    })
+  );
+
+  return {
+    id: match.matchSheetId || `sheet_${match.id}`,
+    matchId: match.id,
+    modalityId: match.modalityId,
+    scoringModel: engine.scoringModel,
+    isTestMode: false,
+    homeLineup: homePlayers.map((p, idx) => ({
+      athleteId: p.id,
+      athleteName: p.name,
+      jerseyNumber: p.jerseyNumber,
+      isStarter: idx < (isPairs ? 2 : 5),
+      isCaptain: idx === 0,
+    })),
+    awayLineup: awayPlayers.map((p, idx) => ({
+      athleteId: p.id,
+      athleteName: p.name,
+      jerseyNumber: p.jerseyNumber,
+      isStarter: idx < (isPairs ? 2 : 5),
+      isCaptain: idx === 0,
+    })),
+    timer: {
+      currentPeriod: 1,
+      totalPeriods: catRule.periodsCount,
+      periodLabel:
+        engine.scoringModel === 'sets_points'
+          ? 'Set 1'
+          : isSwimming
+          ? 'Prova Oficial'
+          : engine.scoringModel === 'points_quarters'
+          ? '1º Quarto (P1)'
+          : '1º Período',
+      remainingSeconds: catRule.periodDurationSeconds,
+      initialPeriodSeconds: catRule.periodDurationSeconds,
+      elapsedSeconds: 0,
+      isRunning: false,
+      lifecycle: 'not_started',
+      lastTickTimestamp: null,
+    },
+    periodScores,
+    events: [],
+    activeSuspensions: [],
+    activeTimeout: null,
+    homeTimeoutsUsed: 0,
+    awayTimeoutsUsed: 0,
+    homeFoulsCurrentPeriod: 0,
+    awayFoulsCurrentPeriod: 0,
+    refereeNotes: '',
+    isClosed: false,
+    closedAtIso: null,
+    syncStatus: 'synced',
+    lastUpdatedIso: '',
+    revision: 0,
+  };
+}
+
+function hydrateOfficialSheetsWithDefaults(
+  savedSheets: Record<string, MatchSheet> | undefined,
+  matches: Match[],
+  athletesPool: Athlete[]
+): Record<string, MatchSheet> {
+  const result: Record<string, MatchSheet> = { ...(savedSheets || {}) };
+  for (const m of matches) {
+    if (m && m.id && !result[m.id]) {
+      result[m.id] = buildDefaultOfficialSheetForMatch(m, athletesPool);
+    }
+  }
+  return result;
+}
+
 export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -429,48 +538,46 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           let resolvedUser: UserProfile | null = null;
           if (parsed.currentUser && isPurgedTestEntity(parsed.currentUser)) {
             resolvedUser = null;
-          } else if (parsed.currentUser && parsed.currentUser.role === 'atleta') {
-            resolvedUser = parsed.currentUser;
-          } else if (hasAdminSession && parsed.currentUser) {
-            resolvedUser = parsed.currentUser;
-          } else if (
-            parsed.currentUser &&
-            ((parsed.currentUser.role as string) === 'moderador_master' ||
-              parsed.currentUser.role === 'moderador' ||
-              parsed.currentUser.role === 'administrador')
-          ) {
+          } else if (parsed.currentUser && parsed.currentUser.id) {
             resolvedUser = parsed.currentUser;
           }
+
+          const resolvedOfficialAthletes = (parsed.officialAthletes || INITIAL_ATHLETES).filter(
+            (a: Athlete) => a && a.id && !isPurgedTestEntity(a)
+          );
+          const resolvedOfficialMatches =
+            parsed.officialMatches && parsed.officialMatches.length > 0
+              ? (() => {
+                  const initialById = new Map<string, Match>();
+                  for (const m of INITIAL_MATCHES) initialById.set(m.id, m);
+                  const byId = new Map<string, Match>();
+                  for (const m of INITIAL_MATCHES) byId.set(m.id, m);
+                  for (const sm of parsed.officialMatches as Match[]) {
+                    if (sm && sm.id) {
+                      const defM = initialById.get(sm.id);
+                      byId.set(sm.id, {
+                        ...(defM || {}),
+                        ...sm,
+                        scheduledDate: defM?.scheduledDate || sm.scheduledDate || null,
+                        scheduledTime: defM?.scheduledTime || sm.scheduledTime || null,
+                        venue: defM?.venue || sm.venue || null,
+                      });
+                    }
+                  }
+                  return Array.from(byId.values());
+                })()
+              : INITIAL_MATCHES;
 
           return {
             isTestMode: Boolean(hasAdminSession && parsed.isTestMode),
             officialTeams: mergeTeamsWithDefaults(parsed.officialTeams, INITIAL_TEAMS),
-            officialAthletes: (parsed.officialAthletes || INITIAL_ATHLETES).filter(
-              (a: Athlete) => a && a.id && !isPurgedTestEntity(a)
+            officialAthletes: resolvedOfficialAthletes,
+            officialMatches: resolvedOfficialMatches,
+            officialSheets: hydrateOfficialSheetsWithDefaults(
+              parsed.officialSheets,
+              resolvedOfficialMatches,
+              resolvedOfficialAthletes
             ),
-            officialMatches:
-              parsed.officialMatches && parsed.officialMatches.length > 0
-                ? (() => {
-                    const initialById = new Map<string, Match>();
-                    for (const m of INITIAL_MATCHES) initialById.set(m.id, m);
-                    const byId = new Map<string, Match>();
-                    for (const m of INITIAL_MATCHES) byId.set(m.id, m);
-                    for (const sm of parsed.officialMatches as Match[]) {
-                      if (sm && sm.id) {
-                        const defM = initialById.get(sm.id);
-                        byId.set(sm.id, {
-                          ...(defM || {}),
-                          ...sm,
-                          scheduledDate: defM?.scheduledDate || sm.scheduledDate || null,
-                          scheduledTime: defM?.scheduledTime || sm.scheduledTime || null,
-                          venue: defM?.venue || sm.venue || null,
-                        });
-                      }
-                    }
-                    return Array.from(byId.values());
-                  })()
-                : INITIAL_MATCHES,
-            officialSheets: parsed.officialSheets || {},
             testTeams: mergeTeamsWithDefaults(parsed.testTeams, initialTest.teams),
             testAthletes:
               parsed.testAthletes && parsed.testAthletes.length > 0
@@ -507,7 +614,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       officialTeams: INITIAL_TEAMS,
       officialAthletes: INITIAL_ATHLETES,
       officialMatches: INITIAL_MATCHES,
-      officialSheets: {},
+      officialSheets: hydrateOfficialSheetsWithDefaults(
+        {},
+        INITIAL_MATCHES,
+        INITIAL_ATHLETES
+      ),
       testTeams: initialTest.teams,
       testAthletes: initialTest.athletes,
       testMatches: initialTest.matches,
@@ -719,17 +830,20 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               const ex = copySheets[rs.matchId];
               const exRev = ex?.revision ?? 0;
               const rsRev = rs.revision ?? 0;
+              const isOperatorForThisMatch =
+                isUserAdmin(prev.currentUser) ||
+                unlockedMatchIdsRef.current.includes(rs.matchId);
               const isStrictlyNewerTime =
                 !ex ||
                 (rs.lastUpdatedIso &&
-                  ex.lastUpdatedIso &&
-                  new Date(rs.lastUpdatedIso).getTime() >
-                    new Date(ex.lastUpdatedIso).getTime());
+                  (!ex.lastUpdatedIso ||
+                    new Date(rs.lastUpdatedIso).getTime() >
+                      new Date(ex.lastUpdatedIso).getTime()));
 
-              // Correção crítica Item 10 da Auditoria: usa `>` em vez de `!==` para jamais substituir súmula local mais nova por snapshot antigo
               if (
                 !ex ||
                 rsRev > exRev ||
+                (!isOperatorForThisMatch && rsRev >= exRev && isStrictlyNewerTime) ||
                 (rsRev >= exRev && isStrictlyNewerTime && !ex.timer.isRunning)
               ) {
                 copySheets[rs.matchId] = rs;
@@ -850,12 +964,16 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             : prev.officialAthletes.filter((a) => !isPurgedTestEntity(a)),
           officialTeams: Array.isArray(payload.teams) && payload.teams.length > 0 ? payload.teams : prev.officialTeams,
           officialMatches: Array.isArray(payload.matches) && payload.matches.length > 0 ? payload.matches : prev.officialMatches,
-          officialSheets: Array.isArray(payload.match_sheets)
-            ? payload.match_sheets.reduce((acc: Record<string, MatchSheet>, s: MatchSheet) => {
-                if (s && s.matchId) acc[s.matchId] = s;
-                return acc;
-              }, {})
-            : prev.officialSheets,
+          officialSheets: hydrateOfficialSheetsWithDefaults(
+            Array.isArray(payload.match_sheets)
+              ? payload.match_sheets.reduce((acc: Record<string, MatchSheet>, s: MatchSheet) => {
+                  if (s && s.matchId) acc[s.matchId] = s;
+                  return acc;
+                }, {})
+              : prev.officialSheets,
+            Array.isArray(payload.matches) && payload.matches.length > 0 ? payload.matches : prev.officialMatches,
+            Array.isArray(payload.athletes) ? (payload.athletes as Athlete[]).filter((a) => !isPurgedTestEntity(a)) : prev.officialAthletes
+          ),
           publicProfiles: Array.isArray(payload.profiles)
             ? (payload.profiles as PublicUserProfile[]).filter((p) => !isPurgedTestEntity(p))
             : prev.publicProfiles.filter((p) => !isPurgedTestEntity(p)),
@@ -1114,13 +1232,20 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 const ex = nextSheets[rs.matchId];
                 const exRev = ex?.revision ?? 0;
                 const rsRev = rs.revision ?? 0;
+                const isOperatorForThisMatch =
+                  isUserAdmin(prev.currentUser) ||
+                  unlockedMatchIdsRef.current.includes(rs.matchId);
                 const isNewerIso =
                   !ex ||
                   (rs.lastUpdatedIso &&
-                    ex.lastUpdatedIso &&
-                    rs.lastUpdatedIso > ex.lastUpdatedIso);
+                    (!ex.lastUpdatedIso || rs.lastUpdatedIso > ex.lastUpdatedIso));
 
-                if (!ex || rsRev > exRev || (rsRev === exRev && isNewerIso)) {
+                if (
+                  !ex ||
+                  rsRev > exRev ||
+                  (!isOperatorForThisMatch && rsRev >= exRev && isNewerIso) ||
+                  (rsRev === exRev && isNewerIso)
+                ) {
                   nextSheets[rs.matchId] = rs;
                   changed = true;
                 }
@@ -1150,7 +1275,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   useEffect(() => {
     if (typeof window === 'undefined') return;
     fetchCloudSnapshot();
-    const interval = setInterval(fetchCloudSnapshot, 4500);
+    const interval = setInterval(fetchCloudSnapshot, 2500);
     return () => clearInterval(interval);
   }, [fetchCloudSnapshot]);
 
@@ -1307,6 +1432,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 isUserAdmin(prev.currentUser) ||
                 unlockedMatchIdsRef.current.includes(mId);
 
+              const shouldBroadcastTick =
+                !isTestCollection &&
+                isOperatorForThisMatch &&
+                (nextTimer.elapsedSeconds % 2 === 0 || !nextTimer.isRunning);
+
               const nextSheetObj: MatchSheet = {
                 ...sheet,
                 timer: nextTimer,
@@ -1314,6 +1444,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 activeSuspensions: nextSuspensions,
                 periodScores: nextPeriodScores,
                 events: nextEvents,
+                revision: shouldBroadcastTick
+                  ? (sheet.revision ?? 0) + 1
+                  : sheet.revision,
                 // Só atualiza `lastUpdatedIso` e envia para a nuvem se este aparelho for o operador da partida!
                 lastUpdatedIso: isOperatorForThisMatch
                   ? new Date().toISOString()
@@ -1321,11 +1454,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               };
               updatedSheets[mId] = nextSheetObj;
 
-              if (
-                !isTestCollection &&
-                isOperatorForThisMatch &&
-                (nextTimer.elapsedSeconds % 3 === 0 || !nextTimer.isRunning)
-              ) {
+              if (shouldBroadcastTick) {
                 enqueueCloudSync('match_sheets', mId, nextSheetObj);
               }
             }
@@ -1384,8 +1513,16 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         const sheetsMap = isTest ? { ...prev.testSheets } : { ...prev.officialSheets };
 
         const matchIdx = matchesList.findIndex((m) => m.id === matchId);
-        const currentSheet = sheetsMap[matchId];
-        if (matchIdx === -1 || !currentSheet) return prev;
+        if (matchIdx === -1) return prev;
+        const currentSheet =
+          sheetsMap[matchId] ||
+          (!isTest
+            ? buildDefaultOfficialSheetForMatch(
+                matchesList[matchIdx],
+                prev.officialAthletes
+              )
+            : undefined);
+        if (!currentSheet) return prev;
 
         const { match: nextMatch, sheet: nextSheet } = updater(
           matchesList[matchIdx],
@@ -1562,6 +1699,31 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   }, [rawAthletes]);
   const activeSheetsMap = state.isTestMode ? state.testSheets : state.officialSheets;
 
+  const activeLiveMatches = useMemo(() => {
+    return visibleMatches.filter((m) => {
+      if (!m || m.modalityId === 'natacao' || m.id === 'match_natacao_geral_final') {
+        return false;
+      }
+      if (m.status !== 'live' && m.status !== 'halftime') {
+        return false;
+      }
+      const s = activeSheetsMap[m.id];
+      if (!s || s.isClosed) {
+        return false;
+      }
+      return (
+        s.timer.isRunning ||
+        s.timer.lifecycle === 'running' ||
+        s.timer.lifecycle === 'paused' ||
+        s.timer.lifecycle === 'interval' ||
+        s.timer.lifecycle === 'overtime' ||
+        (s.events && s.events.some((ev) => !ev.isDeleted))
+      );
+    });
+  }, [visibleMatches, activeSheetsMap]);
+
+  const hasActiveLiveMatch = activeLiveMatches.length > 0;
+
   const getMatchById = useCallback(
     (matchId: string): Match | undefined => {
       if (matchId.startsWith('test-')) {
@@ -1577,9 +1739,13 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       if (matchId.startsWith('test-')) {
         return state.testSheets[matchId];
       }
-      return state.officialSheets[matchId];
+      const existing = state.officialSheets[matchId];
+      if (existing) return existing;
+      const targetMatch = state.officialMatches.find((m) => m.id === matchId);
+      if (!targetMatch) return undefined;
+      return buildDefaultOfficialSheetForMatch(targetMatch, state.officialAthletes);
     },
-    [state.testSheets, state.officialSheets]
+    [state.testSheets, state.officialSheets, state.officialMatches, state.officialAthletes]
   );
 
   const getCurrentMatchClockDisplay = (sheet: MatchSheet): string => {
@@ -3004,6 +3170,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           .then((resData) => {
             if (resData?.ok && resData?.token) {
               setStoredOperatorToken(resData.token);
+              void flushOfflineQueue(resData.token).then((res) => {
+                setState((prev) => ({ ...prev, pendingSyncCount: res.remainingCount }));
+              });
             }
           })
           .catch(() => {});
@@ -4475,6 +4644,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       isOnline,
       pendingSyncCount: state.pendingSyncCount,
       visibleMatches,
+      hasActiveLiveMatch,
+      activeLiveMatches,
       getMatchById,
       getSheetByMatchId,
       favoriteModalityIds: state.favoriteModalityIds,
@@ -4588,6 +4759,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       isOnline,
       state.pendingSyncCount,
       visibleMatches,
+      hasActiveLiveMatch,
+      activeLiveMatches,
       getMatchById,
       getSheetByMatchId,
       state.favoriteModalityIds,

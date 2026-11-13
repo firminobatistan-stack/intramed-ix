@@ -119,6 +119,7 @@ export async function flushOfflineQueue(operatorToken?: string | null): Promise<
     const token =
       operatorToken ||
       sessionStorage.getItem('intramed_operator_jwt') ||
+      localStorage.getItem('intramed_operator_jwt') ||
       '';
 
     const headers: Record<string, string> = {

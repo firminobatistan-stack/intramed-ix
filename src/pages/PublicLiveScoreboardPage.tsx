@@ -64,6 +64,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
     isTestMode,
     setTestMode,
     visibleMatches,
+    activeLiveMatches,
     getMatchById,
     getSheetByMatchId,
     getModalityStandings,
@@ -89,7 +90,8 @@ export const PublicLiveScoreboardPage: React.FC = () => {
 
   const resolvedMatch =
     (matchId ? getMatchById(matchId) : undefined) ||
-    nonSwimmingMatches.find((m) => m.status === 'live') ||
+    activeLiveMatches[0] ||
+    nonSwimmingMatches.find((m) => m.status === 'live' || m.status === 'halftime') ||
     nonSwimmingMatches[0] ||
     visibleMatches[0];
 
@@ -375,6 +377,21 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   ({sheet.timer.periodLabel})
                 </span>
               )}
+              {sheet?.periodScores &&
+                sheet.periodScores.some((p) => p.homeScore > 0 || p.awayScore > 0 || p.isFinished) && (
+                  <div className="mt-1.5 flex flex-wrap items-center justify-center gap-1">
+                    {sheet.periodScores
+                      .filter((p) => p.homeScore > 0 || p.awayScore > 0 || p.isFinished)
+                      .map((p) => (
+                        <span
+                          key={p.periodNumber}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 text-[9px] font-mono font-bold text-slate-600"
+                        >
+                          {p.label}: {p.homeScore}-{p.awayScore}
+                        </span>
+                      ))}
+                  </div>
+                )}
             </div>
 
             <div className="flex items-center justify-start gap-2.5 text-left min-w-0">
