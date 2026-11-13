@@ -591,6 +591,26 @@ export async function firebaseAuthSignIn(
   }
 }
 
+export async function firebaseAuthSendPasswordReset(
+  email: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_WEB_API_KEY}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestType: 'PASSWORD_RESET', email }),
+    });
+    const data = (await res.json().catch(() => ({}))) as any;
+    if (!res.ok || data.error) {
+      return { ok: false, error: data.error?.message || 'Falha ao enviar e-mail de redefinição.' };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Falha de rede com Firebase Auth' };
+  }
+}
+
 export async function firebaseAuthUpdateProfile(params: {
   idToken: string;
   displayName?: string;
@@ -1102,18 +1122,25 @@ export async function ensureCloudStoreHydrated(force = false): Promise<CloudColl
 
     await Promise.all(
       collectionsToHydrate.map(async (colName) => {
-        const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(
-          colName
-        )}?pageSize=300&key=${FIREBASE_API_KEY}`;
-        const res = await fetch(url, { headers: authHeaders }).catch(() => null);
-        if (!res || !res.ok) return;
-        const { data } = await parseJsonSafe(res);
-        const docs = Array.isArray(data?.documents)
-          ? (data.documents as Array<{
-              name?: string;
-              fields?: Record<string, Record<string, unknown>>;
-            }>)
-          : [];
+        // Paginação completa (antes limitava a 300 documentos e perdia usuários/perfis excedentes)
+        const docs: Array<{
+          name?: string;
+          fields?: Record<string, Record<string, unknown>>;
+        }> = [];
+        let pageToken = '';
+        for (let page = 0; page < 50; page++) {
+          const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(
+            colName
+          )}?pageSize=300${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}&key=${FIREBASE_API_KEY}`;
+          const res = await fetch(url, { headers: authHeaders }).catch(() => null);
+          if (!res || !res.ok) break;
+          const { data } = await parseJsonSafe(res);
+          if (Array.isArray(data?.documents)) {
+            docs.push(...(data.documents as typeof docs));
+          }
+          pageToken = typeof data?.nextPageToken === 'string' ? data.nextPageToken : '';
+          if (!pageToken) break;
+        }
         for (const doc of docs) {
           if (!doc?.fields) continue;
           const parsedDoc: Record<string, unknown> = {};
