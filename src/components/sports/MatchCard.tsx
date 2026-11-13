@@ -11,6 +11,7 @@ import {
 import { Match, MatchEventType } from '../../types/domain';
 import { TeamCrest } from './TeamCrest';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
+import { StoryShareButton } from '../social/StoryShareModal';
 
 interface MatchCardProps {
   match?: Match | null;
@@ -30,15 +31,10 @@ const SCORING_EVENT_TYPES: MatchEventType[] = [
 ];
 
 /**
- * MatchCard modelado diretamente nas Imagens 1, 2, 3, 4 e 5 do case "All Sports":
- * - Topo com pílula cinza-lavanda larga (.all-sports-section-pill) identificando a Competição/Modalidade;
- * - Badge central:
- *   • Ongoing Match (Ao Vivo): Pílula verde vibrante (#10B981) com ícone de relógio;
- *   • Finished Match (Encerrado): Pílula cinza (#9CA3AF) com ícone de relógio "FIM";
- *   • Upcoming Match (Agendado): Ícone circular de sino (🔔) + horário em vermelho (#EF4444) e data abaixo;
- * - Linha horizontal do confronto: [Nome Mandante] [Escudo]  [ Pílula Placar: 2 - 1 ]  [Escudo] [Nome Visitante];
- * - Árvore bilateral de eventos/gols conectada por linha vertical com marcadores;
- * - Rodapé centralizado: Ginásio/Local + subtítulo azul suave + link verde "Ver detalhes ›" (See all >).
+ * MatchCard Compacto & Minimalista:
+ * - Altura vertical reduzida em ~30% para permitir visualizar 3 a 4 jogos simultaneamente no celular;
+ * - Escudos com anel colorido oficial da turma;
+ * - Botão integrado "Compartilhar" que gera Card 9:16 para Instagram Stories / WhatsApp.
  */
 export const MatchCard: React.FC<MatchCardProps> = ({
   match,
@@ -61,42 +57,35 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     .filter((e) => e.teamSide === 'away')
     .slice(0, 3);
 
-  // Estado vazio elegante no estilo All Sports (sem dados fictícios)
   if (!match) {
     return (
-      <div className={`all-sports-card p-5 sm:p-6 ${className}`}>
-        <div className="all-sports-section-pill mb-4">
+      <div className={`all-sports-card p-4 ${className}`}>
+        <div className="all-sports-section-pill mb-3">
           INTRAMED IX • Confronto Oficial
         </div>
 
-        <div className="flex flex-col items-center justify-center mb-3">
-          <span className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-400">
-            <Bell className="w-4 h-4" />
-          </span>
-        </div>
-
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 max-w-md mx-auto">
-          <div className="flex items-center justify-end gap-2.5 text-right min-w-0">
+          <div className="flex items-center justify-end gap-2 text-right min-w-0">
             <span className="text-xs sm:text-sm font-display font-bold text-slate-400 truncate">
-              Aguardando equipe
+              Aguardando
             </span>
-            <TeamCrest size="md" />
+            <TeamCrest size="sm" />
           </div>
 
-          <div className="px-4 py-1.5 rounded-full bg-[#F3F4F9] text-slate-400 text-xs sm:text-sm font-display font-extrabold">
+          <div className="px-3 py-1 rounded-full bg-[#F3F4F9] text-slate-400 text-xs font-display font-extrabold">
             — : —
           </div>
 
-          <div className="flex items-center justify-start gap-2.5 text-left min-w-0">
-            <TeamCrest size="md" />
+          <div className="flex items-center justify-start gap-2 text-left min-w-0">
+            <TeamCrest size="sm" />
             <span className="text-xs sm:text-sm font-display font-bold text-slate-400 truncate">
-              Aguardando equipe
+              Aguardando
             </span>
           </div>
         </div>
 
-        <div className="mt-4 text-center">
-          <p className="text-xs font-semibold text-slate-500">{emptyMessage}</p>
+        <div className="mt-2.5 text-center">
+          <p className="text-[11px] font-semibold text-slate-400">{emptyMessage}</p>
         </div>
       </div>
     );
@@ -105,37 +94,35 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   const isLive = match.status === 'live' || match.status === 'halftime';
   const isFinished = match.status === 'finished';
 
+  const headerTitle = `${match.modalityName}${
+    match.categoryName &&
+    match.categoryName.trim().toLowerCase() !==
+      match.modalityName.trim().toLowerCase()
+      ? ` • ${match.categoryName}`
+      : ''
+  }${match.phaseLabel ? ` • ${match.phaseLabel}` : ''}`;
+
   return (
     <div
-      className={`all-sports-card p-5 sm:p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl ${className}`}
+      className={`all-sports-card px-4 py-3.5 sm:px-5 sm:py-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl ${className}`}
     >
-      {/* 1. Pílula Cinza-Lavanda no Topo */}
-      <div className="all-sports-section-pill mb-4 flex items-center justify-center gap-2">
-        <span className="truncate">
-          {match.modalityName}
-          {match.categoryName &&
-          match.categoryName.trim().toLowerCase() !==
-            match.modalityName.trim().toLowerCase()
-            ? ` • ${match.categoryName}`
-            : ''}
-          {match.phaseLabel ? ` • ${match.phaseLabel}` : ''}
+      {/* 1. Topo Compacto: Pílula da Modalidade/Fase + Status ou Lembrete na mesma linha */}
+      <div className="flex items-center justify-between gap-2 mb-2.5 px-3 py-1.5 rounded-xl bg-[#F3F4F9]">
+        <span className="text-[11px] sm:text-xs font-display font-extrabold text-[#1E293B] truncate">
+          {headerTitle}
         </span>
-      </div>
 
-      {/* 2. Badge Central de Status (Verde = Ongoing Match | Cinza = Finished Match | Sino = Upcoming Match) */}
-      <div className="flex justify-center mb-3.5">
         {isLive ? (
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#10B981] text-white text-xs font-display font-extrabold shadow-sm">
-            <Clock className="w-3.5 h-3.5 animate-pulse" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#10B981] text-white text-[10px] font-display font-extrabold shrink-0">
+            <Clock className="w-3 h-3 animate-pulse" />
             <span>
               {sheet?.timer?.periodLabel
-                ? `${sheet.timer.periodLabel} • AO VIVO`
+                ? `${sheet.timer.periodLabel}`
                 : 'AO VIVO'}
             </span>
           </span>
         ) : isFinished ? (
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[#9CA3AF] text-white text-xs font-display font-extrabold">
-            <Clock className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#9CA3AF] text-white text-[10px] font-display font-extrabold shrink-0">
             <span>FIM</span>
           </span>
         ) : (
@@ -143,35 +130,36 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             type="button"
             onClick={() => navigate(`/notificacoes`)}
             title="Ativar lembrete da partida"
-            className="w-8 h-8 rounded-full bg-[#F3F4F9] hover:bg-blue-50 border border-slate-200/80 flex items-center justify-center text-[#4F6BED] transition-colors"
+            className="w-6 h-6 rounded-full bg-white hover:bg-blue-50 border border-slate-200/80 flex items-center justify-center text-[#4F6BED] transition-colors shrink-0"
           >
-            <Bell className="w-3.5 h-3.5" />
+            <Bell className="w-3 h-3" />
           </button>
         )}
       </div>
 
-      {/* 3. Linha Principal do Confronto (Equipes + Escudos + Placar ou Horário Central) */}
+      {/* 2. Linha Principal do Confronto (Equipes + Escudos + Placar ou Horário Central) */}
       <div
         onClick={() => navigate(`/placar/${match.id}`)}
-        className="cursor-pointer grid grid-cols-[1fr_auto_1fr] items-center gap-2.5 sm:gap-4 max-w-lg mx-auto"
+        className="cursor-pointer grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3.5 max-w-lg mx-auto py-0.5"
       >
-        {/* Mandante (Nome à esquerda + Escudo à direita, igual às Imagens 2 e 3) */}
-        <div className="flex items-center justify-end gap-2.5 text-right min-w-0">
-          <span className="text-xs sm:text-base font-display font-bold text-slate-800 truncate">
-            {match.homeTeam.teamName || 'Aguardando equipe'}
+        {/* Mandante */}
+        <div className="flex items-center justify-end gap-2 text-right min-w-0">
+          <span className="text-xs sm:text-sm font-display font-extrabold text-slate-800 truncate">
+            {match.homeTeam.teamName || 'A definir'}
           </span>
           <TeamCrest
             crestUrl={match.homeTeam.crestUrl}
             teamName={match.homeTeam.teamName}
+            teamId={match.homeTeam.teamId}
             size="md"
             highlighted={Boolean(match.homeTeam.isWinner)}
           />
         </div>
 
-        {/* Placar Central em Pílula (Ongoing/Finished) ou Horário Coral (Upcoming) */}
-        <div className="flex flex-col items-center justify-center px-1">
+        {/* Placar Central ou Horário */}
+        <div className="flex flex-col items-center justify-center px-1.5 min-w-[68px]">
           {isLive || isFinished ? (
-            <div className="px-4 py-1.5 rounded-full bg-[#F3F4F9] border border-slate-200/70 text-slate-900 font-display font-extrabold text-sm sm:text-base tracking-tight tabular-nums shadow-inner">
+            <div className="px-3.5 py-1 rounded-full bg-[#F3F4F9] border border-slate-200/70 text-slate-900 font-display font-extrabold text-sm sm:text-base tracking-tight tabular-nums shadow-inner">
               {match.homeTeam.score ?? 0} - {match.awayTeam.score ?? 0}
             </div>
           ) : (
@@ -179,49 +167,48 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               <span className="block text-sm sm:text-base font-display font-extrabold text-[#EF4444] leading-none">
                 {match.scheduledTime || 'A definir'}
               </span>
-              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">
+              <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">
                 {match.scheduledDate || 'INTRAMED'}
               </span>
             </div>
           )}
         </div>
 
-        {/* Visitante (Escudo à esquerda + Nome à direita, igual às Imagens 2 e 3) */}
-        <div className="flex items-center justify-start gap-2.5 text-left min-w-0">
+        {/* Visitante */}
+        <div className="flex items-center justify-start gap-2 text-left min-w-0">
           <TeamCrest
             crestUrl={match.awayTeam.crestUrl}
             teamName={match.awayTeam.teamName}
+            teamId={match.awayTeam.teamId}
             size="md"
             highlighted={Boolean(match.awayTeam.isWinner)}
           />
-          <span className="text-xs sm:text-base font-display font-bold text-slate-800 truncate">
-            {match.awayTeam.teamName || 'Aguardando equipe'}
+          <span className="text-xs sm:text-sm font-display font-extrabold text-slate-800 truncate">
+            {match.awayTeam.teamName || 'A definir'}
           </span>
         </div>
       </div>
 
-      {/* 4. Árvore Bilateral de Gols / Pontos (Scorers Tree idêntica às Imagens 2, 3 e 5) */}
+      {/* 3. Árvore Bilateral de Gols / Pontos (quando houver eventos) */}
       {(homeScorers.length > 0 || awayScorers.length > 0) && (
-        <div className="mt-4 grid grid-cols-2 gap-4 max-w-md mx-auto text-[11px] text-[#5B6B98]">
-          {/* Coluna Mandante */}
-          <div className="flex flex-col items-end pr-2 border-r border-dashed border-slate-200 space-y-1.5">
+        <div className="mt-2.5 grid grid-cols-2 gap-3 max-w-md mx-auto text-[10px] text-[#5B6B98]">
+          <div className="flex flex-col items-end pr-2 border-r border-dashed border-slate-200 space-y-1">
             {homeScorers.map((ev) => (
-              <div key={ev.id} className="inline-flex items-center gap-1.5">
-                <span className="font-medium truncate max-w-[120px]">
+              <div key={ev.id} className="inline-flex items-center gap-1">
+                <span className="font-medium truncate max-w-[110px]">
                   {ev.athleteName || ev.typeLabel}{' '}
                   <span className="text-slate-400">{ev.matchClockDisplay}</span>
                 </span>
-                <CircleDot className="w-3 h-3 text-[#0B218A] shrink-0" />
+                <CircleDot className="w-2.5 h-2.5 text-[#0B218A] shrink-0" />
               </div>
             ))}
           </div>
 
-          {/* Coluna Visitante */}
-          <div className="flex flex-col items-start pl-2 space-y-1.5">
+          <div className="flex flex-col items-start pl-2 space-y-1">
             {awayScorers.map((ev) => (
-              <div key={ev.id} className="inline-flex items-center gap-1.5">
-                <CircleDot className="w-3 h-3 text-[#0B218A] shrink-0" />
-                <span className="font-medium truncate max-w-[120px]">
+              <div key={ev.id} className="inline-flex items-center gap-1">
+                <CircleDot className="w-2.5 h-2.5 text-[#0B218A] shrink-0" />
+                <span className="font-medium truncate max-w-[110px]">
                   <span className="text-slate-400">{ev.matchClockDisplay}</span>{' '}
                   {ev.athleteName || ev.typeLabel}
                 </span>
@@ -231,24 +218,49 @@ export const MatchCard: React.FC<MatchCardProps> = ({
         </div>
       )}
 
-      {/* 5. Rodapé Centralizado Minimalista: Local + Ações */}
-      <div className="mt-4 pt-3 border-t border-slate-100 text-center space-y-1">
-        <p className="text-xs font-bold text-slate-600">
-          {match.venue || 'Local a definir'}
+      {/* 4. Rodapé Compacto em Linha Única: Local à esquerda + Ações à direita */}
+      <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+        <span className="font-semibold text-slate-500 truncate">
+          {match.venue || 'Quadra Oficial'}
           {(isLive || isFinished) && match.scheduledDate
-            ? ` • ${match.scheduledDate}${match.scheduledTime ? ` (${match.scheduledTime})` : ''}`
+            ? ` • ${match.scheduledDate}`
             : ''}
-        </p>
+        </span>
 
-        <div className="pt-1.5 flex flex-wrap items-center justify-center gap-3">
+        <div className="flex items-center gap-2.5 ml-auto">
+          <StoryShareButton
+            compact
+            label="Stories"
+            payload={{
+              type: 'match',
+              title: headerTitle,
+              homeTeamName: match.homeTeam.teamName || 'A definir',
+              homeTeamCrestUrl: match.homeTeam.crestUrl,
+              homeScore: isLive || isFinished ? (match.homeTeam.score ?? 0) : null,
+              awayTeamName: match.awayTeam.teamName || 'A definir',
+              awayTeamCrestUrl: match.awayTeam.crestUrl,
+              awayScore: isLive || isFinished ? (match.awayTeam.score ?? 0) : null,
+              statusLabel: isLive
+                ? 'AO VIVO'
+                : isFinished
+                ? 'FIM DE JOGO'
+                : 'CONFRONTO AGENDADO',
+              dateTimeLabel: `${match.scheduledDate || ''} ${
+                match.scheduledTime ? `• ${match.scheduledTime}` : ''
+              }`.trim(),
+              venueLabel: match.venue || 'Quadra Oficial',
+            }}
+          />
+
+          <span className="text-slate-200">|</span>
+
           <button
             type="button"
             onClick={() => navigate(`/placar/${match.id}`)}
-            className="inline-flex items-center gap-1 text-xs font-display font-extrabold text-[#10B981] hover:text-[#059669] transition-colors"
+            className="inline-flex items-center gap-0.5 font-display font-extrabold text-[#10B981] hover:text-[#059669] transition-colors"
           >
-            <CircleDot className="w-3.5 h-3.5" />
             <span>Detalhes</span>
-            <ChevronRight className="w-3.5 h-3.5" />
+            <ChevronRight className="w-3 h-3" />
           </button>
 
           {showOperatorActions && (
@@ -257,22 +269,23 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               <button
                 type="button"
                 onClick={() => navigate(`/sumula/${match.id}`)}
-                className="inline-flex items-center gap-1 text-xs font-display font-bold text-[#0B218A] hover:underline"
+                className="inline-flex items-center gap-1 font-display font-bold text-[#0B218A] hover:underline"
               >
-                <Play className="w-3 h-3" />
+                <Play className="w-2.5 h-2.5" />
                 <span>{isAdmin ? 'Súmula' : 'Mesário'}</span>
               </button>
             </>
           )}
+
           {(isLive || isFinished) && (
             <>
               <span className="text-slate-200">|</span>
               <button
                 type="button"
                 onClick={() => navigate(`/sumula/${match.id}/documento`)}
-                className="inline-flex items-center gap-1 text-xs font-display font-bold text-amber-600 hover:underline"
+                className="inline-flex items-center gap-1 font-display font-bold text-amber-600 hover:underline"
               >
-                <FileText className="w-3 h-3" />
+                <FileText className="w-2.5 h-2.5" />
                 <span>PDF</span>
               </button>
             </>

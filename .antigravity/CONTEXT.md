@@ -34,9 +34,15 @@ Este arquivo serve de memória e alinhamento de contexto para o agente Antigravi
 ## 4. Chaveamento e 16 Modalidades
 - O torneio conta com 16 modalidades oficiais (Futsal Masc/Fem, Handebol Masc/Fem, Basquete Masc/Fem, Vôlei Masc/Fem, Vôlei de Praia Masc/Fem, Tênis de Mesa Masc/Fem, Sinuca, Truco, Poker, Natação).
 - Chaveamento de 5 equipes com Bye direto na semifinal e partidas baseadas na tabela oficial `TABELA_IX_INTRAMED_.xlsx`.
+- **Natação:** Disputa simultânea entre as 5 turmas por tempo/raia (não aparece na grade de confrontos `Time A × Time B`, tendo visualização própria na página de Natação).
 
-## 5. Diretrizes de UI/UX
+## 5. Diretrizes de UI/UX & Engajamento
 - **Design Minimalista:** Sem textos prolixos, sem repetições de rótulos (evitar `Futsal • Futsal` ou `Turma 21 • Turma 21`), tabelas limpas e cards diretos.
+- **Navegação Mobile Unificada (`Header.tsx` + `BottomNav.tsx`):** No celular, a barra de abas superior fica oculta (`hidden lg:block`), mantendo apenas o `BottomNav` inferior para um visual de app nativo.
+- **Cards de Jogos Compactos (`MatchCard.tsx`):** Altura reduzida em ~30% para exibir 3 a 4 jogos na tela do celular simultaneamente.
+- **Destaque de Byes no Chaveamento (`BracketView.tsx`):** Resumo visual no topo da chave indicando claramente as 3 turmas com *Bye* direto na Semifinal e as 2 turmas que disputam as Quartas.
+- **Escudos Padronizados (`TeamCrest.tsx`):** Moldura com fundo escuro uniforme e anel colorido na cor oficial de cada turma (`Vermelho Sanguinária`, `Amarelo Predadora`, `Azul Tormenta`, `Verde Colossal`, `Vinho Soberana`).
+- **Gerador de Cards 9:16 para Instagram Stories (`StoryShareModal.tsx`):** Permite compartilhar placares/partidas e o passaporte/ficha de atleta direto nos Stories ou WhatsApp via Web Share API / PNG.
 - **Identidade Visual:** Azul Royal (`#0B218A`), Amarelo Dourado (`#FACC15`), com temas individuais para cada atlética.
 
 ## 6. Como Retomar o Trabalho em Novo Dispositivo

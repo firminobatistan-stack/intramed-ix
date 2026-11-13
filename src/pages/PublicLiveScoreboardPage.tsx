@@ -21,6 +21,7 @@ import { formatSecondsToClock } from '../data/sportRulesConfig';
 import { TeamCrest } from '../components/sports/TeamCrest';
 import { TestModeBanner } from '../components/layout/TestModeBanner';
 import { StandingsTable } from '../components/sports/StandingsTable';
+import { StoryShareButton } from '../components/social/StoryShareModal';
 import { MatchEventType } from '../types/domain';
 
 type MatchInfoTab = 'details' | 'lineups' | 'standings' | 'statistics';
@@ -214,15 +215,52 @@ export const PublicLiveScoreboardPage: React.FC = () => {
             )}
 
             {resolvedMatch && (
-              <button
-                type="button"
-                onClick={() => navigate(`/sumula/${resolvedMatch.id}/documento`)}
-                title="Visualizar Documento da Súmula"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-display font-bold transition-colors"
-              >
-                <FileText className="w-3.5 h-3.5 text-brand-yellow" />
-                <span className="hidden sm:inline">Súmula Oficial</span>
-              </button>
+              <>
+                <StoryShareButton
+                  label="Stories"
+                  payload={{
+                    type: 'match',
+                    title: `${resolvedMatch.modalityName}${
+                      resolvedMatch.phaseLabel ? ` • ${resolvedMatch.phaseLabel}` : ''
+                    }`,
+                    homeTeamName: resolvedMatch.homeTeam.teamName || 'A definir',
+                    homeTeamCrestUrl: resolvedMatch.homeTeam.crestUrl,
+                    homeScore:
+                      resolvedMatch.status === 'live' ||
+                      resolvedMatch.status === 'halftime' ||
+                      resolvedMatch.status === 'finished'
+                        ? (resolvedMatch.homeTeam.score ?? 0)
+                        : null,
+                    awayTeamName: resolvedMatch.awayTeam.teamName || 'A definir',
+                    awayTeamCrestUrl: resolvedMatch.awayTeam.crestUrl,
+                    awayScore:
+                      resolvedMatch.status === 'live' ||
+                      resolvedMatch.status === 'halftime' ||
+                      resolvedMatch.status === 'finished'
+                        ? (resolvedMatch.awayTeam.score ?? 0)
+                        : null,
+                    statusLabel:
+                      resolvedMatch.status === 'live' || resolvedMatch.status === 'halftime'
+                        ? 'AO VIVO'
+                        : resolvedMatch.status === 'finished'
+                        ? 'FIM DE JOGO'
+                        : 'CONFRONTO OFICIAL',
+                    dateTimeLabel: `${resolvedMatch.scheduledDate || ''} ${
+                      resolvedMatch.scheduledTime ? `• ${resolvedMatch.scheduledTime}` : ''
+                    }`.trim(),
+                    venueLabel: resolvedMatch.venue || 'Quadra Oficial',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => navigate(`/sumula/${resolvedMatch.id}/documento`)}
+                  title="Visualizar Documento da Súmula"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white text-xs font-display font-bold transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5 text-brand-yellow" />
+                  <span className="hidden sm:inline">Súmula Oficial</span>
+                </button>
+              </>
             )}
 
             <button

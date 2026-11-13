@@ -36,6 +36,7 @@ import { Input } from '../components/ui/Input';
 import { TURMAS_MEDICINA } from '../data/registrationData';
 import { PostCard } from '../components/social/PostCard';
 import { FollowersModal } from '../components/social/FollowersModal';
+import { StoryShareButton } from '../components/social/StoryShareModal';
 import { SocialPost } from '../types/domain';
 
 export const ProfilePage: React.FC = () => {
@@ -560,6 +561,22 @@ export const ProfilePage: React.FC = () => {
                 >
                   Ficha Esportiva
                 </Button>
+              )}
+
+              {targetProfile && (
+                <StoryShareButton
+                  label="Card Stories"
+                  className="!bg-slate-100 !text-slate-800 !border-slate-200 hover:!bg-slate-200"
+                  payload={{
+                    type: 'athlete',
+                    title: targetProfile.displayName || 'Participante IntraMed',
+                    athleteName: targetProfile.displayName || 'Participante IntraMed',
+                    turmaName: linkedTeam?.name || targetProfile.turmaLabel || 'Medicina UEMA',
+                    turmaShort: linkedTeam?.shortName || (targetProfile.turma ? `T${targetProfile.turma}` : ''),
+                    positionLabel: targetProfile.isAthlete ? 'ATLETA OFICIAL' : 'COMUNIDADE INTRAMED',
+                    avatarUrl: targetProfile.avatarUrl || linkedTeam?.crestUrl,
+                  }}
+                />
               )}
             </div>
           </div>

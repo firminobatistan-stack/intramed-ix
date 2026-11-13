@@ -42,6 +42,7 @@ import { SportIcon } from '../components/sports/SportIcon';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
+import { StoryShareButton } from '../components/social/StoryShareModal';
 import { ModalitySlug, Registration, TurmaMedicina } from '../types/domain';
 
 function compressImageToDataUrl(file: File, maxSize = 260): Promise<string> {
@@ -1551,6 +1552,21 @@ export const RegistrationPage: React.FC = () => {
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
+                          <StoryShareButton
+                            label="Stories"
+                            className="!bg-slate-100 !text-slate-800 !border-slate-200 hover:!bg-slate-200"
+                            payload={{
+                              type: 'athlete',
+                              title: reg.athleteName,
+                              athleteName: reg.athleteName,
+                              turmaName: reg.teamName || reg.turmaLabel || 'Medicina UEMA',
+                              turmaShort: reg.turma ? `T${reg.turma}` : '',
+                              jerseyNumber: reg.jerseyNumber,
+                              positionLabel: isPaid ? 'PASSAPORTE CONFIRMADO' : 'ATLETA INSCRITO',
+                              avatarUrl: reg.avatarUrl,
+                              badgeCode: `ID: ${reg.id.toUpperCase()}`,
+                            }}
+                          />
                           <Button
                             variant="outline"
                             size="sm"

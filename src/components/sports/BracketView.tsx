@@ -392,6 +392,11 @@ export const BracketView: React.FC<BracketViewProps> = ({
         <div className="space-y-2">
           {teams.map((teamSlot, idx) => {
             const isWinner = Boolean(teamSlot.isWinner);
+            const isByeDirect =
+              !isFinal &&
+              match.phase === 'semifinals' &&
+              Boolean(teamSlot.teamId) &&
+              !(slot.orderIndex === 0 && idx === 1);
             return (
               <div
                 key={idx}
@@ -405,19 +410,27 @@ export const BracketView: React.FC<BracketViewProps> = ({
                   <TeamCrest
                     crestUrl={teamSlot.crestUrl}
                     teamName={teamSlot.teamName}
-                    size="md"
+                    teamId={teamSlot.teamId}
+                    size="sm"
                     highlighted={isWinner}
                   />
                   <div className="min-w-0">
-                    <span
-                      className={`block text-xs sm:text-sm truncate ${
-                        isWinner
-                          ? 'font-display font-bold text-brand-blue'
-                          : 'font-medium text-brand-text-primary'
-                      }`}
-                    >
-                      {teamSlot.teamName || 'Aguardando definição'}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`block text-xs sm:text-sm truncate ${
+                          isWinner
+                            ? 'font-display font-bold text-brand-blue'
+                            : 'font-semibold text-brand-text-primary'
+                        }`}
+                      >
+                        {teamSlot.teamName || 'Aguardando definição'}
+                      </span>
+                      {isByeDirect && (
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 text-[9px] font-display font-extrabold uppercase shrink-0">
+                          Bye
+                        </span>
+                      )}
+                    </div>
                     {isWinner && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-blue">
                         <span className="w-1.5 h-1.5 rounded-full bg-brand-yellow" />
@@ -465,8 +478,87 @@ export const BracketView: React.FC<BracketViewProps> = ({
 
   const isConfigured = hasAnyKnockoutMatch;
 
+  // Identifica as 3 equipes com Bye direto na Semifinal e as 2 equipes das Quartas
+  const byeTeams = [
+    sf1MatchRaw?.homeTeam,
+    sf2MatchRaw?.homeTeam,
+    sf2MatchRaw?.awayTeam,
+  ].filter((t): t is MatchTeamSlot => Boolean(t && t.teamName));
+
+  const qfTeams = [
+    qfMatchRaw?.homeTeam,
+    qfMatchRaw?.awayTeam,
+  ].filter((t): t is MatchTeamSlot => Boolean(t && t.teamName));
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      {/* Faixa Visual de Sorteio: 3 Byes Diretos na Semifinal vs 2 nas Quartas */}
+      {isConfigured && (byeTeams.length > 0 || qfTeams.length > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex flex-col justify-between gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-display font-black uppercase tracking-wider text-emerald-800">
+                Direto na Semifinal (Bye)
+              </span>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                3 Turmas
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {byeTeams.map((t, idx) => (
+                <div
+                  key={idx}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-emerald-200/90 shadow-2xs"
+                >
+                  <TeamCrest
+                    crestUrl={t.crestUrl}
+                    teamName={t.teamName}
+                    teamId={t.teamId}
+                    size="sm"
+                    className="!w-6 !h-6 !rounded-lg"
+                  />
+                  <span className="text-xs font-display font-bold text-slate-800">
+                    {t.teamName}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 flex flex-col justify-between gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-display font-black uppercase tracking-wider text-amber-900">
+                Disputam as Quartas
+              </span>
+              <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                Jogo Preliminar
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {qfTeams.map((t, idx) => (
+                <React.Fragment key={idx}>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white border border-amber-200/90 shadow-2xs">
+                    <TeamCrest
+                      crestUrl={t.crestUrl}
+                      teamName={t.teamName}
+                      teamId={t.teamId}
+                      size="sm"
+                      className="!w-6 !h-6 !rounded-lg"
+                    />
+                    <span className="text-xs font-display font-bold text-slate-800">
+                      {t.teamName}
+                    </span>
+                  </div>
+                  {idx === 0 && qfTeams.length > 1 && (
+                    <span className="text-[10px] font-black text-amber-700">×</span>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Banner informativo de estado vazio + Controles de Zoom e Fase */}
       {!isConfigured && (
         <div className="rounded-2xl bg-white border border-brand-surface-border p-5 sm:p-6 shadow-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

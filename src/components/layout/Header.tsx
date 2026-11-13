@@ -219,11 +219,11 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Menu Bar Integrada na Base do Header Azul com Indicador Amarelo (#FACC15) */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Menu Bar Integrada na Base do Header Azul com Indicador Amarelo (#FACC15) — Visível apenas no Desktop (lg:block) pois no Mobile usamos o BottomNav */}
+        <div className="hidden lg:block max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav
             aria-label="Menu principal do topo"
-            className="flex items-center justify-between sm:justify-start sm:gap-8 overflow-x-auto no-scrollbar pt-1"
+            className="flex items-center justify-start gap-8 overflow-x-auto no-scrollbar pt-1"
           >
             {topMenuTabs.map((tab: { id: string; label: string; path: string }) => {
               const isActive = activeTopTab === tab.id;

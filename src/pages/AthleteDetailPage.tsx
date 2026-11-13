@@ -27,6 +27,7 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
+import { StoryShareButton } from '../components/social/StoryShareModal';
 
 type AthleteTab = 'profile' | 'matches' | 'stats' | 'career';
 
@@ -674,6 +675,20 @@ export const AthleteDetailPage: React.FC = () => {
             {/* Ações rápidas de foto / edição / vínculo do atleta */}
             {resolvedAthlete && (
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                <StoryShareButton
+                  label="Compartilhar nos Stories"
+                  className="text-white"
+                  payload={{
+                    type: 'athlete',
+                    title: resolvedAthlete.name,
+                    athleteName: resolvedAthlete.name,
+                    turmaName: team?.name || 'Medicina UEMA',
+                    turmaShort: team?.shortName || '',
+                    jerseyNumber: resolvedAthlete.jerseyNumber,
+                    positionLabel: resolvedAthlete.position || 'Atleta Oficial',
+                    avatarUrl: resolvedAthlete.avatarUrl || team?.crestUrl,
+                  }}
+                />
                 {hasEditPermission ? (
                   <>
                     <button
