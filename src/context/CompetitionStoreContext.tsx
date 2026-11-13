@@ -181,6 +181,7 @@ interface CompetitionStoreContextValue {
   ) => void;
   finalizeMatch: (matchId: string) => void;
   reopenMatchForCorrection: (matchId: string) => void;
+  setMatchSheetOfficialReleased: (matchId: string, released: boolean) => void;
   visibleTeams: Team[];
   visibleAthletes: Athlete[];
   getTeamById: (teamId: string) => Team | undefined;
@@ -2938,6 +2939,19 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
+  const setMatchSheetOfficialReleased = useCallback(
+    (matchId: string, released: boolean) => {
+      updateMatchAndSheet(matchId, (match, sheet) => ({
+        match,
+        sheet: {
+          ...sheet,
+          isOfficialReleased: released,
+        },
+      }));
+    },
+    [updateMatchAndSheet]
+  );
+
   // FAVORITOS & NOTIFICAÇÕES
   const toggleFavoriteModality = useCallback((modalityId: ModalitySlug) => {
     setState((prev) => {
@@ -4680,6 +4694,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updateRefereeMetadata,
       finalizeMatch,
       reopenMatchForCorrection,
+      setMatchSheetOfficialReleased,
       visibleTeams,
       visibleAthletes,
       getTeamById,
@@ -4795,6 +4810,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updateRefereeMetadata,
       finalizeMatch,
       reopenMatchForCorrection,
+      setMatchSheetOfficialReleased,
       visibleTeams,
       visibleAthletes,
       getTeamById,

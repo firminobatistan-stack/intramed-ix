@@ -76,6 +76,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     updateRefereeMetadata,
     finalizeMatch,
     reopenMatchForCorrection,
+    setMatchSheetOfficialReleased,
   } = useCompetitionStore();
 
   // Proteção contra duplo clique / toque acidental (Item 31)
@@ -530,6 +531,32 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             >
               <FileText className="w-4 h-4 text-brand-yellow" />
               <span className="hidden sm:inline">Súmula</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                setMatchSheetOfficialReleased(match.id, !sheet.isOfficialReleased)
+              }
+              title={
+                sheet.isOfficialReleased
+                  ? 'Clique para ocultar a súmula oficial do público'
+                  : 'Clique para liberar a súmula oficial para todos os usuários'
+              }
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors min-h-[38px] ${
+                sheet.isOfficialReleased
+                  ? 'bg-emerald-500/25 border border-emerald-400/50 text-emerald-100 hover:bg-emerald-500/35'
+                  : 'bg-white/10 hover:bg-white/20 text-white/80'
+              }`}
+            >
+              <CheckCircle2
+                className={`w-4 h-4 ${
+                  sheet.isOfficialReleased ? 'text-emerald-300' : 'text-white/60'
+                }`}
+              />
+              <span className="hidden sm:inline">
+                {sheet.isOfficialReleased ? 'Súmula Liberada' : 'Liberar Súmula'}
+              </span>
             </button>
 
             <button

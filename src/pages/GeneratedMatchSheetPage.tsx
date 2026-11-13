@@ -85,6 +85,30 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     );
   }
 
+  const isSheetPubliclyAvailable =
+    match.status === 'finished' && Boolean(sheet.isOfficialReleased);
+
+  if (!isAdmin && !isSheetPubliclyAvailable) {
+    return (
+      <div className="min-h-screen bg-brand-surface-muted p-6 flex flex-col items-center justify-center text-center space-y-4">
+        <FileText className="w-10 h-10 text-brand-blue" />
+        <h1 className="text-lg font-display font-bold text-brand-text-primary">
+          Súmula oficial ainda não liberada
+        </h1>
+        <p className="text-xs text-brand-text-secondary max-w-sm">
+          A súmula oficial desta partida só fica disponível após o encerramento do jogo e a liberação pela mesa operadora.
+        </p>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => navigate(`/ao-vivo/${match.id}`)}
+        >
+          Voltar para a Partida
+        </Button>
+      </div>
+    );
+  }
+
   const homeTeamObj = match.homeTeam.teamId
     ? getTeamById(match.homeTeam.teamId)
     : undefined;

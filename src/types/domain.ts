@@ -428,6 +428,7 @@ export interface MatchSheet {
   timekeeperName?: string;
   twentyFourSecOperatorName?: string;
   isClosed: boolean;
+  isOfficialReleased?: boolean;
   closedAtIso?: string | null;
   syncStatus: 'synced' | 'pending_sync' | 'offline_ready';
   lastUpdatedIso: string;
