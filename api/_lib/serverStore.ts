@@ -532,7 +532,11 @@ export async function firebaseAuthSignUp(
     if (!res.ok || data.error) {
       const msg = data.error?.message || 'Erro ao registrar no Firebase Auth';
       if (msg === 'EMAIL_EXISTS') {
-        return { ok: false, error: 'Já existe uma conta cadastrada com este e-mail.' };
+        return {
+          ok: false,
+          error:
+            'Já existe uma conta cadastrada com este e-mail. Tente fazer login na aba "Entrar" ou clique em "Continuar com o Google".',
+        };
       }
       return { ok: false, error: msg };
     }
