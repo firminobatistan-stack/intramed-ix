@@ -1175,7 +1175,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Validação de autorização: somente o próprio usuário ou admin pode editar
-      const isSelf = verifiedToken && (verifiedToken.email || '').toLowerCase() === String(store.users?.[targetUserId]?.email || '').toLowerCase();
+      const isSelf =
+        Boolean(verifiedToken) &&
+        (verifiedToken.userId === targetUserId ||
+          (verifiedToken.email || '').toLowerCase() ===
+            String(store.users?.[targetUserId]?.email || '').toLowerCase());
       if (!isAdmin && !isSelf) {
         return res.status(403).json({ ok: false, error: 'Você não tem permissão para editar o perfil de outro usuário.' });
       }
