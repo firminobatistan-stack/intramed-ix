@@ -202,7 +202,9 @@ export const ProfilePage: React.FC = () => {
 
   // Modais
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(() =>
+    typeof window !== 'undefined' && window.location.search.includes('completar=1')
+  );
 
   // Estados do formulário de senha
   const [currentPassword, setCurrentPassword] = useState('');

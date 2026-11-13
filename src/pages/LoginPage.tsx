@@ -155,7 +155,12 @@ export const LoginPage: React.FC = () => {
         );
 
         setTimeout(() => {
-          navigate(returnTo || '/perfil', { replace: true });
+          const needsProfileCompletion =
+            Boolean(data.isNewUser) || !data.profile?.turma;
+          const targetRoute = needsProfileCompletion
+            ? '/perfil?completar=1'
+            : returnTo || '/perfil';
+          navigate(targetRoute, { replace: true });
         }, 650);
         return;
       } else {
@@ -301,7 +306,12 @@ export const LoginPage: React.FC = () => {
           } else if (data.user.linkedAthleteId) {
             navigate(returnTo || `/atleta/${data.user.linkedAthleteId}`, { replace: true });
           } else {
-            navigate(returnTo || '/perfil', { replace: true });
+            const needsProfileCompletion =
+            Boolean(data.isNewUser) || !data.profile?.turma;
+          const targetRoute = needsProfileCompletion
+            ? '/perfil?completar=1'
+            : returnTo || '/perfil';
+          navigate(targetRoute, { replace: true });
           }
         }, 500);
         return;
@@ -392,7 +402,12 @@ export const LoginPage: React.FC = () => {
         setSuccessMessage('Conta e perfil criados com sucesso! Redirecionando...');
 
         setTimeout(() => {
-          navigate(returnTo || '/perfil', { replace: true });
+          const needsProfileCompletion =
+            Boolean(data.isNewUser) || !data.profile?.turma;
+          const targetRoute = needsProfileCompletion
+            ? '/perfil?completar=1'
+            : returnTo || '/perfil';
+          navigate(targetRoute, { replace: true });
         }, 800);
         return;
       } else {
