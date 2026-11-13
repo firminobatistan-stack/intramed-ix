@@ -3,9 +3,44 @@
  * Garante que dados locais obsoletos não mascarem a base central (Firebase e Vercel Hub).
  */
 
-export const CURRENT_APP_CACHE_VERSION = '2.2.0-centralized-firebase';
+export const CURRENT_APP_CACHE_VERSION = '2.3.0-centralized-firebase-clean';
 const CACHE_VERSION_KEY = 'intramed_cache_version';
 const OFFLINE_QUEUE_KEY = 'intramed_offline_sync_queue_v2';
+
+const PURGED_TEST_NAMES_LOWER = [
+  'gabriel medeiros',
+  'beatriz vasconcelos',
+  'lucas albuquerque',
+  'gvsvsadv',
+  'nskaangaba',
+  'firmino',
+];
+
+export function isPurgedTestEntity(item: unknown): boolean {
+  if (!item || typeof item !== 'object') return false;
+  const rec = item as Record<string, unknown>;
+  const id = String(rec.id || '').trim().toLowerCase();
+  const userId = String(rec.userId || '').trim().toLowerCase();
+  const name = String(rec.athleteName || rec.displayName || rec.name || '').trim().toLowerCase();
+  const username = String(rec.accountUsername || '').trim().toLowerCase();
+
+  if (
+    id.startsWith('reg-cang-') ||
+    id.startsWith('ath-reg-cang-') ||
+    id.startsWith('user-ath-') ||
+    id.startsWith('ath-demo-') ||
+    userId.startsWith('user-ath-')
+  ) {
+    return true;
+  }
+
+  for (const purged of PURGED_TEST_NAMES_LOWER) {
+    if (name === purged || name.includes(purged) || username === purged) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export interface CacheIntegrityReport {
   version: string;
@@ -61,6 +96,43 @@ export async function initializeCacheManager(): Promise<CacheIntegrityReport> {
       localStorage.removeItem(key);
     }
 
+    // Expurga registros de teste (gvsvsadv, nskaangaba, firmino) do localStorage e da fila offline em todos os aparelhos
+    try {
+      const savedStateRaw = localStorage.getItem('intramed_ix_live_engine_v3');
+      if (savedStateRaw) {
+        const parsedState = JSON.parse(savedStateRaw);
+        if (parsedState && typeof parsedState === 'object') {
+          if (Array.isArray(parsedState.officialAthletes)) {
+            parsedState.officialAthletes = parsedState.officialAthletes.filter(
+              (a: unknown) => !isPurgedTestEntity(a)
+            );
+          }
+          if (Array.isArray(parsedState.publicProfiles)) {
+            parsedState.publicProfiles = parsedState.publicProfiles.filter(
+              (p: unknown) => !isPurgedTestEntity(p)
+            );
+          }
+          if (parsedState.currentUser && isPurgedTestEntity(parsedState.currentUser)) {
+            parsedState.currentUser = null;
+          }
+          localStorage.setItem('intramed_ix_live_engine_v3', JSON.stringify(parsedState));
+        }
+      }
+    } catch {}
+
+    try {
+      const savedRegsRaw = localStorage.getItem('intramed_registrations_store_v1');
+      if (savedRegsRaw) {
+        const parsedRegs = JSON.parse(savedRegsRaw);
+        if (parsedRegs && Array.isArray(parsedRegs.registrations)) {
+          parsedRegs.registrations = parsedRegs.registrations.filter(
+            (r: unknown) => !isPurgedTestEntity(r)
+          );
+          localStorage.setItem('intramed_registrations_store_v1', JSON.stringify(parsedRegs));
+        }
+      }
+    } catch {}
+
     // Invalida e limpa Cache Storage do navegador se existir
     if ('caches' in window) {
       try {
@@ -86,8 +158,22 @@ export async function initializeCacheManager(): Promise<CacheIntegrityReport> {
       }
     }
 
-    // Restaura chaves preservadas
-    if (offlineQueue) localStorage.setItem(OFFLINE_QUEUE_KEY, offlineQueue);
+    // Restaura chaves preservadas (filtrando a fila offline para remover qualquer item de teste)
+    if (offlineQueue) {
+      try {
+        const parsedQueue = JSON.parse(offlineQueue);
+        if (Array.isArray(parsedQueue)) {
+          const cleanQueue = parsedQueue.filter(
+            (q: any) => !isPurgedTestEntity(q?.data)
+          );
+          localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(cleanQueue));
+        } else {
+          localStorage.setItem(OFFLINE_QUEUE_KEY, offlineQueue);
+        }
+      } catch {
+        localStorage.setItem(OFFLINE_QUEUE_KEY, offlineQueue);
+      }
+    }
     if (adminSession) localStorage.setItem('intramed_admin_session', adminSession);
     if (operatorToken) localStorage.setItem('intramed_operator_token', operatorToken);
     if (operatorJwt) localStorage.setItem('intramed_operator_jwt', operatorJwt);

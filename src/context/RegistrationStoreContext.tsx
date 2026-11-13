@@ -28,6 +28,9 @@ import {
 } from './CompetitionStoreContext';
 import { generateUniqueId } from '../utils/statsEngine';
 import { enqueueOfflineMutation } from '../utils/offlineSyncQueue';
+import { isPurgedTestEntity } from '../utils/cacheManager';
+import { db } from '../lib/firebase';
+import { collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 const REGISTRATIONS_STORAGE_KEY = 'intramed_registrations_store_v1';
 const MY_REGISTRATIONS_KEY = 'intramed_my_registered_ids_v1';
@@ -122,13 +125,16 @@ interface RegistrationContextValue {
 const RegistrationContext = createContext<RegistrationContextValue | null>(null);
 
 const pushRegistrationToCloud = (reg: Registration, accountPassword?: string) => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || isPurgedTestEntity(reg)) return;
   try {
     const cleanReg = JSON.parse(JSON.stringify(reg));
     if (accountPassword) {
       cleanReg.accountPassword = accountPassword;
     }
     enqueueOfflineMutation('registrations', reg.id, cleanReg);
+    // Espelhamento direto no Cloud Firestore SDK (sem a senha em texto puro)
+    const { accountPassword: _omitPass, ...firestoreDoc } = cleanReg;
+    void setDoc(doc(db, 'registrations', reg.id), firestoreDoc, { merge: true }).catch(() => {});
   } catch {
     // Silencioso
   }
@@ -212,16 +218,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed.registrations)) {
           const clean = (parsed.registrations as Registration[])
-            .filter(
-              (r) =>
-                r &&
-                r.id &&
-                !r.id.startsWith('reg-cang-') &&
-                !r.userId?.startsWith('user-ath-') &&
-                !r.athleteName?.includes('Gabriel Medeiros') &&
-                !r.athleteName?.includes('Beatriz Vasconcelos') &&
-                !r.athleteName?.includes('Lucas Albuquerque')
-            )
+            .filter((r) => r && r.id && !isPurgedTestEntity(r))
             .map((r) => normalizePendingRegistrationPrice(r));
           return clean;
         }
@@ -274,16 +271,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!registrations || registrations.length === 0) return;
 
     registrations.forEach((reg) => {
-      if (reg.paymentStatus === 'cancelado') return;
-      if (
-        reg.id.startsWith('reg-cang-') ||
-        reg.userId?.startsWith('user-ath-') ||
-        reg.athleteName?.includes('Gabriel Medeiros') ||
-        reg.athleteName?.includes('Beatriz Vasconcelos') ||
-        reg.athleteName?.includes('Lucas Albuquerque')
-      ) {
-        return;
-      }
+      if (reg.paymentStatus === 'cancelado' || isPurgedTestEntity(reg)) return;
       const sig = `${reg.updatedAtIso}_${reg.paymentStatus}_${reg.memberStatus}_${reg.avatarUrl || ''}_${reg.jerseyNumber || ''}_${reg.position || ''}`;
       if (syncedRegSignaturesRef.current.get(reg.id) === sig) return;
       syncedRegSignaturesRef.current.set(reg.id, sig);
@@ -336,6 +324,33 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
+  // Escuta em tempo real direta da coleção `registrations` no Cloud Firestore
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const unsub = onSnapshot(
+        collection(db, 'registrations'),
+        (snap) => {
+          if (snap.empty) return;
+          const firestoreRegs = snap.docs
+            .map((d) => ({ ...(d.data() as Registration), id: d.id }))
+            .filter((r) => r && r.id && !isPurgedTestEntity(r));
+          if (firestoreRegs.length > 0) {
+            window.dispatchEvent(
+              new CustomEvent('intramed-cloud-registrations', {
+                detail: firestoreRegs,
+              })
+            );
+          }
+        },
+        () => {}
+      );
+      return () => unsub();
+    } catch {
+      return;
+    }
+  }, []);
+
   // Recebe as inscrições do polling unificado do CompetitionStoreContext (fonte única de verdade via /api/cloud-sync)
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -346,31 +361,25 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!Array.isArray(remoteList)) return;
 
       const cleanRemote = remoteList.filter(
-        (cr) =>
-          cr &&
-          cr.id &&
-          !cr.id.startsWith('reg-cang-') &&
-          !cr.userId?.startsWith('user-ath-') &&
-          !cr.athleteName?.includes('Gabriel Medeiros') &&
-          !cr.athleteName?.includes('Beatriz Vasconcelos') &&
-          !cr.athleteName?.includes('Lucas Albuquerque')
+        (cr) => cr && cr.id && !isPurgedTestEntity(cr)
       );
 
       setRegistrations((prev) => {
-        // Remove qualquer registro fictício/demo que possa estar no estado local
+        // Remove qualquer registro fictício/teste que possa estar no estado local
         const cleanPrev = prev.filter(
-          (r) =>
-            r &&
-            r.id &&
-            !r.id.startsWith('reg-cang-') &&
-            !r.userId?.startsWith('user-ath-') &&
-            !r.athleteName?.includes('Gabriel Medeiros') &&
-            !r.athleteName?.includes('Beatriz Vasconcelos') &&
-            !r.athleteName?.includes('Lucas Albuquerque')
+          (r) => r && r.id && !isPurgedTestEntity(r)
         );
 
+        const remoteIds = new Set(cleanRemote.map((cr) => cr.id));
+        // Auto-Cura (Self-Healing): se este dispositivo possui uma inscrição legítima que não veio no snapshot remoto, reenvia para a nuvem!
+        for (const localReg of cleanPrev) {
+          if (!remoteIds.has(localReg.id)) {
+            pushRegistrationToCloud(localReg);
+          }
+        }
+
         if (cleanRemote.length === 0) {
-          return cleanPrev.length === 0 ? cleanPrev : [];
+          return cleanPrev;
         }
 
         const byId = new Map<string, Registration>();

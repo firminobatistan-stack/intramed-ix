@@ -70,6 +70,7 @@ import {
   initializeCacheManager,
   clearLocalDataCaches,
   CURRENT_APP_CACHE_VERSION,
+  isPurgedTestEntity,
 } from '../utils/cacheManager';
 
 interface NewEventPayload {
@@ -426,7 +427,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               localStorage.getItem('intramed_admin_session') === 'restricted_first_access');
 
           let resolvedUser: UserProfile | null = null;
-          if (parsed.currentUser && parsed.currentUser.role === 'atleta') {
+          if (parsed.currentUser && isPurgedTestEntity(parsed.currentUser)) {
+            resolvedUser = null;
+          } else if (parsed.currentUser && parsed.currentUser.role === 'atleta') {
             resolvedUser = parsed.currentUser;
           } else if (hasAdminSession && parsed.currentUser) {
             resolvedUser = parsed.currentUser;
@@ -443,15 +446,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             isTestMode: Boolean(hasAdminSession && parsed.isTestMode),
             officialTeams: mergeTeamsWithDefaults(parsed.officialTeams, INITIAL_TEAMS),
             officialAthletes: (parsed.officialAthletes || INITIAL_ATHLETES).filter(
-              (a: Athlete) =>
-                a &&
-                a.id &&
-                !a.id.startsWith('ath-reg-cang-') &&
-                !a.id.startsWith('user-ath-') &&
-                !a.id.startsWith('ath-demo-') &&
-                !a.name?.includes('Gabriel Medeiros') &&
-                !a.name?.includes('Beatriz Vasconcelos') &&
-                !a.name?.includes('Lucas Albuquerque')
+              (a: Athlete) => a && a.id && !isPurgedTestEntity(a)
             ),
             officialMatches:
               parsed.officialMatches && parsed.officialMatches.length > 0
@@ -489,7 +484,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             favoriteTeamIds: parsed.favoriteTeamIds || [],
             favoriteAthleteIds: parsed.favoriteAthleteIds || [],
             notifications: parsed.notifications || [],
-            publicProfiles: parsed.publicProfiles || [],
+            publicProfiles: (parsed.publicProfiles || []).filter(
+              (p) => !isPurgedTestEntity(p)
+            ),
             launchConfig: {
               ...DEFAULT_PUBLIC_LAUNCH_CONFIG,
               ...(parsed.launchConfig || {}),
@@ -595,12 +592,33 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       setState((prev) => {
         let changed = false;
 
-        let nextAthletes = prev.officialAthletes;
-        if (Array.isArray(payload.athletes) && payload.athletes.length > 0) {
-          const byId = new Map<string, Athlete>();
-          for (const a of prev.officialAthletes) byId.set(a.id, a);
-          for (const r of payload.athletes as Athlete[]) {
-            if (r && r.id && !r.isTestOnly) {
+        let nextAthletes = prev.officialAthletes.filter(
+          (a) => a && a.id && !isPurgedTestEntity(a)
+        );
+        if (nextAthletes.length !== prev.officialAthletes.length) {
+          changed = true;
+        }
+        if (Array.isArray(payload.athletes)) {
+          const cleanRemoteAthletes = (payload.athletes as Athlete[]).filter(
+            (r) => r && r.id && !r.isTestOnly && !isPurgedTestEntity(r)
+          );
+          const remoteAthIds = new Set(cleanRemoteAthletes.map((r) => r.id));
+
+          // Auto-Cura (Self-Healing): se este aparelho possui um atleta legítimo que ainda não consta na nuvem, reenvia!
+          for (const localAth of nextAthletes) {
+            if (!localAth.isTestOnly && !remoteAthIds.has(localAth.id)) {
+              enqueueOfflineMutation('athletes', localAth.id, localAth);
+              try {
+                const cleanAth = JSON.parse(JSON.stringify(localAth));
+                void setDoc(doc(db, 'athletes', localAth.id), cleanAth, { merge: true }).catch(() => {});
+              } catch {}
+            }
+          }
+
+          if (cleanRemoteAthletes.length > 0) {
+            const byId = new Map<string, Athlete>();
+            for (const a of nextAthletes) byId.set(a.id, a);
+            for (const r of cleanRemoteAthletes) {
               const ex = byId.get(r.id);
               if (
                 !ex ||
@@ -615,9 +633,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 changed = true;
               }
             }
-          }
-          if (changed) {
-            nextAthletes = Array.from(byId.values());
+            if (changed) {
+              nextAthletes = Array.from(byId.values());
+            }
           }
         }
 
@@ -725,9 +743,13 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           }
         }
 
-        let nextProfiles = prev.publicProfiles || [];
+        let nextProfiles = (prev.publicProfiles || []).filter(
+          (p) => !isPurgedTestEntity(p)
+        );
         if (Array.isArray(payload.profiles)) {
-          nextProfiles = payload.profiles as PublicUserProfile[];
+          nextProfiles = (payload.profiles as PublicUserProfile[]).filter(
+            (p) => !isPurgedTestEntity(p)
+          );
           changed = true;
         }
 
@@ -823,7 +845,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         isApplyingRemoteUpdate.current = true;
         return {
           ...prev,
-          officialAthletes: Array.isArray(payload.athletes) ? payload.athletes : prev.officialAthletes,
+          officialAthletes: Array.isArray(payload.athletes)
+            ? (payload.athletes as Athlete[]).filter((a) => !isPurgedTestEntity(a))
+            : prev.officialAthletes.filter((a) => !isPurgedTestEntity(a)),
           officialTeams: Array.isArray(payload.teams) && payload.teams.length > 0 ? payload.teams : prev.officialTeams,
           officialMatches: Array.isArray(payload.matches) && payload.matches.length > 0 ? payload.matches : prev.officialMatches,
           officialSheets: Array.isArray(payload.match_sheets)
@@ -832,7 +856,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 return acc;
               }, {})
             : prev.officialSheets,
-          publicProfiles: Array.isArray(payload.profiles) ? payload.profiles : prev.publicProfiles,
+          publicProfiles: Array.isArray(payload.profiles)
+            ? (payload.profiles as PublicUserProfile[]).filter((p) => !isPurgedTestEntity(p))
+            : prev.publicProfiles.filter((p) => !isPurgedTestEntity(p)),
           launchConfig: payload.launchConfig ? { ...prev.launchConfig, ...payload.launchConfig, bracketPublished: true } : prev.launchConfig,
           officialBrackets: payload.brackets && Object.keys(payload.brackets).length > 0
             ? { ...OFFICIAL_UNIVERSAL_BRACKETS, ...prev.officialBrackets, ...payload.brackets }
@@ -983,13 +1009,17 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         collection(db, 'athletes'),
         (snap) => {
           if (snap.empty) return;
-          const remoteAthletes = snap.docs.map((d) => ({
-            ...(d.data() as Athlete),
-            id: d.id,
-          }));
+          const remoteAthletes = snap.docs
+            .map((d) => ({
+              ...(d.data() as Athlete),
+              id: d.id,
+            }))
+            .filter((r) => !isPurgedTestEntity(r));
           setState((prev) => {
             const byId = new Map<string, Athlete>();
-            for (const a of prev.officialAthletes) byId.set(a.id, a);
+            for (const a of prev.officialAthletes) {
+              if (!isPurgedTestEntity(a)) byId.set(a.id, a);
+            }
             for (const r of remoteAthletes) {
               if (!r.isTestOnly) {
                 const existing = byId.get(r.id);

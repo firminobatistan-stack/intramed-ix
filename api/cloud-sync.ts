@@ -21,6 +21,7 @@ import {
   hashPassword,
   hashSecretPin,
   isMasterAccount,
+  isPurgedTestRecord,
   markRegistrationPaidOnServer,
   MASTER_MODERATOR_EMAIL,
   MirrorDocumentToFirestoreRest,
@@ -74,6 +75,20 @@ function canClientWriteDocument(
   const nowIso = new Date().toISOString();
   const prevRevision = Number(existing?.revision || 0);
   const incomingRevision = Number(incoming.revision || 0);
+
+  if (
+    (collectionName === 'registrations' ||
+      collectionName === 'athletes' ||
+      collectionName === 'users' ||
+      collectionName === 'profiles') &&
+    isPurgedTestRecord(incoming)
+  ) {
+    return {
+      allowed: false,
+      sanitizedData: {},
+      reason: 'Conta de teste bloqueada/expurgada.',
+    };
+  }
 
   // Proteção contra sobrescrita por cliente desatualizado (Item 10 da Auditoria)
   if (
@@ -377,7 +392,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  const store = await ensureCloudStoreHydrated();
+  const isForceHydrate = req.query.force === 'true';
+  const store = await ensureCloudStoreHydrated(isForceHydrate);
   const rawToken = extractBearerOrHeaderToken(req.headers as Record<string, unknown>);
   const verifiedToken = verifySignedOperatorToken(rawToken);
   const operatorRoleLevel = verifiedToken?.role
@@ -413,22 +429,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isPublicProfilesVisible = Boolean(launchConfig.publicProfilesVisible || isAdminRequest);
     const isPublicPricesVisible = Boolean(launchConfig.publicPricesVisible || isAdminRequest);
 
+    const rawRegistrations = Object.values(store.registrations).filter(
+      (r) => !isPurgedTestRecord(r)
+    );
+
     const publicRegistrations = isPublicProfilesVisible
       ? (isAdminRequest
-          ? Object.values(store.registrations).map((r) => normalizeRegServerPrice(r))
-          : Object.values(store.registrations).map((r) =>
+          ? rawRegistrations.map((r) => normalizeRegServerPrice(r))
+          : rawRegistrations.map((r) =>
               sanitizeRegistrationForPublic(normalizeRegServerPrice(r))
             ))
       : (isAdminRequest
-          ? Object.values(store.registrations).map((r) => normalizeRegServerPrice(r))
+          ? rawRegistrations.map((r) => normalizeRegServerPrice(r))
           : []);
 
     // Atletas e elencos do torneio oficial são informações esportivas públicas da competição
     // e devem ser entregues a todos os dispositivos (celular e desktop) para evitar silos locais
-    const publicAthletes = Object.values(store.athletes);
+    const publicAthletes = Object.values(store.athletes).filter(
+      (a) => !isPurgedTestRecord(a)
+    );
 
     // Perfis públicos sanitizados (sem senhas, CPF ou telefone) para descoberta da comunidade e dados do usuário
-    const publicProfiles = Object.values(store.profiles || {}).map(sanitizeUserProfileForPublic);
+    const publicProfiles = Object.values(store.profiles || {})
+      .filter((p) => !isPurgedTestRecord(p))
+      .map(sanitizeUserProfileForPublic);
 
     const publicMatches = Object.values(store.matches).map((m) =>
       sanitizeMatchForPublic(m, isAdminRequest)

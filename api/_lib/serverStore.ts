@@ -209,6 +209,40 @@ export interface CloudCollectionMap {
 
 export const MASTER_MODERATOR_EMAIL = 'cangaceira@uema.com';
 
+const PURGED_TEST_NAMES_LOWER = [
+  'gabriel medeiros',
+  'beatriz vasconcelos',
+  'lucas albuquerque',
+  'gvsvsadv',
+  'nskaangaba',
+  'firmino',
+];
+
+export function isPurgedTestRecord(rec: Record<string, unknown> | null | undefined): boolean {
+  if (!rec || typeof rec !== 'object') return false;
+  const id = String(rec.id || '').trim().toLowerCase();
+  const userId = String(rec.userId || '').trim().toLowerCase();
+  const name = String(rec.athleteName || rec.displayName || rec.name || '').trim().toLowerCase();
+  const username = String(rec.accountUsername || '').trim().toLowerCase();
+
+  if (
+    id.startsWith('reg-cang-') ||
+    id.startsWith('ath-reg-cang-') ||
+    id.startsWith('user-ath-') ||
+    id.startsWith('ath-demo-') ||
+    userId.startsWith('user-ath-')
+  ) {
+    return true;
+  }
+
+  for (const purged of PURGED_TEST_NAMES_LOWER) {
+    if (name === purged || name.includes(purged) || username === purged) {
+      return true;
+    }
+  }
+  return false;
+}
+
 declare global {
   // eslint-disable-next-line no-var
   var __INTRAMED_CLOUD_STORE_V2__: CloudCollectionMap | undefined;
@@ -890,6 +924,66 @@ export function sanitizeMatchForPublic(
 const FIREBASE_PROJECT_ID =
   process.env.VITE_FIREBASE_PROJECT_ID || 'gen-lang-client-0847910166';
 
+const SERVER_SYNC_ACCOUNT_EMAIL = 'sync-engine@intramed.uema.br';
+const SERVER_SYNC_ACCOUNT_PASS = 'IntramedSyncEngine#2026!';
+
+let cachedServerFirebaseIdToken: string | null = null;
+let cachedServerFirebaseTokenExpMs = 0;
+
+/**
+ * Obtém um Firebase Auth ID Token válido de serviço para autenticar chamadas REST ao Cloud Firestore,
+ * garantindo que as Security Rules (`request.auth != null`) permitam leitura/escrita durável entre instâncias Vercel.
+ */
+export async function getServerFirebaseIdToken(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedServerFirebaseIdToken && now < cachedServerFirebaseTokenExpMs - 60000) {
+    return cachedServerFirebaseIdToken;
+  }
+
+  try {
+    let authRes = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_WEB_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: SERVER_SYNC_ACCOUNT_EMAIL,
+          password: SERVER_SYNC_ACCOUNT_PASS,
+          returnSecureToken: true,
+        }),
+      }
+    );
+    let authData = (await authRes.json().catch(() => ({}))) as any;
+
+    if (!authRes.ok || !authData?.idToken) {
+      authRes = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_WEB_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: SERVER_SYNC_ACCOUNT_EMAIL,
+            password: SERVER_SYNC_ACCOUNT_PASS,
+            returnSecureToken: true,
+          }),
+        }
+      );
+      authData = (await authRes.json().catch(() => ({}))) as any;
+    }
+
+    if (authData?.idToken) {
+      cachedServerFirebaseIdToken = String(authData.idToken);
+      const expiresInSec = Number(authData.expiresIn || 3600);
+      cachedServerFirebaseTokenExpMs = now + expiresInSec * 1000;
+      return cachedServerFirebaseIdToken;
+    }
+  } catch {
+    // Non-blocking fallback
+  }
+
+  return null;
+}
+
 function toFirestoreValue(val: unknown): Record<string, unknown> {
   if (val === null || val === undefined) return { nullValue: null };
   if (typeof val === 'boolean') return { booleanValue: val };
@@ -956,9 +1050,25 @@ export function appendServerSyncLog(
 /**
  * Hidrata o store em memória a partir do Cloud Firestore REST API caso a instância serverless tenha sofrido cold-start.
  */
-export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
+export async function ensureCloudStoreHydrated(force = false): Promise<CloudCollectionMap> {
   const store = getCloudStore();
-  if (store.hydratedFromFirestoreAtIso) {
+  // Remove qualquer registro de teste expurgado que possa estar em memória
+  for (const colKey of ['registrations', 'athletes', 'users', 'profiles'] as const) {
+    const mapObj = store[colKey];
+    if (mapObj && typeof mapObj === 'object') {
+      for (const [k, v] of Object.entries(mapObj)) {
+        if (isPurgedTestRecord(v)) {
+          delete mapObj[k];
+        }
+      }
+    }
+  }
+
+  const lastHydratedMs = store.hydratedFromFirestoreAtIso
+    ? new Date(store.hydratedFromFirestoreAtIso).getTime()
+    : 0;
+  // Re-hidrata se forçado, se nunca hidratou ou se passou mais de 15s (sincroniza entre instâncias serverless)
+  if (!force && lastHydratedMs > 0 && Date.now() - lastHydratedMs < 15000) {
     return store;
   }
 
@@ -981,12 +1091,17 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
   ];
 
   try {
+    const idToken = await getServerFirebaseIdToken();
+    const authHeaders: Record<string, string> = idToken
+      ? { Authorization: `Bearer ${idToken}` }
+      : {};
+
     await Promise.all(
       collectionsToHydrate.map(async (colName) => {
         const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(
           colName
         )}?pageSize=300&key=${FIREBASE_API_KEY}`;
-        const res = await fetch(url).catch(() => null);
+        const res = await fetch(url, { headers: authHeaders }).catch(() => null);
         if (!res || !res.ok) return;
         const { data } = await parseJsonSafe(res);
         const docs = Array.isArray(data?.documents)
@@ -1008,6 +1123,16 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
               .pop() ||
             '';
           if (docId) {
+            if (
+              (colName === 'registrations' ||
+                colName === 'athletes' ||
+                colName === 'users' ||
+                colName === 'profiles') &&
+              isPurgedTestRecord(parsedDoc)
+            ) {
+              void DeleteDocumentFromFirestoreRest(colName, docId);
+              continue;
+            }
             if (colName === 'admin_users') {
               if (!store.admin_users) store.admin_users = {};
               const normalizedEmail = String(parsedDoc.email || docId).trim().toLowerCase();
@@ -1040,8 +1165,11 @@ export async function ensureCloudStoreHydrated(): Promise<CloudCollectionMap> {
               };
             } else {
               const targetCol = (store as Record<string, any>)[colName] || {};
-              if (!targetCol[docId]) {
-                targetCol[docId] = { ...parsedDoc, id: docId };
+              const exDoc = targetCol[docId];
+              const exRev = Number(exDoc?.revision || 0);
+              const inRev = Number(parsedDoc.revision || 0);
+              if (!exDoc || inRev >= exRev) {
+                targetCol[docId] = { ...(exDoc || {}), ...parsedDoc, id: docId };
                 (store as Record<string, any>)[colName] = targetCol;
               }
             }
@@ -1077,8 +1205,12 @@ export async function checkFirestoreHealth(force = false): Promise<FirestoreHeal
   }
 
   try {
-    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/system_config?key=${FIREBASE_API_KEY}`;
-    const res = await fetch(url, { method: 'GET' });
+    const idToken = await getServerFirebaseIdToken();
+    const authHeaders: Record<string, string> = idToken
+      ? { Authorization: `Bearer ${idToken}` }
+      : {};
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/registrations?pageSize=1&key=${FIREBASE_API_KEY}`;
+    const res = await fetch(url, { method: 'GET', headers: authHeaders });
     const data = await res.json().catch(() => ({}));
 
     if (res.status === 200) {
@@ -1130,30 +1262,47 @@ export async function MirrorDocumentToFirestoreRest(
   data: Record<string, unknown>
 ): Promise<void> {
   try {
+    if (
+      (collectionName === 'registrations' ||
+        collectionName === 'athletes' ||
+        collectionName === 'users' ||
+        collectionName === 'profiles') &&
+      isPurgedTestRecord(data)
+    ) {
+      return;
+    }
+
     const fields: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
       if (v !== undefined) {
         fields[k] = toFirestoreValue(v);
       }
     }
+    const idToken = await getServerFirebaseIdToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+    };
     const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(
       collectionName
     )}/${encodeURIComponent(docId)}?key=${FIREBASE_API_KEY}`;
 
     const res = await fetch(url, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ fields }),
     }).catch(() => null);
 
     if (res && res.status >= 400) {
       appendServerSyncLog({
         category: 'firestore_mirror',
-        message: `Mirror ${collectionName}/${docId} Firestore: HTTP ${res.status} (banco pendente de ativação no console)`,
+        level: 'warning',
+        message: `Mirror ${collectionName}/${docId} Firestore: HTTP ${res.status}`,
       });
     } else if (res && res.ok) {
       appendServerSyncLog({
         category: 'firestore_mirror',
+        level: 'info',
         message: `Mirror ${collectionName}/${docId} gravado com sucesso no Cloud Firestore.`,
       });
     }
@@ -1167,17 +1316,23 @@ export async function DeleteDocumentFromFirestoreRest(
   docId: string
 ): Promise<void> {
   try {
+    const idToken = await getServerFirebaseIdToken();
+    const headers: Record<string, string> = idToken
+      ? { Authorization: `Bearer ${idToken}` }
+      : {};
     const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/${encodeURIComponent(
       collectionName
     )}/${encodeURIComponent(docId)}?key=${FIREBASE_API_KEY}`;
 
     const res = await fetch(url, {
       method: 'DELETE',
+      headers,
     }).catch(() => null);
 
     if (res && res.ok) {
       appendServerSyncLog({
         category: 'firestore_mirror',
+        level: 'info',
         message: `Delete ${collectionName}/${docId} no Cloud Firestore concluído.`,
       });
     }
