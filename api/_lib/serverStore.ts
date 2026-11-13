@@ -215,7 +215,7 @@ const PURGED_TEST_NAMES_LOWER = [
   'lucas albuquerque',
   'gvsvsadv',
   'nskaangaba',
-  'firmino',
+  '#33 firmino',
 ];
 
 export function isPurgedTestRecord(rec: Record<string, unknown> | null | undefined): boolean {

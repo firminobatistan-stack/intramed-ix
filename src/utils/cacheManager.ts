@@ -13,7 +13,7 @@ const PURGED_TEST_NAMES_LOWER = [
   'lucas albuquerque',
   'gvsvsadv',
   'nskaangaba',
-  'firmino',
+  '#33 firmino',
 ];
 
 export function isPurgedTestEntity(item: unknown): boolean {
