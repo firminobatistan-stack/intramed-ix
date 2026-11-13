@@ -326,7 +326,26 @@ export const ProfilePage: React.FC = () => {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        setEditAvatarUrl(reader.result);
+        const img = new Image();
+        const rawDataUrl = reader.result;
+        img.onload = () => {
+          const maxSide = 360;
+          const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            setEditAvatarUrl(canvas.toDataURL('image/jpeg', 0.82));
+          } else {
+            setEditAvatarUrl(rawDataUrl);
+          }
+        };
+        img.onerror = () => {
+          setEditAvatarUrl(rawDataUrl);
+        };
+        img.src = rawDataUrl;
       }
     };
     reader.readAsDataURL(file);
