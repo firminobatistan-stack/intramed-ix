@@ -82,9 +82,14 @@ export const PublicLiveScoreboardPage: React.FC = () => {
   });
   const [userVote, setUserVote] = useState<'home' | 'away' | 'draw' | null>(null);
 
+  const nonSwimmingMatches = visibleMatches.filter(
+    (m) => m.modalityId !== 'natacao' && m.id !== 'match_natacao_geral_final'
+  );
+
   const resolvedMatch =
     (matchId ? getMatchById(matchId) : undefined) ||
-    visibleMatches.find((m) => m.status === 'live') ||
+    nonSwimmingMatches.find((m) => m.status === 'live') ||
+    nonSwimmingMatches[0] ||
     visibleMatches[0];
 
   const sheet = resolvedMatch ? getSheetByMatchId(resolvedMatch.id) : undefined;

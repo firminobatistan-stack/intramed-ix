@@ -77,6 +77,8 @@ export const TeamDetailPage: React.FC = () => {
   const teamMatches = resolvedTeam
     ? visibleMatches.filter(
         (m) =>
+          m.modalityId !== 'natacao' &&
+          m.id !== 'match_natacao_geral_final' &&
           (m.homeTeam.teamId === resolvedTeam.id ||
             m.awayTeam.teamId === resolvedTeam.id) &&
           (selectedModality === 'all' ? true : m.modalityId === selectedModality)

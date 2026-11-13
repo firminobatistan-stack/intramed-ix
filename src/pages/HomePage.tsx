@@ -27,7 +27,7 @@ type HomeTimeFilter = 'all' | 'live' | 'upcoming' | 'finished';
 
 const MATCH_DAYS = [
   { id: 'all', label: 'Todos os Jogos', sub: 'Calendário Geral' },
-  { id: '20/11', label: 'Sex • 20/11', sub: 'Natação & Vôlei' },
+  { id: '20/11', label: 'Sex • 20/11', sub: 'Vôlei de Quadra' },
   { id: '21/11', label: 'Sáb • 21/11', sub: 'Basquete & Handebol' },
   { id: '22/11', label: 'Dom • 22/11', sub: 'Handebol & Futsal' },
   { id: '28/11', label: 'Sáb • 28/11', sub: 'Tênis de Mesa, Sinuca & Vôlei de Praia' },
@@ -64,10 +64,14 @@ export const HomePage: React.FC = () => {
     selectedSportFilter === 'todas' ? 'all' : (selectedSportFilter as any)
   );
 
+  const nonSwimmingMatches = visibleMatches.filter(
+    (m) => m.modalityId !== 'natacao' && m.id !== 'match_natacao_geral_final'
+  );
+
   const sportFiltered =
     selectedSportFilter === 'todas'
-      ? visibleMatches
-      : visibleMatches.filter((m) => m.modalityId === selectedSportFilter);
+      ? nonSwimmingMatches
+      : nonSwimmingMatches.filter((m) => m.modalityId === selectedSportFilter);
 
   const filteredMatches = sportFiltered
     .filter((m) => {
@@ -339,7 +343,7 @@ export const HomePage: React.FC = () => {
             <span>Todas as Modalidades</span>
           </button>
 
-          {OFFICIAL_MODALITIES.map((modality) => {
+          {OFFICIAL_MODALITIES.filter((m) => m.id !== 'natacao').map((modality) => {
             const active = selectedSportFilter === modality.id;
             return (
               <button

@@ -17,7 +17,7 @@ type PeriodFilter = 'todos' | 'hoje' | 'proximos' | 'finalizados';
 
 const TOURNAMENT_DAYS = [
   { id: 'todos', dayLabel: 'Todos os Dias', sub: 'Calendário Geral' },
-  { id: '20/11', dayLabel: 'Sex • 20/11', sub: 'Natação & Vôlei' },
+  { id: '20/11', dayLabel: 'Sex • 20/11', sub: 'Vôlei de Quadra' },
   { id: '21/11', dayLabel: 'Sáb • 21/11', sub: 'Basquete & Handebol' },
   { id: '22/11', dayLabel: 'Dom • 22/11', sub: 'Handebol & Futsal' },
   { id: '28/11', dayLabel: 'Sáb • 28/11', sub: 'Tênis de Mesa, Sinuca & Vôlei de Praia' },
@@ -43,6 +43,9 @@ export const MatchesPage: React.FC = () => {
   const currentDay = TOURNAMENT_DAYS[dayIdx];
 
   const filteredMatches = visibleMatches.filter((match) => {
+    if (match.modalityId === 'natacao' || match.id === 'match_natacao_geral_final') {
+      return false;
+    }
     if (selectedModality !== 'todas' && match.modalityId !== selectedModality) {
       return false;
     }
@@ -156,7 +159,7 @@ export const MatchesPage: React.FC = () => {
         >
           Todas
         </button>
-        {OFFICIAL_MODALITIES.map((mod) => {
+        {OFFICIAL_MODALITIES.filter((m) => m.id !== 'natacao').map((mod) => {
           const active = selectedModality === mod.id;
           return (
             <button

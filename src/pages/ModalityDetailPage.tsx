@@ -94,11 +94,28 @@ export const ModalityDetailPage: React.FC = () => {
     );
   }
 
+  const isSwimming = modality.id === 'natacao';
+
+  const visibleTabs = isSwimming
+    ? MODALITY_TABS.filter((t) => t.id === 'classificacao' || t.id === 'estatisticas')
+    : MODALITY_TABS;
+
+  const effectiveTab: ModalityTabId =
+    isSwimming && activeTab !== 'classificacao' && activeTab !== 'estatisticas'
+      ? 'classificacao'
+      : activeTab;
+
   const modalityMatches = visibleMatches.filter(
-    (m) => m.modalityId === modality.id && m.status !== 'finished'
+    (m) =>
+      m.modalityId === modality.id &&
+      m.status !== 'finished' &&
+      m.id !== 'match_natacao_geral_final'
   );
   const modalityResults = visibleMatches.filter(
-    (m) => m.modalityId === modality.id && m.status === 'finished'
+    (m) =>
+      m.modalityId === modality.id &&
+      m.status === 'finished' &&
+      m.id !== 'match_natacao_geral_final'
   );
   const modalityBracket = INITIAL_BRACKETS[modality.id] || null;
   const modalityStandings = getModalityStandings(modality.id);
@@ -163,11 +180,38 @@ export const ModalityDetailPage: React.FC = () => {
         </div>
       </div>
 
+      {isSwimming && (
+        <div className="all-sports-card p-5 bg-gradient-to-r from-sky-50 to-blue-50 border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-[11px] font-display font-extrabold uppercase tracking-wider text-sky-700">
+              Disputa Simultânea • 5 Atléticas
+            </span>
+            <h3 className="text-base font-display font-extrabold text-slate-900">
+              Baterias Oficiais de Natação (Masculino &amp; Feminino)
+            </h3>
+            <p className="text-xs text-slate-600">
+              Sexta-feira, 20/11 • 07:00 às 11:00 • Escola José Castro — Todas as 5 turmas competem por tempo nas raias.
+            </p>
+          </div>
+          {isAdmin && (
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Play className="w-3.5 h-3.5" />}
+              onClick={() => navigate('/sumula/match_natacao_geral_final')}
+              className="shrink-0"
+            >
+              Operar Raia / Tempos
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Navegação por Abas em Pílulas Arredondadas (Estilo All Sports) */}
       <div className="bg-white rounded-3xl border border-brand-surface-border p-2 shadow-card">
         <Tabs
-          tabs={MODALITY_TABS}
-          activeTab={activeTab}
+          tabs={visibleTabs}
+          activeTab={effectiveTab}
           onChange={(id) => setActiveTab(id as ModalityTabId)}
           variant="pill"
         />
@@ -175,7 +219,7 @@ export const ModalityDetailPage: React.FC = () => {
 
       {/* Conteúdo de cada Aba */}
       <div className="pt-1">
-        {activeTab === 'jogos' && (
+        {effectiveTab === 'jogos' && (
           <div className="space-y-4">
             {modalityMatches.length > 0 ? (
               modalityMatches.map((match) => (
@@ -191,7 +235,7 @@ export const ModalityDetailPage: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'resultados' && (
+        {effectiveTab === 'resultados' && (
           <div className="space-y-4">
             {modalityResults.length > 0 ? (
               modalityResults.map((match) => (
@@ -207,7 +251,7 @@ export const ModalityDetailPage: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'chaveamento' && (
+        {effectiveTab === 'chaveamento' && (
           <BracketView
             bracket={modalityBracket}
             modalityId={modality.id}
@@ -215,7 +259,7 @@ export const ModalityDetailPage: React.FC = () => {
           />
         )}
 
-        {activeTab === 'classificacao' && (
+        {effectiveTab === 'classificacao' && (
           <StandingsTable
             standings={modalityStandings}
             modalityId={modality.id}
@@ -223,7 +267,7 @@ export const ModalityDetailPage: React.FC = () => {
           />
         )}
 
-        {activeTab === 'estatisticas' && (
+        {effectiveTab === 'estatisticas' && (
           <div className="space-y-5">
             {isVolley && (
               <div className="all-sports-card p-5 flex items-center gap-3 bg-blue-50/70 border-blue-200 text-xs text-[#0B218A]">
