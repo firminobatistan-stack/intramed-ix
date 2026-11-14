@@ -452,7 +452,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Perfis públicos sanitizados (sem senhas, CPF ou telefone) para descoberta da comunidade e dados do usuário
     const publicProfiles = Object.values(store.profiles || {})
-      .filter((p) => !isPurgedTestRecord(p))
+      .filter((p) => !isPurgedTestRecord(p) && (isMasterRequest || !p.isHiddenFromPublic))
       .map(sanitizeUserProfileForPublic);
 
     const publicMatches = Object.values(store.matches).map((m) =>
@@ -1328,7 +1328,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const filterTeam = String(body.teamId || '').trim();
       const onlyAthletes = Boolean(body.onlyAthletes);
 
-      const allProfiles = Object.values(store.profiles || {}).map(sanitizeUserProfileForPublic);
+      const allProfiles = Object.values(store.profiles || {})
+        .filter((p) => isMasterRequest || !p.isHiddenFromPublic)
+        .map(sanitizeUserProfileForPublic);
 
       const filtered = allProfiles.filter((p) => {
         if (onlyAthletes && !p.isAthlete) return false;
@@ -2340,6 +2342,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           role: u.role || 'visitante',
           organization: u.authProvider === 'google' ? 'Conta Google' : 'Cadastro E-mail',
           isActive: u.isActive !== false,
+          isHiddenFromPublic: Boolean(prof?.isHiddenFromPublic || u.isHiddenFromPublic),
+          turma: prof?.turma || u.turma || null,
+          turmaLabel: prof?.turmaLabel || u.turmaLabel || null,
           mustChangePassword: Boolean(u.mustChangePassword),
           createdAtIso: u.createdAtIso,
           lastLoginAtIso: u.lastLoginAtIso,
@@ -2496,6 +2501,132 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // AÇÃO 2I: Validação e Auditoria de Sócios da Atlética
+    if (action === 'toggle_user_visibility') {
+      if (!isMasterRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas a conta Master pode ocultar ou exibir perfis de usuários.',
+        });
+      }
+      const targetUserId = String(body.targetUserId || '').trim();
+      const targetEmail = String(body.targetEmail || '').trim().toLowerCase();
+      const isHidden = Boolean(body.isHidden);
+
+      if (isMasterAccount(targetEmail)) {
+        return res.status(403).json({
+          ok: false,
+          error: 'A conta Master não pode ser ocultada.',
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+      if (!store.users) store.users = {};
+      if (!store.profiles) store.profiles = {};
+
+      const userByUid = targetUserId ? store.users[targetUserId] : undefined;
+      const userByEmail = targetEmail ? store.users[targetEmail] : undefined;
+      const resolvedUid = String(targetUserId || userByEmail?.id || '');
+
+      if (userByUid) {
+        userByUid.isHiddenFromPublic = isHidden;
+        userByUid.updatedAtIso = nowIso;
+        await MirrorDocumentToFirestoreRest('users', String(userByUid.id || targetUserId), userByUid);
+      }
+      if (userByEmail) {
+        userByEmail.isHiddenFromPublic = isHidden;
+        userByEmail.updatedAtIso = nowIso;
+      }
+      if (resolvedUid && store.profiles[resolvedUid]) {
+        store.profiles[resolvedUid].isHiddenFromPublic = isHidden;
+        store.profiles[resolvedUid].updatedAtIso = nowIso;
+        await MirrorDocumentToFirestoreRest('profiles', resolvedUid, store.profiles[resolvedUid]);
+      }
+
+      store.updatedAtIso = nowIso;
+      saveCloudStore(store);
+
+      return res.status(200).json({
+        ok: true,
+        isHiddenFromPublic: isHidden,
+        message: isHidden
+          ? 'Usuário ocultado para os demais participantes.'
+          : 'Usuário visível novamente para todos.',
+      });
+    }
+
+    if (action === 'delete_user_completely') {
+      if (!isMasterRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas a conta Master pode apagar um usuário por completo.',
+        });
+      }
+      const targetUserId = String(body.targetUserId || '').trim();
+      const targetEmail = String(body.targetEmail || '').trim().toLowerCase();
+
+      if (isMasterAccount(targetEmail)) {
+        return res.status(403).json({
+          ok: false,
+          error: 'A conta Master possui blindagem permanente e não pode ser excluída.',
+        });
+      }
+
+      const userByUid = targetUserId ? store.users?.[targetUserId] : undefined;
+      const userByEmail = targetEmail ? store.users?.[targetEmail] : undefined;
+      const resolvedUid = String(targetUserId || userByEmail?.id || userByUid?.id || '');
+      const resolvedEmail = String(targetEmail || userByUid?.email || userByEmail?.email || '').trim().toLowerCase();
+
+      if (store.users) {
+        for (const [k, u] of Object.entries(store.users)) {
+          const uEmail = String(u?.email || '').trim().toLowerCase();
+          const uId = String(u?.id || '');
+          if ((resolvedUid && (k === resolvedUid || uId === resolvedUid)) || (resolvedEmail && (k === resolvedEmail || uEmail === resolvedEmail))) {
+            delete store.users[k];
+            void DeleteDocumentFromFirestoreRest('users', k);
+          }
+        }
+      }
+
+      if (store.profiles && resolvedUid && store.profiles[resolvedUid]) {
+        delete store.profiles[resolvedUid];
+        void DeleteDocumentFromFirestoreRest('profiles', resolvedUid);
+      }
+
+      if (store.admin_users && resolvedEmail && store.admin_users[resolvedEmail]) {
+        delete store.admin_users[resolvedEmail];
+        void DeleteDocumentFromFirestoreRest('admin_users', resolvedEmail);
+      }
+
+      if (store.registrations) {
+        for (const [regId, reg] of Object.entries(store.registrations)) {
+          const regEmail = String(reg?.athleteEmail || '').trim().toLowerCase();
+          const regUid = String(reg?.userId || '');
+          if ((resolvedUid && regUid === resolvedUid) || (resolvedEmail && regEmail === resolvedEmail)) {
+            delete store.registrations[regId];
+            void DeleteDocumentFromFirestoreRest('registrations', regId);
+          }
+        }
+      }
+
+      if (store.athletes) {
+        for (const [athId, ath] of Object.entries(store.athletes)) {
+          const athEmail = String(ath?.email || '').trim().toLowerCase();
+          if (resolvedEmail && athEmail === resolvedEmail) {
+            delete store.athletes[athId];
+            void DeleteDocumentFromFirestoreRest('athletes', athId);
+          }
+        }
+      }
+
+      store.updatedAtIso = new Date().toISOString();
+      saveCloudStore(store);
+
+      return res.status(200).json({
+        ok: true,
+        message: 'Usuário e todos os registros vinculados foram apagados com sucesso.',
+      });
+    }
+
     if (action === 'review_member_status') {
       if (!isAdminRequest) {
         return res.status(403).json({

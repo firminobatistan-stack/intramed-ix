@@ -200,6 +200,7 @@ export const AdminDashboardPage: React.FC = () => {
     role: string;
     organization?: string;
     isActive: boolean;
+    isHiddenFromPublic?: boolean;
     mustChangePassword?: boolean;
     createdAtIso?: string;
     lastLoginAtIso?: string;
@@ -1518,6 +1519,56 @@ export const AdminDashboardPage: React.FC = () => {
                                   }}
                                 >
                                   Alterar Cargo
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={user.isActive ? 'ghost' : 'outline'}
+                                  className={`text-xs py-1 px-2.5 h-7 ${
+                                    user.isActive ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600'
+                                  }`}
+                                  onClick={async () => {
+                                    const token = getStoredOperatorToken();
+                                    await fetch('/api/cloud-sync', {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        ...(token ? { Authorization: `Bearer ${token}`, 'x-intramed-token': token } : {}),
+                                      },
+                                      body: JSON.stringify({
+                                        action: 'toggle_user_visibility',
+                                        targetUserId: user.id,
+                                        targetEmail: user.email,
+                                        isHidden: !user.isHiddenFromPublic,
+                                      }),
+                                    });
+                                    await loadAdminUsers();
+                                  }}
+                                >
+                                  {user.isHiddenFromPublic ? 'Tornar Visível' : 'Ocultar p/ Outros'}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-xs py-1 px-2.5 h-7 text-rose-700 hover:bg-rose-50"
+                                  onClick={async () => {
+                                    if (!window.confirm(`Apagar por completo o usuário "${user.name}" (${user.email})?`)) return;
+                                    const token = getStoredOperatorToken();
+                                    await fetch('/api/cloud-sync', {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        ...(token ? { Authorization: `Bearer ${token}`, 'x-intramed-token': token } : {}),
+                                      },
+                                      body: JSON.stringify({
+                                        action: 'delete_user_completely',
+                                        targetUserId: user.id,
+                                        targetEmail: user.email,
+                                      }),
+                                    });
+                                    await loadAdminUsers();
+                                  }}
+                                >
+                                  Apagar
                                 </Button>
                                 <Button
                                   size="sm"

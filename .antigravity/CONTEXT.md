@@ -6,7 +6,7 @@ Este arquivo serve de memória e alinhamento de contexto para o agente Antigravi
 - **Aplicação:** Plataforma Esportiva e Social Universitária (Medicina UEMA).
 - **Repositório:** `https://github.com/firminobatistan-stack/intramed-ix.git`
 - **Projeto Firebase:** `gen-lang-client-0847910166`
-- **Conta Master (Diretoria):** `cangaceira@uema.com`
+- **Conta Master (Diretoria):** `cangaceira@uema.com` (possui ações exclusivas para ocultar/exibir usuários para outros participantes via `toggle_user_visibility` e apagar usuários por completo via `delete_user_completely`, tanto em `/admin/inscricoes` na aba **Todos os Usuários** quanto em `/admin` na aba **Usuários**).
 - **Stack:** React 18, TypeScript, Vite, Tailwind CSS, Firebase (Auth + Firestore + Storage), Mercado Pago Checkout Transparente, Vercel Serverless Functions (`/api/*`).
 - **Estrutura de Equipes (5 Turmas Oficiais):**
   - Sanguinária (Turma 21)

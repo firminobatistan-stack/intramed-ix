@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -17,9 +17,12 @@ import {
   History,
   QrCode,
   CreditCard,
+  Eye,
+  EyeOff,
+  Trash2,
 } from 'lucide-react';
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
-import { useCompetitionStore } from '../context/CompetitionStoreContext';
+import { useCompetitionStore, getStoredOperatorToken } from '../context/CompetitionStoreContext';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
@@ -29,7 +32,156 @@ import { exportRegistrationsToExcel } from '../utils/excelRegistrationsExporter'
 
 export const AdminRegistrationsPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, canOperateOfficialData } = useCompetitionStore();
+  const { currentUser, canOperateOfficialData, publicProfiles } = useCompetitionStore();
+  const isMasterAccountUser =
+    currentUser?.email?.toLowerCase() === 'cangaceira@uema.com' ||
+    (currentUser?.role as string) === 'moderador_master';
+  const [activeSectionTab, setActiveSectionTab] = useState<'inscricoes' | 'usuarios'>('inscricoes');
+  const [serverUsers, setServerUsers] = useState<Array<{
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    organization?: string;
+    isActive?: boolean;
+    isHiddenFromPublic?: boolean;
+    turma?: string | null;
+    turmaLabel?: string | null;
+    createdAtIso?: string;
+  }>>([]);
+  const [isLoadingServerUsers, setIsLoadingServerUsers] = useState(false);
+
+  const loadAllSiteUsers = useCallback(async () => {
+    setIsLoadingServerUsers(true);
+    try {
+      const token = getStoredOperatorToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        headers['x-intramed-token'] = token;
+      }
+      const res = await fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'list_admin_users' }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok && Array.isArray(data.users)) {
+        setServerUsers(data.users);
+      }
+    } catch {
+      // Fallback to publicProfiles
+    } finally {
+      setIsLoadingServerUsers(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAllSiteUsers();
+  }, [loadAllSiteUsers]);
+
+  const mergedSiteUsers = React.useMemo(() => {
+    const map = new Map<string, {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+      organization: string;
+      isActive: boolean;
+      isHiddenFromPublic: boolean;
+      turma: string | null;
+      turmaLabel: string | null;
+    }>();
+    for (const u of serverUsers) {
+      const key = (u.id || u.email || '').toLowerCase();
+      if (!key) continue;
+      map.set(key, {
+        id: u.id || u.email,
+        email: u.email || '',
+        name: u.name || u.email || 'Participante',
+        role: u.role || 'visitante',
+        organization: u.organization || 'Comunidade IntraMed',
+        isActive: u.isActive !== false,
+        isHiddenFromPublic: Boolean(u.isHiddenFromPublic),
+        turma: u.turma || null,
+        turmaLabel: u.turmaLabel || null,
+      });
+    }
+    for (const p of publicProfiles || []) {
+      const key = (p.userId || p.id || '').toLowerCase();
+      if (!key || map.has(key)) continue;
+      map.set(key, {
+        id: p.userId || p.id,
+        email: '',
+        name: p.displayName || 'Participante',
+        role: p.role || (p.isAthlete ? 'atleta' : 'visitante'),
+        organization: p.teamName || p.turmaLabel || 'Comunidade IntraMed',
+        isActive: true,
+        isHiddenFromPublic: Boolean((p as unknown as Record<string, unknown>).isHiddenFromPublic),
+        turma: p.turma || null,
+        turmaLabel: p.turmaLabel || p.teamName || null,
+      });
+    }
+    return Array.from(map.values());
+  }, [serverUsers, publicProfiles]);
+
+  const handleToggleUserVisibility = async (targetUser: { id: string; email: string; name: string; isHiddenFromPublic: boolean }) => {
+    if (!isMasterAccountUser) return;
+    const token = getStoredOperatorToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['x-intramed-token'] = token;
+    }
+    const res = await fetch('/api/cloud-sync', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        action: 'toggle_user_visibility',
+        targetUserId: targetUser.id,
+        targetEmail: targetUser.email,
+        isHidden: !targetUser.isHiddenFromPublic,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.ok) {
+      await loadAllSiteUsers();
+    } else {
+      window.alert(data?.error || 'Não foi possível alterar a visibilidade do usuário.');
+    }
+  };
+
+  const handleDeleteUserCompletely = async (targetUser: { id: string; email: string; name: string }) => {
+    if (!isMasterAccountUser) return;
+    if (
+      !window.confirm(
+        `Tem certeza que deseja APAGAR POR COMPLETO o usuário "${targetUser.name}" (${targetUser.email || targetUser.id})? Esta ação remove conta, perfil e inscrição vinculada.`
+      )
+    ) {
+      return;
+    }
+    const token = getStoredOperatorToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['x-intramed-token'] = token;
+    }
+    const res = await fetch('/api/cloud-sync', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        action: 'delete_user_completely',
+        targetUserId: targetUser.id,
+        targetEmail: targetUser.email,
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (res.ok && data?.ok) {
+      await loadAllSiteUsers();
+    } else {
+      window.alert(data?.error || 'Não foi possível excluir o usuário.');
+    }
+  };
   const isAdmin = canOperateOfficialData();
 
   const {
@@ -298,6 +450,32 @@ export const AdminRegistrationsPage: React.FC = () => {
           </div>
         </section>
 
+        {/* Abas Principais: Inscrições de Atletas vs Todos os Usuários */}
+        <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-brand-surface-border shadow-xs w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveSectionTab('inscricoes')}
+            className={`px-4 py-2 rounded-xl text-xs font-display font-extrabold transition-all ${
+              activeSectionTab === 'inscricoes'
+                ? 'bg-brand-blue text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Inscrições de Atletas ({totalRegistrations})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSectionTab('usuarios')}
+            className={`px-4 py-2 rounded-xl text-xs font-display font-extrabold transition-all ${
+              activeSectionTab === 'usuarios'
+                ? 'bg-brand-blue text-white shadow-sm'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            Todos os Usuários ({mergedSiteUsers.length})
+          </button>
+        </div>
+
         {/* Barra de Filtros e Busca */}
         <section className="bg-white p-4 rounded-3xl border border-brand-surface-border shadow-card space-y-3">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -371,7 +549,125 @@ export const AdminRegistrationsPage: React.FC = () => {
         </section>
 
         {/* Tabela de Inscrições Desktop + Cards Otimizados Mobile */}
-        <section className="bg-white rounded-3xl border border-brand-surface-border shadow-card overflow-hidden">
+        {activeSectionTab === 'usuarios' && (
+          <section className="bg-white rounded-3xl border border-brand-surface-border shadow-card overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-brand-surface-border flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm sm:text-base font-display font-extrabold text-slate-900">
+                  Todos os Usuários Registrados no Site ({mergedSiteUsers.length})
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Inclui torcedores/visitantes, contas Google, e-mail/senha e atletas inscritos.
+                </p>
+              </div>
+              <Button size="sm" variant="outline" onClick={loadAllSiteUsers} disabled={isLoadingServerUsers}>
+                {isLoadingServerUsers ? 'Atualizando...' : 'Atualizar Lista'}
+              </Button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-brand-surface-muted/80 border-b border-brand-surface-border text-brand-text-muted font-display font-extrabold uppercase text-[10px]">
+                    <th className="py-3 px-4">Usuário</th>
+                    <th className="py-3 px-3">E-mail / Origem</th>
+                    <th className="py-3 px-3">Turma / Equipe</th>
+                    <th className="py-3 px-3">Perfil / Cargo</th>
+                    <th className="py-3 px-3">Visibilidade</th>
+                    {isMasterAccountUser && (
+                      <th className="py-3 px-4 text-right">Ações Exclusivas Master</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-surface-border">
+                  {mergedSiteUsers
+                    .filter((u) => {
+                      if (filterTurma !== 'todas' && u.turma !== filterTurma) return false;
+                      if (searchTerm.trim()) {
+                        const q = searchTerm.toLowerCase();
+                        return (
+                          u.name.toLowerCase().includes(q) ||
+                          u.email.toLowerCase().includes(q) ||
+                          (u.turmaLabel || '').toLowerCase().includes(q)
+                        );
+                      }
+                      return true;
+                    })
+                    .map((u) => {
+                      const isTargetMaster = u.email.toLowerCase() === 'cangaceira@uema.com';
+                      return (
+                        <tr key={u.id || u.email} className="hover:bg-brand-surface-muted/40 transition-colors">
+                          <td className="py-3 px-4 font-extrabold text-brand-text-primary">
+                            {u.name}
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="text-slate-700 font-mono text-[11px]">{u.email || '—'}</div>
+                            <div className="text-[10px] text-slate-400">{u.organization}</div>
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-slate-800">
+                            {u.turmaLabel || (u.turma ? `Turma ${u.turma}` : 'Não informada')}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-700">
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
+                            {u.isHiddenFromPublic ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                <EyeOff className="w-3 h-3" />
+                                Oculto p/ Outros
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                <Eye className="w-3 h-3" />
+                                Visível
+                              </span>
+                            )}
+                          </td>
+                          {isMasterAccountUser && (
+                            <td className="py-3 px-4 text-right">
+                              {isTargetMaster ? (
+                                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-lg border border-amber-200">
+                                  Conta Master
+                                </span>
+                              ) : (
+                                <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    leftIcon={
+                                      u.isHiddenFromPublic ? (
+                                        <Eye className="w-3.5 h-3.5" />
+                                      ) : (
+                                        <EyeOff className="w-3.5 h-3.5" />
+                                      )
+                                    }
+                                    onClick={() => handleToggleUserVisibility(u)}
+                                  >
+                                    {u.isHiddenFromPublic ? 'Tornar Visível' : 'Ocultar p/ Outros'}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-rose-300 text-rose-600 hover:bg-rose-50"
+                                    leftIcon={<Trash2 className="w-3.5 h-3.5" />}
+                                    onClick={() => handleDeleteUserCompletely(u)}
+                                  >
+                                    Apagar Usuário
+                                  </Button>
+                                </div>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+        <section className={activeSectionTab === 'inscricoes' ? 'bg-white rounded-3xl border border-brand-surface-border shadow-card overflow-hidden' : 'hidden'}>
           {/* Versão Desktop (Tabela Completa) */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">

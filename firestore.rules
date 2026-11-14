@@ -373,6 +373,7 @@ service cloud.firestore {
         isValidOptionalString(data, 'registrationCode', 0, 100) &&
         (!('modalityIds' in data) || data.modalityIds == null || (data.modalityIds is list && data.modalityIds.size() <= 30)) &&
         isValidOptionalBool(data, 'isActive') &&
+        isValidOptionalBool(data, 'isHiddenFromPublic') &&
         isValidOptionalBool(data, 'mustChangePassword') &&
         isValidOptionalString(data, 'createdAtIso', 0, 60) &&
         isValidOptionalString(data, 'updatedAtIso', 0, 60) &&
@@ -397,6 +398,7 @@ service cloud.firestore {
         isValidOptionalString(data, 'linkedAthleteId', 0, 100) &&
         isValidOptionalString(data, 'role', 0, 50) &&
         isValidOptionalBool(data, 'isAthlete') &&
+        isValidOptionalBool(data, 'isHiddenFromPublic') &&
         isValidOptionalNumber(data, 'followersCount', 0, 1000000) &&
         isValidOptionalNumber(data, 'followingCount', 0, 1000000) &&
         isValidOptionalNumber(data, 'postsCount', 0, 1000000) &&
@@ -416,6 +418,7 @@ service cloud.firestore {
         isValidOptionalString(data, 'passwordHash', 0, 256) &&
         isValidOptionalBool(data, 'mustChangePassword') &&
         isValidOptionalBool(data, 'isActive') &&
+        isValidOptionalBool(data, 'isHiddenFromPublic') &&
         isValidOptionalString(data, 'createdAtIso', 0, 60) &&
         isValidOptionalString(data, 'updatedAtIso', 0, 60) &&
         isValidOptionalString(data, 'lastLoginAtIso', 0, 60);
