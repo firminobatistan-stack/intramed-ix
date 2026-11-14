@@ -373,9 +373,20 @@ export const RegistrationPage: React.FC = () => {
         instagramHandle: instagramHandle.trim() || null,
       });
 
-      // Abre automaticamente o modal de pagamento do passaporte
-      setPayingRegistration(created);
       setActiveTab('minhas_inscricoes');
+      if (
+        created.memberStatus === 'pendente' ||
+        created.paymentStatus === 'aguardando_validacao' ||
+        (created.requestedMemberDiscount && created.memberStatus !== 'aprovado')
+      ) {
+        setPayingRegistration(null);
+        alert(
+          'Solicitação de verificação de sócio enviada com sucesso! Assim que a diretoria da A.A.A. Cangaceira aprovar sua associação, o pagamento será liberado nesta tela.'
+        );
+      } else {
+        // Abre automaticamente o modal de pagamento do passaporte apenas para Não Sócio ou Convidado
+        setPayingRegistration(created);
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Falha ao processar inscrição.');
     } finally {
@@ -515,7 +526,14 @@ export const RegistrationPage: React.FC = () => {
 
   // Efeito para gerar o Pix Oficial via API do Mercado Pago
   useEffect(() => {
-    if (!payingRegistration || paymentMethod !== 'pix') {
+    if (
+      !payingRegistration ||
+      paymentMethod !== 'pix' ||
+      payingRegistration.memberStatus === 'pendente' ||
+      payingRegistration.paymentStatus === 'aguardando_validacao' ||
+      (payingRegistration.requestedMemberDiscount &&
+        payingRegistration.memberStatus !== 'aprovado')
+    ) {
       setPixData(null);
       setPixError(null);
       setPaymentApprovedSuccess(false);
@@ -674,6 +692,17 @@ export const RegistrationPage: React.FC = () => {
 
   const handleCardCheckout = async () => {
     if (!payingRegistration) return;
+    if (
+      payingRegistration.memberStatus === 'pendente' ||
+      payingRegistration.paymentStatus === 'aguardando_validacao' ||
+      (payingRegistration.requestedMemberDiscount &&
+        payingRegistration.memberStatus !== 'aprovado')
+    ) {
+      alert(
+        'Sua solicitação de sócio ainda está em análise pela diretoria. Aguarde a aprovação para realizar o pagamento.'
+      );
+      return;
+    }
     setIsCreatingCardPreference(true);
     try {
       const { ok, data } = await fetchGatewayJson(
@@ -1343,7 +1372,9 @@ export const RegistrationPage: React.FC = () => {
                   disabled={isSubmitting}
                 >
                   {isSubmitting
-                    ? 'Salvando Inscrição de Atleta...'
+                    ? 'Enviando Solicitação...'
+                    : !isGuestAthlete && isSocioClaim
+                    ? `Solicitar Verificação de Sócio • R$ ${currentDisplayPrice.toFixed(2)}`
                     : `Prosseguir para Pagamento do Passaporte • R$ ${currentDisplayPrice.toFixed(2)}`}
                 </Button>
               </div>
@@ -1460,7 +1491,12 @@ export const RegistrationPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {myRegistrations.map((reg) => {
-                  const isPendingValidation = reg.memberStatus === 'pendente';
+                  const isPendingValidation =
+                    reg.memberStatus === 'pendente' ||
+                    reg.paymentStatus === 'aguardando_validacao' ||
+                    (reg.requestedMemberDiscount &&
+                      reg.memberStatus !== 'aprovado' &&
+                      reg.memberStatus !== 'rejeitado');
                   const isPaid = reg.paymentStatus === 'pago';
                   const athleteProfileId = reg.linkedAthleteId || `ath-${reg.id}`;
 

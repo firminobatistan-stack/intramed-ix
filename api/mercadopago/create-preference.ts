@@ -70,7 +70,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  if (effectiveMemberStatus === 'pendente') {
+  const effectiveRequestedMember = Boolean(
+    storedReg?.requestedMemberDiscount ?? requestedMemberDiscount
+  );
+  if (
+    effectiveMemberStatus === 'pendente' ||
+    storedReg?.paymentStatus === 'aguardando_validacao' ||
+    (effectiveRequestedMember &&
+      effectiveMemberStatus !== 'aprovado' &&
+      effectiveMemberStatus !== 'rejeitado')
+  ) {
     return res.status(403).json({
       error:
         'Inscrição com solicitação de sócio ainda pendente de validação pela diretoria da Atlética.',

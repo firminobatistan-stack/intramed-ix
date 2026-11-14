@@ -26,6 +26,8 @@ interface SidebarItem {
   label: string;
   icon: React.FC<{ className?: string }>;
   matchPrefix?: string;
+  badgeLabel?: string;
+  badgeTone?: 'confirmed' | 'pending_member' | 'pending_payment';
 }
 
 const PRIMARY_ITEMS: SidebarItem[] = [
@@ -83,9 +85,25 @@ export const Sidebar: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser, canOperateOfficialData, launchConfig, hasActiveLiveMatch } =
     useCompetitionStore();
-  const { hasCompletedRegistration } = useRegistrationStore();
+  const { hasCompletedRegistration, myRegistrations } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
 
+  const activeMyRegs = myRegistrations.filter((r) => r.paymentStatus !== 'cancelado');
+  const isRegistrationPaid = activeMyRegs.some((r) => r.paymentStatus === 'pago');
+  const isPendingMemberValidation =
+    !isRegistrationPaid &&
+    activeMyRegs.some(
+      (r) =>
+        r.memberStatus === 'pendente' ||
+        r.paymentStatus === 'aguardando_validacao' ||
+        (r.requestedMemberDiscount &&
+          r.memberStatus !== 'aprovado' &&
+          r.memberStatus !== 'rejeitado')
+    );
+  const isPendingPayment =
+    !isRegistrationPaid && !isPendingMemberValidation && activeMyRegs.length > 0;
+  const isConfirmedAthlete =
+    isRegistrationPaid || (currentUser?.role === 'atleta' && activeMyRegs.length === 0);
   const isAthlete = hasCompletedRegistration || currentUser?.role === 'atleta';
 
   // Itens dinâmicos baseados no modo de lançamento, sessão e privilégios
@@ -108,6 +126,20 @@ export const Sidebar: React.FC = () => {
             label: isAthlete ? 'Meu Passaporte' : 'Inscrição de Atleta',
             icon: CreditCard,
             matchPrefix: '/inscricao',
+            badgeLabel: isConfirmedAthlete
+              ? 'Confirmado'
+              : isPendingMemberValidation
+              ? 'Em Análise'
+              : isPendingPayment
+              ? 'Aguardando Pgto'
+              : undefined,
+            badgeTone: isConfirmedAthlete
+              ? ('confirmed' as const)
+              : isPendingMemberValidation
+              ? ('pending_member' as const)
+              : isPendingPayment
+              ? ('pending_payment' as const)
+              : undefined,
           },
         ]
       : []),
@@ -211,7 +243,22 @@ export const Sidebar: React.FC = () => {
                   <div className="min-w-0 flex-1">
                     <span className="block leading-tight">{item.label}</span>
                   </div>
-                  {isActive && (
+                  {item.badgeLabel && (
+                    <span
+                      className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase border shrink-0 ${
+                        isActive
+                          ? 'bg-brand-blue-dark/15 text-brand-blue-dark border-brand-blue-dark/30'
+                          : item.badgeTone === 'confirmed'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : item.badgeTone === 'pending_member'
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                          : 'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                      }`}
+                    >
+                      {item.badgeLabel}
+                    </span>
+                  )}
+                  {isActive && !item.badgeLabel && (
                     <span
                       className="w-2 h-2 rounded-full bg-brand-blue-dark"
                       aria-hidden="true"

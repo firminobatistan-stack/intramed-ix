@@ -44,9 +44,25 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
     launchConfig,
     hasActiveLiveMatch,
   } = useCompetitionStore();
-  const { hasCompletedRegistration } = useRegistrationStore();
+  const { hasCompletedRegistration, myRegistrations } = useRegistrationStore();
   const isAdmin = canOperateOfficialData();
   const unreadNotifications = notifications.filter((n) => !n.isRead).length;
+  const activeMyRegs = myRegistrations.filter((r) => r.paymentStatus !== 'cancelado');
+  const isRegistrationPaid = activeMyRegs.some((r) => r.paymentStatus === 'pago');
+  const isPendingMemberValidation =
+    !isRegistrationPaid &&
+    activeMyRegs.some(
+      (r) =>
+        r.memberStatus === 'pendente' ||
+        r.paymentStatus === 'aguardando_validacao' ||
+        (r.requestedMemberDiscount &&
+          r.memberStatus !== 'aprovado' &&
+          r.memberStatus !== 'rejeitado')
+    );
+  const isPendingPayment =
+    !isRegistrationPaid && !isPendingMemberValidation && activeMyRegs.length > 0;
+  const isConfirmedAthlete =
+    isRegistrationPaid || (currentUser?.role === 'atleta' && activeMyRegs.length === 0);
 
   const [isSportsExpanded, setIsSportsExpanded] = useState(false);
   const prevPathRef = React.useRef(location.pathname);
@@ -158,6 +174,10 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
                   <span className="text-[10px] font-semibold text-brand-yellow block truncate">
                     {currentUser.role === 'administrador'
                       ? 'Comissão Organizadora'
+                      : isPendingMemberValidation
+                      ? `${currentUser.teamName || 'Participante'} • Em Análise`
+                      : isPendingPayment
+                      ? `${currentUser.teamName || 'Participante'} • Aguardando Pgto`
                       : currentUser.teamName || 'Atleta Medicina'}
                   </span>
                 </div>
@@ -236,9 +256,17 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
                       : 'Inscrição de Atleta'}
                   </span>
                 </span>
-                {hasCompletedRegistration || currentUser?.role === 'atleta' ? (
+                {isConfirmedAthlete ? (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold uppercase border border-emerald-500/30">
                     Confirmado
+                  </span>
+                ) : isPendingMemberValidation ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[9px] font-bold uppercase border border-amber-500/30">
+                    Em Análise
+                  </span>
+                ) : isPendingPayment ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[9px] font-bold uppercase border border-sky-500/30">
+                    Aguardando Pgto
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-yellow text-brand-blue-dark text-[9px] font-black uppercase">

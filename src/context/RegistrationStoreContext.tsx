@@ -852,11 +852,40 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       setAuditLogs(nextLogs);
       broadcastState(nextRegs, nextLogs);
 
+      upsertParticipantAthlete({
+        id: target.linkedAthleteId || `ath-${target.id}`,
+        name: target.athleteName,
+        email: target.athleteEmail,
+        teamId: target.teamId,
+        turma: target.turma,
+        turmaLabel: target.turmaLabel,
+        jerseyNumber: target.jerseyNumber,
+        position: target.position,
+        bio: target.bio,
+        instagramHandle: target.instagramHandle,
+        avatarUrl: target.avatarUrl,
+        modalityIds: target.selectedModalities,
+        registrationId: target.id,
+        paymentStatus: 'pago',
+        memberStatus: target.memberStatus,
+        autoLogin:
+          !isAdmin ||
+          (Boolean(currentUser?.email) &&
+            currentUser?.email?.toLowerCase() === target.athleteEmail.toLowerCase()),
+      });
+
       if (isAdmin) {
         pushRegistrationToCloud(updated);
       }
     },
-    [canOperateOfficialData, registrations, auditLogs, currentUser, broadcastState]
+    [
+      canOperateOfficialData,
+      registrations,
+      auditLogs,
+      currentUser,
+      broadcastState,
+      upsertParticipantAthlete,
+    ]
   );
 
   // 4. CANCELAMENTO DE INSCRIÇÃO

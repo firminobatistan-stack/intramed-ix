@@ -3333,10 +3333,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       ) {
         return true;
       }
-      return (
-        state.currentUser.role === 'atleta' &&
-        state.currentUser.linkedAthleteId === athleteId
-      );
+      return state.currentUser.linkedAthleteId === athleteId;
     },
     [state.currentUser]
   );
@@ -3588,14 +3585,21 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
           let nextUser = prev.currentUser;
           if (payload.autoLogin) {
+            const isRegistrationPaid = athleteRecord.paymentStatus === 'pago';
+            const preservedRole: UserRole =
+              prev.currentUser?.role && prev.currentUser.role !== 'usuario'
+                ? prev.currentUser.role
+                : isRegistrationPaid
+                ? 'atleta'
+                : 'usuario';
             nextUser = {
-              id: `usr-${athleteRecord.id}`,
+              id: prev.currentUser?.id || `usr-${athleteRecord.id}`,
               name: athleteRecord.name,
               email:
                 athleteRecord.email ||
                 `${athleteRecord.id}@medicina.uema.br`,
               avatarUrl: athleteRecord.avatarUrl,
-              role: 'atleta',
+              role: preservedRole,
               teamId: athleteRecord.teamId,
               teamName:
                 teamObj?.name ||

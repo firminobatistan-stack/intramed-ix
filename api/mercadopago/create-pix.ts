@@ -70,8 +70,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // Regra Inviolável de Negócio: Se a solicitação de sócio estiver pendente, não pode cobrar ainda
-  if (effectiveMemberStatus === 'pendente') {
+  const effectiveRequestedMember = Boolean(
+    storedReg?.requestedMemberDiscount ?? requestedMemberDiscount
+  );
+  // Regra Inviolável de Negócio: Se a solicitação de sócio estiver pendente (ou foi solicitada e ainda não aprovada/rejeitada), não pode cobrar ainda
+  if (
+    effectiveMemberStatus === 'pendente' ||
+    storedReg?.paymentStatus === 'aguardando_validacao' ||
+    (effectiveRequestedMember &&
+      effectiveMemberStatus !== 'aprovado' &&
+      effectiveMemberStatus !== 'rejeitado')
+  ) {
     return res.status(403).json({
       error:
         'Inscrição com solicitação de sócio ainda pendente de validação pela diretoria da Atlética Cangaceira.',

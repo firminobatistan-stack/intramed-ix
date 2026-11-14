@@ -19,7 +19,7 @@ Este arquivo serve de memória e alinhamento de contexto para o agente Antigravi
 - **Sócio:** R$ 50,00
 - **Não Sócio:** R$ 60,00
 - **Atleta Convidado (Turma 21 apenas):** R$ 65,00 (Vagas restritas: 1 masculino e 1 feminino).
-- **Fluxo:** Qualquer usuário pode criar conta/login comum (incluindo login via Google). Somente após estar cadastrado e logado (`currentUser != null`) a aba **"Inscrição de Atleta" / "Meu Passaporte"** aparece nos menus (`Sidebar.tsx`, `BottomNav.tsx`, `MobileNavDrawer.tsx`, `HomePage.tsx`).
+- **Fluxo:** Qualquer usuário pode criar conta/login comum (incluindo login via Google). Somente após estar cadastrado e logado (`currentUser != null`) a aba **"Inscrição de Atleta" / "Meu Passaporte"** aparece nos menus (`Sidebar.tsx`, `BottomNav.tsx`, `MobileNavDrawer.tsx`, `HomePage.tsx`). Quando o usuário seleciona a opção **Sócio**, o botão exibe `"Solicitar Verificação de Sócio • R$ 50.00"` e bloqueia o pagamento até que a Diretoria (`cangaceira@uema.com` / Admin) aprove a associação; nos menus laterais (`MobileNavDrawer.tsx` e `Sidebar.tsx`), a inscrição exibe o selo `"Em Análise"` (ou `"Aguardando Pgto"`) e somente mostra `"Confirmado"` quando `paymentStatus === 'pago'`.
 
 ## 3. Sincronização Multi-Dispositivo e Persistência (Firestore + Cloud Sync)
 - **Persistência Autenticada no Firestore (`api/_lib/serverStore.ts`):**
