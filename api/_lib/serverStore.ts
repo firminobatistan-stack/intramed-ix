@@ -702,6 +702,8 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
   if (!store.users) store.users = {};
   if (!store.profiles) store.profiles = {};
 
+  const mutationPromises: Array<Promise<unknown>> = [];
+
   // 1. Deduplica registrations por athleteEmail (mantém a inscrição PAGA ou mais recente e mescla foto/camisa/insta da anterior)
   const regsByEmail = new Map<string, Array<Record<string, unknown>>>();
   for (const reg of Object.values(store.registrations)) {
@@ -751,7 +753,7 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
       }
       if (dupId && dupId !== primaryRegId) {
         delete store.registrations[dupId];
-        void DeleteDocumentFromFirestoreRest('registrations', dupId);
+        mutationPromises.push(DeleteDocumentFromFirestoreRest('registrations', dupId));
       }
     }
 
@@ -759,11 +761,16 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
       primaryReg.revision = Number(primaryReg.revision || 1) + 1;
       primaryReg.updatedAtIso = nowIso;
       store.registrations[primaryRegId] = primaryReg;
-      void MirrorDocumentToFirestoreRest('registrations', primaryRegId, primaryReg);
+      mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', primaryRegId, primaryReg));
     }
   }
 
   // 2. Deduplica athletes por email (e vincula com a inscrição ativa do mesmo email)
+  if (store.athletes['test-sync-check']) {
+    delete store.athletes['test-sync-check'];
+    mutationPromises.push(DeleteDocumentFromFirestoreRest('athletes', 'test-sync-check'));
+  }
+
   const athsByEmail = new Map<string, Array<Record<string, unknown>>>();
   for (const ath of Object.values(store.athletes)) {
     if (!ath || !ath.id || isPurgedTestRecord(ath)) continue;
@@ -806,8 +813,21 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
     let athChanged = false;
 
     if (matchingReg) {
+      if (primaryAth.registrationId !== matchingReg.id) {
+        primaryAth.registrationId = matchingReg.id;
+        athChanged = true;
+      }
       if (primaryAth.paymentStatus !== matchingReg.paymentStatus) {
         primaryAth.paymentStatus = matchingReg.paymentStatus;
+        athChanged = true;
+      }
+      const expectedStatus = matchingReg.paymentStatus === 'pago' ? 'confirmado' : 'pendente';
+      if (primaryAth.status !== expectedStatus) {
+        primaryAth.status = expectedStatus;
+        athChanged = true;
+      }
+      if (matchingReg.athleteName && String(matchingReg.athleteName).length > String(primaryAth.name || '').length) {
+        primaryAth.name = matchingReg.athleteName;
         athChanged = true;
       }
       if (!primaryAth.avatarUrl && matchingReg.avatarUrl) {
@@ -845,7 +865,7 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
       }
       if (dupId && dupId !== primaryAthId) {
         delete store.athletes[dupId];
-        void DeleteDocumentFromFirestoreRest('athletes', dupId);
+        mutationPromises.push(DeleteDocumentFromFirestoreRest('athletes', dupId));
       }
     }
 
@@ -853,26 +873,25 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
       primaryAth.revision = Number(primaryAth.revision || 1) + 1;
       primaryAth.updatedAtIso = nowIso;
       store.athletes[primaryAthId] = primaryAth;
-      void MirrorDocumentToFirestoreRest('athletes', primaryAthId, primaryAth);
+      mutationPromises.push(MirrorDocumentToFirestoreRest('athletes', primaryAthId, primaryAth));
     }
   }
 
   // 3. Sincroniza profiles com users, registrations e athletes (e remove perfil duplicado usr_master_cangaceira se já houver UID real para a conta Master)
-  const masterRealUser = Object.values(store.users).find(
-    (u) =>
-      u &&
-      String(u.email || '').trim().toLowerCase() === MASTER_MODERATOR_EMAIL.toLowerCase() &&
-      String(u.id || '') !== 'usr_master_cangaceira'
+  const masterRealProfileId = Object.keys(store.profiles).find(
+    (pid) =>
+      pid !== 'usr_master_cangaceira' &&
+      String(store.profiles[pid]?.displayName || '').trim().toLowerCase() === 'atlética cangaceira'
   );
-  if (masterRealUser && store.profiles['usr_master_cangaceira'] && store.profiles[String(masterRealUser.id)]) {
-    const realProf = store.profiles[String(masterRealUser.id)];
+  if (masterRealProfileId && store.profiles['usr_master_cangaceira']) {
+    const realProf = store.profiles[masterRealProfileId];
     const legacyProf = store.profiles['usr_master_cangaceira'];
     if (!realProf.instagramHandle && legacyProf.instagramHandle) {
       realProf.instagramHandle = legacyProf.instagramHandle;
-      void MirrorDocumentToFirestoreRest('profiles', String(masterRealUser.id), realProf);
+      mutationPromises.push(MirrorDocumentToFirestoreRest('profiles', masterRealProfileId, realProf));
     }
     delete store.profiles['usr_master_cangaceira'];
-    void DeleteDocumentFromFirestoreRest('profiles', 'usr_master_cangaceira');
+    mutationPromises.push(DeleteDocumentFromFirestoreRest('profiles', 'usr_master_cangaceira'));
   }
 
   for (const [profId, prof] of Object.entries(store.profiles)) {
@@ -885,7 +904,7 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         )
       : prof.linkedAthleteId
       ? Object.values(store.registrations).find(
-          (r) => r?.linkedAthleteId === prof.linkedAthleteId
+          (r) => r?.linkedAthleteId === prof.linkedAthleteId || `ath-${r?.id}` === prof.linkedAthleteId
         )
       : undefined;
 
@@ -924,9 +943,13 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
       if (profChanged) {
         prof.updatedAtIso = nowIso;
         store.profiles[profId] = prof;
-        void MirrorDocumentToFirestoreRest('profiles', profId, prof);
+        mutationPromises.push(MirrorDocumentToFirestoreRest('profiles', profId, prof));
       }
     }
+  }
+
+  if (mutationPromises.length > 0) {
+    await Promise.allSettled(mutationPromises);
   }
 }
 
@@ -1151,7 +1174,7 @@ export function sanitizeUserProfileForPublic(
     teamName: safePublic.teamName || null,
     bio: safePublic.bio || null,
     instagramHandle: safePublic.instagramHandle || null,
-    isAthlete: Boolean(safePublic.isAthlete || safePublic.linkedAthleteId),
+    isAthlete: Boolean(safePublic.isAthlete),
     linkedAthleteId: safePublic.linkedAthleteId || null,
     favoriteModalityIds: Array.isArray(safePublic.favoriteModalityIds)
       ? safePublic.favoriteModalityIds
