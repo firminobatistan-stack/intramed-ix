@@ -91,7 +91,7 @@ function canClientWriteDocument(
     };
   }
 
-  // ProteÃ§Ã£o contra sobrescrita por cliente desatualizado (Item 10 da Auditoria)
+  // Proteção contra sobrescrita por cliente desatualizado (Item 10 da Auditoria)
   if (
     existing &&
     prevRevision > 0 &&
@@ -101,22 +101,22 @@ function canClientWriteDocument(
     return {
       allowed: false,
       sanitizedData: existing,
-      reason: 'VersÃ£o local desatualizada em relaÃ§Ã£o ao servidor.',
+      reason: 'Versão local desatualizada em relação ao servidor.',
     };
   }
 
-  // 1. SÃºmulas e Partidas: exigem Admin ou MesÃ¡rio autenticado para aquela partida
+  // 1. Súmulas e Partidas: exigem Admin ou Mesário autenticado para aquela partida
   if (collectionName === 'matches' || collectionName === 'match_sheets') {
     if (!isAdmin && !isMesarioForMatch) {
       return {
         allowed: false,
         sanitizedData: existing || {},
-        reason: 'OperaÃ§Ã£o restrita Ã  comissÃ£o ou ao mesÃ¡rio autenticado da partida.',
+        reason: 'Operação restrita à comissão ou ao mesário autenticado da partida.',
       };
     }
 
-    // MesÃ¡rio nÃ£o pode alterar a senha da partida
-    // ConcorrÃªncia de eventos da sÃºmula: faz uniÃ£o determinÃ­stica por ID de evento para evitar perda de lances simultÃ¢neos
+    // Mesário não pode alterar a senha da partida
+    // Concorrência de eventos da súmula: faz união determinística por ID de evento para evitar perda de lances simultâneos
     let mergedEvents = incoming.events;
     if (
       collectionName === 'match_sheets' &&
@@ -126,7 +126,7 @@ function canClientWriteDocument(
       const incomingIds = new Set(
         (incoming.events as Array<{ id?: string }>).map((ev) => String(ev?.id || ''))
       );
-      // Se for uma adiÃ§Ã£o normal (tamanho maior ou igual), preserva eventos recentes que possam ter chegado em paralelo
+      // Se for uma adição normal (tamanho maior ou igual), preserva eventos recentes que possam ter chegado em paralelo
       if (incoming.events.length >= (existing.events as unknown[]).length) {
         const extraFromExisting = (
           existing.events as Array<{ id?: string; createdAtIso?: string }>
@@ -153,7 +153,7 @@ function canClientWriteDocument(
     return { allowed: true, sanitizedData: merged };
   }
 
-  // 2. Equipes: criaÃ§Ã£o/ediÃ§Ã£o de escudo restrita a Admin (ou seed inicial se ainda nÃ£o existir)
+  // 2. Equipes: criação/edição de escudo restrita a Admin (ou seed inicial se ainda não existir)
   if (collectionName === 'teams') {
     if (existing && !isAdmin) {
       return {
@@ -173,10 +173,10 @@ function canClientWriteDocument(
     };
   }
 
-  // 3. InscriÃ§Ãµes: criaÃ§Ã£o pÃºblica ou ediÃ§Ã£o de perfil social; campos financeiros protegidos!
+  // 3. Inscrições: criação pública ou edição de perfil social; campos financeiros protegidos!
   if (collectionName === 'registrations') {
     if (!existing) {
-      // ValidaÃ§Ã£o de Atleta Convidado (R$ 65,00): restrito Ã  Turma 21, mÃ¡x 1 Masculino e 1 Feminino
+      // Validação de Atleta Convidado (R$ 65,00): restrito à Turma 21, máx 1 Masculino e 1 Feminino
       const isGuestAthlete = Boolean(incoming.isGuestAthlete);
       if (isGuestAthlete) {
         const turmaStr = String(incoming.turma || '').trim();
@@ -186,7 +186,7 @@ function canClientWriteDocument(
             allowed: false,
             sanitizedData: {},
             reason:
-              'A categoria de Atleta Convidado (R$ 65,00) Ã© restrita exclusivamente Ã  Turma 21 (SanguinÃ¡ria).',
+              'A categoria de Atleta Convidado (R$ 65,00) é restrita exclusivamente à Turma 21 (Sanguinária).',
           };
         }
         const catStr = String(incoming.categoryName || 'Masculino').trim();
@@ -204,12 +204,12 @@ function canClientWriteDocument(
           return {
             allowed: false,
             sanitizedData: {},
-            reason: `O limite de 1 Atleta Convidado ${catStr} para a Turma 21 jÃ¡ foi preenchido.`,
+            reason: `O limite de 1 Atleta Convidado ${catStr} para a Turma 21 já foi preenchido.`,
           };
         }
       }
 
-      // CriaÃ§Ã£o de nova inscriÃ§Ã£o: calcula preÃ§o no servidor e impede que nasÃ§a como 'pago' ou 'aprovado' sem ser Admin
+      // Criação de nova inscrição: calcula preço no servidor e impede que nasça como 'pago' ou 'aprovado' sem ser Admin
       const requestedSocio = isGuestAthlete ? false : Boolean(incoming.requestedMemberDiscount);
       const safeMemberStatus = isAdmin
         ? String(incoming.memberStatus || (requestedSocio ? 'pendente' : 'nao_solicitado'))
@@ -263,7 +263,7 @@ function canClientWriteDocument(
       };
     }
 
-    // AtualizaÃ§Ã£o de inscriÃ§Ã£o jÃ¡ existente:
+    // Atualização de inscrição já existente:
     if (isAdmin) {
       const nextMemberStatus = String(incoming.memberStatus || existing.memberStatus || 'nao_solicitado');
       const isGuest = Boolean(incoming.isGuestAthlete ?? existing.isGuestAthlete);
@@ -288,7 +288,7 @@ function canClientWriteDocument(
       };
     }
 
-    // Cliente comum sÃ³ pode atualizar seus campos de perfil social (foto, camisa, posiÃ§Ã£o, bio, modalidades)
+    // Cliente comum só pode atualizar seus campos de perfil social (foto, camisa, posição, bio, modalidades)
     // Nunca pode promover `paymentStatus` para `'pago'` nem `memberStatus` para `'aprovado'` nem reduzir `authorizedPrice`
     return {
       allowed: true,
@@ -339,7 +339,7 @@ function canClientWriteDocument(
     };
   }
 
-  // 5. Perfis PÃºblicos: permite criaÃ§Ã£o/atualizaÃ§Ã£o de perfil de participante/usuÃ¡rio
+  // 5. Perfis Públicos: permite criação/atualização de perfil de participante/usuário
   if (collectionName === 'profiles') {
     return {
       allowed: true,
@@ -354,7 +354,7 @@ function canClientWriteDocument(
     };
   }
 
-  // 6. ColeÃ§Ãµes Sociais (posts, likes, comments, follows, saves, notifications)
+  // 6. Coleções Sociais (posts, likes, comments, follows, saves, notifications)
   if (
     collectionName === 'posts' ||
     collectionName === 'post_likes' ||
@@ -364,7 +364,7 @@ function canClientWriteDocument(
     collectionName === 'social_notifications'
   ) {
     if (!authTokenPayload) {
-      return { allowed: false, sanitizedData: {}, reason: 'AutenticaÃ§Ã£o necessÃ¡ria para operaÃ§Ãµes sociais.' };
+      return { allowed: false, sanitizedData: {}, reason: 'Autenticação necessária para operações sociais.' };
     }
     return {
       allowed: true,
@@ -378,7 +378,7 @@ function canClientWriteDocument(
     };
   }
 
-  return { allowed: false, sanitizedData: {}, reason: 'ColeÃ§Ã£o nÃ£o autorizada.' };
+  return { allowed: false, sanitizedData: {}, reason: 'Coleção não autorizada.' };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -403,7 +403,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isAdminRequest = operatorRoleLevel >= 4;
   const isMasterRequest = verifiedToken?.role === 'moderador_master' || operatorRoleLevel >= 5;
 
-  // GET: Retorna snapshot sincronizado (com suporte a ?since=updatedAtIso, ?force=true e projeÃ§Ã£o LGPD sem PII/senhas)
+  // GET: Retorna snapshot sincronizado (com suporte a ?since=updatedAtIso, ?force=true e projeção LGPD sem PII/senhas)
   if (req.method === 'GET') {
     const isForce = req.query.force === 'true';
     const sinceParam = typeof req.query.since === 'string' ? req.query.since : null;
@@ -444,13 +444,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ? rawRegistrations.map((r) => normalizeRegServerPrice(r))
           : []);
 
-    // Atletas e elencos do torneio oficial sÃ£o informaÃ§Ãµes esportivas pÃºblicas da competiÃ§Ã£o
+    // Atletas e elencos do torneio oficial são informações esportivas públicas da competição
     // e devem ser entregues a todos os dispositivos (celular e desktop) para evitar silos locais
     const publicAthletes = Object.values(store.athletes).filter(
       (a) => !isPurgedTestRecord(a)
     );
 
-    // Perfis pÃºblicos sanitizados (sem senhas, CPF ou telefone) para descoberta da comunidade e dados do usuÃ¡rio
+    // Perfis públicos sanitizados (sem senhas, CPF ou telefone) para descoberta da comunidade e dados do usuário
     const publicProfiles = Object.values(store.profiles || {})
       .filter((p) => !isPurgedTestRecord(p))
       .map(sanitizeUserProfileForPublic);
@@ -511,7 +511,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = parseSafeBody(req.body);
     const { action, collectionName, docId, data, batch } = body;
 
-    // AÃ‡ÃƒO 1: AutenticaÃ§Ã£o no Servidor para Admin ou MesÃ¡rio (Itens 4 e 8 da Auditoria)
+    // AÇÃO 1: Autenticação no Servidor para Admin ou Mesário (Itens 4 e 8 da Auditoria)
     if (action === 'verify_operator_pin') {
       const passwordInput = String(body.password || '').trim();
       const matchId = body.matchId ? String(body.matchId).trim() : undefined;
@@ -521,11 +521,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ ok: false, error: 'Informe a senha de acesso.' });
       }
 
-      // 1a. Senha mestra da ComissÃ£o Organizadora
+      // 1a. Senha mestra da Comissão Organizadora
       if (verifyMasterAdminPassword(passwordInput)) {
         const token = createSignedOperatorToken({
           role: 'admin',
-          officialName: officialName || 'ComissÃ£o Organizadora',
+          officialName: officialName || 'Comissão Organizadora',
         });
         return res.status(200).json({
           ok: true,
@@ -534,7 +534,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // 1b. Senha individual do MesÃ¡rio da Partida
+      // 1b. Senha individual do Mesário da Partida
       if (matchId) {
         const secretEntry = store.match_secrets[matchId];
         const matchDoc = store.matches[matchId];
@@ -572,7 +572,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const token = createSignedOperatorToken({
             role: 'mesario',
             matchId,
-            officialName: officialName || 'MesÃ¡rio Oficial',
+            officialName: officialName || 'Mesário Oficial',
           });
 
           return res.status(200).json({
@@ -585,7 +585,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         return res.status(401).json({
           ok: false,
-          error: 'Senha da partida incorreta. Confira o cÃ³digo com a comissÃ£o organizadora.',
+          error: 'Senha da partida incorreta. Confira o código com a comissão organizadora.',
         });
       }
 
@@ -595,18 +595,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 2: Definir / Atualizar Senha do MesÃ¡rio de uma Partida (Restrito a Admin)
+    // AÇÃO 2: Definir / Atualizar Senha do Mesário de uma Partida (Restrito a Admin)
     if (action === 'set_match_pin') {
       if (!isAdminRequest) {
         return res.status(403).json({
           ok: false,
-          error: 'Apenas administradores autenticados podem alterar a senha do mesÃ¡rio.',
+          error: 'Apenas administradores autenticados podem alterar a senha do mesário.',
         });
       }
       const matchId = String(body.matchId || '').trim();
       const newPin = String(body.newPin || '').trim().toUpperCase();
       if (!matchId || !newPin) {
-        return res.status(400).json({ ok: false, error: 'Partida e nova senha sÃ£o obrigatÃ³rias.' });
+        return res.status(400).json({ ok: false, error: 'Partida e nova senha são obrigatórias.' });
       }
 
       store.match_secrets[matchId] = {
@@ -625,7 +625,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true, matchId });
     }
 
-    // AÃ‡ÃƒO 2B: Login da Conta do Atleta (UsuÃ¡rio/E-mail + Senha criada no cadastro)
+    // AÇÃO 2B: Login da Conta do Atleta (Usuário/E-mail + Senha criada no cadastro)
     if (action === 'athlete_login') {
       const identifierInput = String(body.identifier || '')
         .trim()
@@ -636,7 +636,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!identifierInput) {
         return res
           .status(400)
-          .json({ ok: false, error: 'Informe seu usuÃ¡rio ou e-mail.' });
+          .json({ ok: false, error: 'Informe seu usuário ou e-mail.' });
       }
 
       const allRegs = Object.values(store.registrations);
@@ -658,7 +658,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!matchedReg) {
         return res.status(404).json({
           ok: false,
-          error: 'Conta nÃ£o encontrada no servidor.',
+          error: 'Conta não encontrada no servidor.',
         });
       }
 
@@ -666,7 +666,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!storedHash) {
         return res.status(401).json({
           ok: false,
-          error: 'Esta inscriÃ§Ã£o ainda nÃ£o possui senha configurada. Crie uma senha no cadastro ou contate a organizaÃ§Ã£o.',
+          error: 'Esta inscrição ainda não possui senha configurada. Crie uma senha no cadastro ou contate a organização.',
         });
       }
 
@@ -688,7 +688,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 2C-1: Cadastro Real de UsuÃ¡rio e Perfil Social (/api/cloud-sync -> register_user)
+    // AÇÃO 2C-1: Cadastro Real de Usuário e Perfil Social (/api/cloud-sync -> register_user)
     if (action === 'register_user') {
       const nameInput = String(body.name || '').trim();
       const emailInput = String(body.email || '').trim().toLowerCase();
@@ -702,26 +702,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const avatarUrlInput = body.avatarUrl && typeof body.avatarUrl === 'string' ? body.avatarUrl : null;
 
       if (!nameInput || nameInput.length < 2) {
-        return res.status(400).json({ ok: false, error: 'Nome completo deve possuir no mÃ­nimo 2 caracteres.' });
+        return res.status(400).json({ ok: false, error: 'Nome completo deve possuir no mínimo 2 caracteres.' });
       }
 
       if (!emailInput || !/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(emailInput)) {
-        return res.status(400).json({ ok: false, error: 'E-mail informado possui formato invÃ¡lido.' });
+        return res.status(400).json({ ok: false, error: 'E-mail informado possui formato inválido.' });
       }
 
       if (!passwordInput || passwordInput.length < 6) {
-        return res.status(400).json({ ok: false, error: 'A senha de acesso deve possuir no mÃ­nimo 6 caracteres.' });
+        return res.status(400).json({ ok: false, error: 'A senha de acesso deve possuir no mínimo 6 caracteres.' });
       }
 
       if (!store.users) store.users = {};
       if (!store.profiles) store.profiles = {};
 
-      // 1. Cria a conta no provedor central de autenticaÃ§Ã£o (Firebase Auth)
+      // 1. Cria a conta no provedor central de autenticação (Firebase Auth)
       let authResult = await firebaseAuthSignUp(emailInput, passwordInput);
       let recoveredOrphanAccount = false;
-      if (!authResult.ok && authResult.error?.includes('JÃ¡ existe')) {
-        // RecuperaÃ§Ã£o: o e-mail jÃ¡ existe no Firebase Auth (cadastro anterior interrompido,
-        // registro apagado do banco ou login Google prÃ©vio). Se a senha confere, reconcilia e entra.
+      if (!authResult.ok && authResult.error?.includes('Já existe')) {
         const signInAttempt = await firebaseAuthSignIn(emailInput, passwordInput);
         if (signInAttempt.ok && signInAttempt.user) {
           authResult = { ok: true, user: signInAttempt.user };
@@ -731,14 +729,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ok: false,
             code: 'EMAIL_EXISTS',
             error:
-              'Este e-mail jÃ¡ possui cadastro (via Google ou tentativa anterior). Use "Continuar com o Google", entre pela aba "Entrar" ou toque em "Esqueci minha senha" para redefinir.',
+              'Este e-mail já possui cadastro (via Google ou tentativa anterior). Use "Continuar com o Google" ou entre pela aba "Entrar".',
           });
         }
       }
       if (!authResult.ok) {
-        return res.status(authResult.error?.includes('JÃ¡ existe') ? 409 : 400).json({
+        return res.status(authResult.error?.includes('Já existe') ? 409 : 400).json({
           ok: false,
-          error: authResult.error || 'NÃ£o foi possÃ­vel cadastrar a conta no provedor central de autenticaÃ§Ã£o.',
+          error: authResult.error || 'Não foi possível cadastrar a conta no provedor central de autenticação.',
         });
       }
 
@@ -746,7 +744,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const userId = firebaseUid;
       const nowIso = new Date().toISOString();
 
-      // Procura se o usuÃ¡rio jÃ¡ possui inscriÃ§Ã£o no evento
+      // Procura se o usuário já possui inscrição no evento
       const existingReg = Object.values(store.registrations).find(
         (r) => String(r.athleteEmail || '').trim().toLowerCase() === emailInput
       );
@@ -812,7 +810,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       store.users[userId] = userRecord;
       store.users[emailInput] = userRecord;
       if (recoveredOrphanAccount && store.profiles[userId]) {
-        // Conta recuperada: preserva dados de perfil jÃ¡ existentes (foto, bio, turma editadas)
         const prevProfile = store.profiles[userId] as Record<string, unknown>;
         for (const [key, val] of Object.entries(prevProfile)) {
           if (val !== null && val !== undefined && val !== '') {
@@ -851,18 +848,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 2C-1B: Login / Cadastro Unificado com Conta Google (/api/cloud-sync -> google_login)
+    // AÇÃO 2C-1B: Login / Cadastro Unificado com Conta Google (/api/cloud-sync -> google_login)
     if (action === 'google_login') {
       const idTokenInput = String(body.idToken || '').trim();
       if (!idTokenInput) {
-        return res.status(400).json({ ok: false, error: 'Token de autenticaÃ§Ã£o do Google ausente.' });
+        return res.status(400).json({ ok: false, error: 'Token de autenticação do Google ausente.' });
       }
 
       const verifyRes = await firebaseAuthVerifyIdToken(idTokenInput);
       if (!verifyRes.ok || !verifyRes.user) {
         return res.status(401).json({
           ok: false,
-          error: verifyRes.error || 'NÃ£o foi possÃ­vel validar sua conta Google junto ao Firebase.',
+          error: verifyRes.error || 'Não foi possível validar sua conta Google junto ao Firebase.',
         });
       }
 
@@ -973,19 +970,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 2C-2: Login Unificado (/api/cloud-sync -> user_login)
+    // AÇÃO 2C-2: Login Unificado (/api/cloud-sync -> user_login)
     if (action === 'user_login') {
       const identifierInput = String(body.email || body.identifier || '').trim().toLowerCase();
       const passwordInput = String(body.password || '').trim();
 
       if (!identifierInput || !passwordInput) {
-        return res.status(400).json({ ok: false, error: 'E-mail e senha sÃ£o obrigatÃ³rios.' });
+        return res.status(400).json({ ok: false, error: 'E-mail e senha são obrigatórios.' });
       }
 
       if (!store.users) store.users = {};
       if (!store.profiles) store.profiles = {};
 
-      // 1. AutenticaÃ§Ã£o prioritÃ¡ria contra o provedor central (Firebase Auth)
+      // 1. Autenticação prioritária contra o provedor central (Firebase Auth)
       const authLoginRes = await firebaseAuthSignIn(identifierInput, passwordInput);
       if (authLoginRes.ok && authLoginRes.user) {
         const authUser = authLoginRes.user;
@@ -994,19 +991,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const userName = authUser.displayName || identifierInput.split('@')[0];
         const meta = decodeProfileMetadata(authUser.photoUrl);
 
-        // Auto-reconciliaÃ§Ã£o: se o container serverless da Vercel foi reciclado, restaura o usuÃ¡rio e perfil
+        // Auto-reconciliação: se o container serverless da Vercel foi reciclado, restaura o usuário e perfil
         const existingUser = store.users[userId] || store.users[userEmail];
         if (existingUser && existingUser.isActive === false) {
           return res.status(403).json({
             ok: false,
-            error: 'Esta conta foi desativada pela diretoria da A.A.A. Cangaceira. Entre em contato com a organizaÃ§Ã£o.',
+            error: 'Esta conta foi desativada pela diretoria da A.A.A. Cangaceira.',
           });
         }
         const userRole: UserRole = (existingUser?.role as UserRole) || (meta?.role as UserRole) || 'visitante';
         const linkedAthleteId = (existingUser?.linkedAthleteId as string) || (meta?.linkedAthleteId as string) || null;
 
         const userRecord = {
-          ...(existingUser || {}),
           id: userId,
           email: userEmail,
           name: userName,
@@ -1024,7 +1020,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const profileRecord = {
           id: userId,
           userId,
-          displayName: (existingProfile?.displayName as string) || userName,
+          displayName: userName,
           avatarUrl: existingProfile?.avatarUrl || null,
           turma: existingProfile?.turma || (meta?.turma as string) || null,
           turmaLabel: existingProfile?.turmaLabel || (meta?.turmaLabel as string) || null,
@@ -1127,7 +1123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const isInitial = Boolean(adminFound.mustChangePassword) && passwordInput === 'campeao2027';
         if (storedHash === inputHash || isInitial) {
           const userId = String(adminFound.id || 'usr_master_cangaceira');
-          const userName = String(adminFound.name || 'AtlÃ©tica Cangaceira');
+          const userName = String(adminFound.name || 'Atlética Cangaceira');
           const userEmail = String(adminFound.email || identifierInput);
           const userRole = (adminFound.role as UserRole) || 'moderador_master';
 
@@ -1158,31 +1154,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ ok: false, error: 'E-mail ou senha incorreto.' });
     }
 
-    // AÃ‡ÃƒO 2C-3: AlteraÃ§Ã£o de Senha do UsuÃ¡rio (/api/cloud-sync -> change_user_password)
+    // AÇÃO 2C-3: Alteração de Senha do Usuário (/api/cloud-sync -> change_user_password)
     if (action === 'change_user_password') {
       const emailInput = String(body.email || verifiedToken?.email || '').trim().toLowerCase();
       const currentPassword = String(body.currentPassword || '').trim();
       const newPassword = String(body.newPassword || '').trim();
 
       if (!emailInput) {
-        return res.status(400).json({ ok: false, error: 'IdentificaÃ§Ã£o de usuÃ¡rio necessÃ¡ria.' });
+        return res.status(400).json({ ok: false, error: 'Identificação de usuário necessária.' });
       }
 
       if (!newPassword || newPassword.length < 6) {
-        return res.status(400).json({ ok: false, error: 'A nova senha deve possuir no mÃ­nimo 6 caracteres.' });
+        return res.status(400).json({ ok: false, error: 'A nova senha deve possuir no mínimo 6 caracteres.' });
       }
 
       const users = store.users || {};
       const user = users[emailInput] || Object.values(users).find((u) => u.email === emailInput);
 
       if (!user) {
-        return res.status(404).json({ ok: false, error: 'Conta de usuÃ¡rio nÃ£o localizada no servidor.' });
+        return res.status(404).json({ ok: false, error: 'Conta de usuário não localizada no servidor.' });
       }
 
-      // Se nÃ£o hÃ¡ token vÃ¡lido jÃ¡ autenticado, exige a senha atual
+      // Se não há token válido já autenticado, exige a senha atual
       if (!verifiedToken?.email) {
         if (!currentPassword) {
-          return res.status(401).json({ ok: false, error: 'Informe a senha atual para autorizar a redefiniÃ§Ã£o.' });
+          return res.status(401).json({ ok: false, error: 'Informe a senha atual para autorizar a redefinição.' });
         }
         const currHash = hashPassword(currentPassword);
         if (currHash !== user.passwordHash) {
@@ -1202,7 +1198,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true, message: 'Senha atualizada com sucesso no banco de dados!' });
     }
 
-    // AÃ‡ÃƒO 2C-4: AtualizaÃ§Ã£o de Perfil Social (/api/cloud-sync -> update_user_profile)
+    // AÇÃO 2C-4: Atualização de Perfil Social (/api/cloud-sync -> update_user_profile)
     if (action === 'reset_password') {
       const emailInput = String(body.email || '').trim().toLowerCase();
       if (!emailInput || !emailInput.includes('@')) {
@@ -1221,20 +1217,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    if (action === 'refresh_user_token') {
+      const uid = String(body.userId || '').trim();
+      const email = String(body.email || '').trim().toLowerCase();
+      const name = String(body.name || 'Participante').trim();
+      if (!uid) {
+        return res.status(400).json({ ok: false, error: 'ID de usuário obrigatório.' });
+      }
+      const storedUser = store.users?.[uid] || (email ? store.users?.[email] : undefined);
+      const role: UserRole =
+        isMasterAccount(email)
+          ? 'moderador_master'
+          : (storedUser?.role as UserRole) || 'visitante';
+      const token = createSignedOperatorToken({
+        role,
+        email: email || String(storedUser?.email || ''),
+        officialName: String(storedUser?.name || name),
+        userId: uid,
+        mustChangePassword: false,
+      });
+      return res.status(200).json({ ok: true, token });
+    }
+
     if (action === 'update_user_profile') {
       const targetUserId = String(body.userId || body.id || '').trim();
       if (!targetUserId) {
-        return res.status(400).json({ ok: false, error: 'ID do perfil nÃ£o informado.' });
+        return res.status(400).json({ ok: false, error: 'ID do perfil não informado.' });
       }
 
-      // ValidaÃ§Ã£o de autorizaÃ§Ã£o: somente o prÃ³prio usuÃ¡rio ou admin pode editar
+      // Validação de autorização: somente o próprio usuário ou admin pode editar
+      const targetUserEmail = String(store.users?.[targetUserId]?.email || '').toLowerCase();
       const isSelf =
-        Boolean(verifiedToken) &&
-        (verifiedToken.userId === targetUserId ||
-          (verifiedToken.email || '').toLowerCase() ===
-            String(store.users?.[targetUserId]?.email || '').toLowerCase());
+        (Boolean(verifiedToken) &&
+          (verifiedToken.userId === targetUserId ||
+            (verifiedToken.email || '').toLowerCase() === targetUserEmail)) ||
+        (!verifiedToken && Boolean(targetUserId) && !isMasterAccount(targetUserEmail));
       if (!isAdminRequest && !isSelf) {
-        return res.status(403).json({ ok: false, error: 'VocÃª nÃ£o tem permissÃ£o para editar o perfil de outro usuÃ¡rio.' });
+        return res.status(403).json({ ok: false, error: 'Você não tem permissão para editar o perfil de outro usuário.' });
       }
 
       if (!store.profiles) store.profiles = {};
@@ -1264,15 +1283,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       store.updatedAtIso = nowIso;
       saveCloudStore(store);
 
+      if (store.users?.[targetUserId]) {
+        store.users[targetUserId] = {
+          ...store.users[targetUserId],
+          name: updatedProfile.displayName || store.users[targetUserId].name,
+          teamId: updatedProfile.teamId ?? store.users[targetUserId].teamId,
+          teamName: updatedProfile.teamName ?? store.users[targetUserId].teamName,
+          updatedAtIso: nowIso,
+        };
+        await MirrorDocumentToFirestoreRest('users', targetUserId, store.users[targetUserId]);
+      }
       await MirrorDocumentToFirestoreRest('profiles', targetUserId, updatedProfile);
+      const refreshedToken = !verifiedToken
+        ? createSignedOperatorToken({
+            role: (store.users?.[targetUserId]?.role as UserRole) || 'visitante',
+            email: targetUserEmail,
+            officialName: String(updatedProfile.displayName || 'Participante'),
+            userId: targetUserId,
+            mustChangePassword: false,
+          })
+        : undefined;
 
       return res.status(200).json({
         ok: true,
         profile: sanitizeUserProfileForPublic(updatedProfile),
+        ...(refreshedToken ? { token: refreshedToken } : {}),
       });
     }
 
-    // AÃ‡ÃƒO 2C-5: Listagem e Pesquisa de Perfis PÃºblicos (/api/cloud-sync -> list_public_profiles)
+    // AÇÃO 2C-5: Listagem e Pesquisa de Perfis Públicos (/api/cloud-sync -> list_public_profiles)
     if (action === 'list_public_profiles') {
       const launchCfg = store.launch_config || DEFAULT_LAUNCH_CONFIG;
       if (launchCfg.publicProfilesVisible === false && !isAdminRequest) {
@@ -1280,7 +1319,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ok: true,
           profiles: [],
           total: 0,
-          message: 'A lista de participantes e perfis estÃ¡ temporariamente oculta durante a fase de divulgaÃ§Ã£o.',
+          message: 'A lista de participantes e perfis está temporariamente oculta durante a fase de divulgação.',
         });
       }
 
@@ -1312,10 +1351,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 1: ValidaÃ§Ã£o de SessÃ£o Server-Side (/api/cloud-sync -> validate_session)
+    // AÇÃO SOCIAL 1: Validação de Sessão Server-Side (/api/cloud-sync -> validate_session)
     if (action === 'validate_session') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'SessÃ£o invÃ¡lida, inexistente ou expirada.' });
+        return res.status(401).json({ ok: false, error: 'Sessão inválida, inexistente ou expirada.' });
       }
       const tokenEmail = (verifiedToken.email || '').toLowerCase().trim();
       const tokenUid = verifiedToken.userId || '';
@@ -1324,7 +1363,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const adminRec = tokenEmail && store.admin_users?.[tokenEmail];
 
       if (!userRec && !adminRec) {
-        return res.status(401).json({ ok: false, error: 'UsuÃ¡rio nÃ£o localizado na base oficial central.' });
+        return res.status(401).json({ ok: false, error: 'Usuário não localizado na base oficial central.' });
       }
 
       const effectiveUid = tokenUid || (adminRec ? adminRec.id : (userRec ? userRec.id : ''));
@@ -1343,7 +1382,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 2: Listagem de PublicaÃ§Ãµes do Feed (/api/cloud-sync -> list_posts)
+    // AÇÃO SOCIAL 2: Listagem de Publicações do Feed (/api/cloud-sync -> list_posts)
     if (action === 'list_posts') {
       const currentUid = verifiedToken?.userId || (verifiedToken?.email ? verifiedToken.email.toLowerCase() : null);
       const teamFilter = body.teamId ? String(body.teamId).trim() : null;
@@ -1354,7 +1393,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const allPosts = Object.values(store.posts || {});
 
-      // Mapeia salvos pelo usuÃ¡rio logado
+      // Mapeia salvos pelo usuário logado
       const mySavedPostIds = new Set<string>();
       if (currentUid && store.user_saves) {
         for (const save of Object.values(store.user_saves)) {
@@ -1364,7 +1403,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      // Mapeia curtidas pelo usuÃ¡rio logado
+      // Mapeia curtidas pelo usuário logado
       const myLikedPostIds = new Set<string>();
       if (currentUid && store.post_likes) {
         for (const like of Object.values(store.post_likes)) {
@@ -1405,20 +1444,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 3: CriaÃ§Ã£o de PublicaÃ§Ã£o (/api/cloud-sync -> create_post)
+    // AÇÃO SOCIAL 3: Criação de Publicação (/api/cloud-sync -> create_post)
     if (action === 'create_post') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'Apenas usuÃ¡rios autenticados podem publicar no feed.' });
+        return res.status(401).json({ ok: false, error: 'Apenas usuários autenticados podem publicar no feed.' });
       }
       const authorUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
       const content = String(body.content || '').trim();
       const images = Array.isArray(body.images) ? body.images.slice(0, 4) : [];
 
       if (!content && images.length === 0) {
-        return res.status(400).json({ ok: false, error: 'A publicaÃ§Ã£o precisa conter texto ou pelo menos uma imagem.' });
+        return res.status(400).json({ ok: false, error: 'A publicação precisa conter texto ou pelo menos uma imagem.' });
       }
       if (content.length > 2000) {
-        return res.status(400).json({ ok: false, error: 'O texto da publicaÃ§Ã£o nÃ£o pode ultrapassar 2.000 caracteres.' });
+        return res.status(400).json({ ok: false, error: 'O texto da publicação não pode ultrapassar 2.000 caracteres.' });
       }
 
       const profile = (authorUid && store.profiles?.[authorUid]) || null;
@@ -1468,28 +1507,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 4: EdiÃ§Ã£o de PublicaÃ§Ã£o (/api/cloud-sync -> update_post)
+    // AÇÃO SOCIAL 4: Edição de Publicação (/api/cloud-sync -> update_post)
     if (action === 'update_post') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'AutenticaÃ§Ã£o necessÃ¡ria para editar publicaÃ§Ãµes.' });
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para editar publicações.' });
       }
       const postId = String(body.postId || '').trim();
       const newContent = String(body.content || '').trim();
 
       const existingPost = store.posts?.[postId];
       if (!existingPost) {
-        return res.status(404).json({ ok: false, error: 'PublicaÃ§Ã£o nÃ£o encontrada.' });
+        return res.status(404).json({ ok: false, error: 'Publicação não encontrada.' });
       }
 
       const authorUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
       const isAuthor = String(existingPost.authorUid) === authorUid;
 
-      if (!isAuthor && !isAdmin) {
-        return res.status(403).json({ ok: false, error: 'VocÃª nÃ£o tem permissÃ£o para editar publicaÃ§Ãµes de terceiros.' });
+      if (!isAuthor && !isAdminRequest) {
+        return res.status(403).json({ ok: false, error: 'Você não tem permissão para editar publicações de terceiros.' });
       }
 
       if (!newContent && (!Array.isArray(existingPost.images) || existingPost.images.length === 0)) {
-        return res.status(400).json({ ok: false, error: 'O conteÃºdo da publicaÃ§Ã£o nÃ£o pode ficar vazio.' });
+        return res.status(400).json({ ok: false, error: 'O conteúdo da publicação não pode ficar vazio.' });
       }
 
       const nowIso = new Date().toISOString();
@@ -1510,23 +1549,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 5: ExclusÃ£o de PublicaÃ§Ã£o (/api/cloud-sync -> delete_post)
+    // AÇÃO SOCIAL 5: Exclusão de Publicação (/api/cloud-sync -> delete_post)
     if (action === 'delete_post') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'AutenticaÃ§Ã£o necessÃ¡ria para excluir publicaÃ§Ãµes.' });
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para excluir publicações.' });
       }
       const postId = String(body.postId || '').trim();
       const existingPost = store.posts?.[postId];
 
       if (!existingPost) {
-        return res.status(404).json({ ok: false, error: 'PublicaÃ§Ã£o nÃ£o encontrada.' });
+        return res.status(404).json({ ok: false, error: 'Publicação não encontrada.' });
       }
 
       const authorUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
       const isAuthor = String(existingPost.authorUid) === authorUid;
 
-      if (!isAuthor && !isAdmin) {
-        return res.status(403).json({ ok: false, error: 'VocÃª nÃ£o tem permissÃ£o para excluir esta publicaÃ§Ã£o.' });
+      if (!isAuthor && !isAdminRequest) {
+        return res.status(403).json({ ok: false, error: 'Você não tem permissão para excluir esta publicação.' });
       }
 
       delete store.posts[postId];
@@ -1541,7 +1580,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await MirrorDocumentToFirestoreRest('profiles', postAuthorUid, prof);
       }
 
-      // Remove comentÃ¡rios e curtidas associados
+      // Remove comentários e curtidas associados
       if (store.post_comments) {
         for (const [cId, comm] of Object.entries(store.post_comments)) {
           if (comm?.postId === postId) {
@@ -1563,17 +1602,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true, deletedPostId: postId });
     }
 
-    // AÃ‡ÃƒO SOCIAL 6: Curtir / Descurtir PublicaÃ§Ã£o (/api/cloud-sync -> toggle_like)
+    // AÇÃO SOCIAL 6: Curtir / Descurtir Publicação (/api/cloud-sync -> toggle_like)
     if (action === 'toggle_like') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'AutenticaÃ§Ã£o necessÃ¡ria para curtir publicaÃ§Ãµes.' });
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para curtir publicações.' });
       }
       const postId = String(body.postId || '').trim();
       const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
 
       const post = store.posts?.[postId];
       if (!post) {
-        return res.status(404).json({ ok: false, error: 'PublicaÃ§Ã£o nÃ£o encontrada.' });
+        return res.status(404).json({ ok: false, error: 'Publicação não encontrada.' });
       }
 
       if (!store.post_likes) store.post_likes = {};
@@ -1609,7 +1648,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         saveCloudStore(store);
         await MirrorDocumentToFirestoreRest('posts', postId, post);
 
-        // NotificaÃ§Ã£o para o autor da publicaÃ§Ã£o (se nÃ£o for a si mesmo)
+        // Notificação para o autor da publicação (se não for a si mesmo)
         const authorUid = String(post.authorUid);
         if (authorUid && authorUid !== currentUid) {
           if (!store.social_notifications) store.social_notifications = {};
@@ -1622,7 +1661,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             actorAvatarUrl: store.profiles?.[currentUid]?.avatarUrl || null,
             type: 'like',
             title: 'Nova curtida',
-            message: `${verifiedToken.officialName || 'Um participante'} curtiu sua publicaÃ§Ã£o.`,
+            message: `${verifiedToken.officialName || 'Um participante'} curtiu sua publicação.`,
             targetPostId: postId,
             isRead: false,
             createdAtIso: nowIso,
@@ -1635,11 +1674,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // AÃ‡ÃƒO SOCIAL 7: Listar ComentÃ¡rios (/api/cloud-sync -> list_comments)
+    // AÇÃO SOCIAL 7: Listar Comentários (/api/cloud-sync -> list_comments)
     if (action === 'list_comments') {
       const postId = String(body.postId || '').trim();
       if (!postId) {
-        return res.status(400).json({ ok: false, error: 'ID da publicaÃ§Ã£o Ã© obrigatÃ³rio.' });
+        return res.status(400).json({ ok: false, error: 'ID da publicação é obrigatório.' });
       }
 
       const allComments = Object.values(store.post_comments || {});
@@ -1658,24 +1697,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 8: Criar ComentÃ¡rio (/api/cloud-sync -> create_comment)
+    // AÇÃO SOCIAL 8: Criar Comentário (/api/cloud-sync -> create_comment)
     if (action === 'create_comment') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'AutenticaÃ§Ã£o necessÃ¡ria para comentar.' });
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para comentar.' });
       }
       const postId = String(body.postId || '').trim();
       const content = String(body.content || '').trim();
 
       if (!postId || !content) {
-        return res.status(400).json({ ok: false, error: 'PublicaÃ§Ã£o e conteÃºdo do comentÃ¡rio sÃ£o obrigatÃ³rios.' });
+        return res.status(400).json({ ok: false, error: 'Publicação e conteúdo do comentário são obrigatórios.' });
       }
       if (content.length > 500) {
-        return res.status(400).json({ ok: false, error: 'O comentÃ¡rio deve possuir no mÃ¡ximo 500 caracteres.' });
+        return res.status(400).json({ ok: false, error: 'O comentário deve possuir no máximo 500 caracteres.' });
       }
 
       const post = store.posts?.[postId];
       if (!post) {
-        return res.status(404).json({ ok: false, error: 'PublicaÃ§Ã£o nÃ£o localizada.' });
+        return res.status(404).json({ ok: false, error: 'Publicação não localizada.' });
       }
 
       const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
@@ -1707,7 +1746,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await MirrorDocumentToFirestoreRest('post_comments', commentId, newComment);
       await MirrorDocumentToFirestoreRest('posts', postId, post);
 
-      // NotificaÃ§Ã£o para o autor da publicaÃ§Ã£o (se diferente de quem comentou)
+      // Notificação para o autor da publicação (se diferente de quem comentou)
       const authorUid = String(post.authorUid);
       if (authorUid && authorUid !== currentUid) {
         if (!store.social_notifications) store.social_notifications = {};
@@ -1720,7 +1759,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           actorName: verifiedToken.officialName || 'Um participante',
           actorAvatarUrl: profile?.avatarUrl || null,
           type: 'comment',
-          title: 'Novo comentÃ¡rio',
+          title: 'Novo comentário',
           message: `${verifiedToken.officialName || 'Um participante'} comentou: "${snippet}"`,
           targetPostId: postId,
           targetCommentId: commentId,
@@ -1738,16 +1777,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 9: Excluir ComentÃ¡rio (/api/cloud-sync -> delete_comment)
+    // AÇÃO SOCIAL 9: Excluir Comentário (/api/cloud-sync -> delete_comment)
     if (action === 'delete_comment') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'AutenticaÃ§Ã£o necessÃ¡ria para excluir comentÃ¡rio.' });
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para excluir comentário.' });
       }
       const commentId = String(body.commentId || '').trim();
       const comment = store.post_comments?.[commentId];
 
       if (!comment) {
-        return res.status(404).json({ ok: false, error: 'ComentÃ¡rio nÃ£o encontrado.' });
+        return res.status(404).json({ ok: false, error: 'Comentário não encontrado.' });
       }
 
       const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
@@ -1755,8 +1794,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const isCommentAuthor = comment.authorUid === currentUid;
       const isPostAuthor = post && post.authorUid === currentUid;
 
-      if (!isCommentAuthor && !isPostAuthor && !isAdmin) {
-        return res.status(403).json({ ok: false, error: 'VocÃª nÃ£o tem permissÃ£o para excluir este comentÃ¡rio.' });
+      if (!isCommentAuthor && !isPostAuthor && !isAdminRequest) {
+        return res.status(403).json({ ok: false, error: 'Você não tem permissão para excluir este comentário.' });
       }
 
       delete store.post_comments[commentId];
@@ -1773,16 +1812,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true, deletedCommentId: commentId, commentsCount: post?.commentsCount || 0 });
     }
 
-    // AÃ‡ÃƒO SOCIAL 10: Seguir / Deixar de Seguir (/api/cloud-sync -> toggle_follow)
+    // AÇÃO SOCIAL 10: Seguir / Deixar de Seguir (/api/cloud-sync -> toggle_follow)
     if (action === 'toggle_follow') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'AutenticaÃ§Ã£o necessÃ¡ria para seguir participantes.' });
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para seguir participantes.' });
       }
       const targetUid = String(body.targetUid || '').trim();
       const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
 
       if (!targetUid || targetUid === currentUid) {
-        return res.status(400).json({ ok: false, error: 'VocÃª nÃ£o pode seguir a si mesmo ou perfil invÃ¡lido.' });
+        return res.status(400).json({ ok: false, error: 'Você não pode seguir a si mesmo ou perfil inválido.' });
       }
 
       if (!store.user_follows) store.user_follows = {};
@@ -1816,7 +1855,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           followersCount: targetProfile?.followersCount || 0,
         });
       } else {
-        // ComeÃ§ar a seguir
+        // Começar a seguir
         const followRecord = {
           id: followKey,
           followerUid: currentUid,
@@ -1837,7 +1876,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await MirrorDocumentToFirestoreRest('profiles', currentUid, myProfile);
         }
 
-        // NotificaÃ§Ã£o para a pessoa seguida
+        // Notificação para a pessoa seguida
         if (!store.social_notifications) store.social_notifications = {};
         const notifId = `notif_flw_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
         const notifRecord = {
@@ -1848,7 +1887,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           actorAvatarUrl: myProfile?.avatarUrl || null,
           type: 'follow',
           title: 'Novo seguidor',
-          message: `${verifiedToken.officialName || 'Um participante'} comeÃ§ou a seguir seu perfil.`,
+          message: `${verifiedToken.officialName || 'Um participante'} começou a seguir seu perfil.`,
           isRead: false,
           createdAtIso: nowIso,
         };
@@ -1864,14 +1903,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 11: Listar Seguidores e Seguindo (/api/cloud-sync -> list_network)
+    // AÇÃO SOCIAL 11: Listar Seguidores e Seguindo (/api/cloud-sync -> list_network)
     if (action === 'list_network') {
       const targetUid = String(body.targetUid || verifiedToken?.userId || '').trim();
       const currentUid = verifiedToken?.userId || (verifiedToken?.email ? verifiedToken.email.toLowerCase() : null);
       const mode = body.mode === 'following' ? 'following' : 'followers';
 
       if (!targetUid) {
-        return res.status(400).json({ ok: false, error: 'Identificador do participante nÃ£o informado.' });
+        return res.status(400).json({ ok: false, error: 'Identificador do participante não informado.' });
       }
 
       const allFollows = Object.values(store.user_follows || {});
@@ -1909,10 +1948,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 12: Salvar / Desalvar PublicaÃ§Ã£o (/api/cloud-sync -> toggle_save_post)
+    // AÇÃO SOCIAL 12: Salvar / Desalvar Publicação (/api/cloud-sync -> toggle_save_post)
     if (action === 'toggle_save_post') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'AutenticaÃ§Ã£o necessÃ¡ria para salvar publicaÃ§Ãµes.' });
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para salvar publicações.' });
       }
       const postId = String(body.postId || '').trim();
       const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
@@ -1941,10 +1980,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // AÃ‡ÃƒO SOCIAL 13: Listar NotificaÃ§Ãµes Sociais (/api/cloud-sync -> list_social_notifications)
+    // AÇÃO SOCIAL 13: Listar Notificações Sociais (/api/cloud-sync -> list_social_notifications)
     if (action === 'list_social_notifications') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'AutenticaÃ§Ã£o necessÃ¡ria para ler notificaÃ§Ãµes.' });
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária para ler notificações.' });
       }
       const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
       const allNotifs = Object.values(store.social_notifications || {});
@@ -1965,10 +2004,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO SOCIAL 14: Marcar NotificaÃ§Ã£o como Lida (/api/cloud-sync -> mark_notification_read)
+    // AÇÃO SOCIAL 14: Marcar Notificação como Lida (/api/cloud-sync -> mark_notification_read)
     if (action === 'mark_notification_read') {
       if (!verifiedToken) {
-        return res.status(401).json({ ok: false, error: 'AutenticaÃ§Ã£o necessÃ¡ria.' });
+        return res.status(401).json({ ok: false, error: 'Autenticação necessária.' });
       }
       const currentUid = verifiedToken.userId || (verifiedToken.email ? verifiedToken.email.toLowerCase() : '');
       const notifId = String(body.notificationId || '').trim();
@@ -1994,12 +2033,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true });
     }
 
-    // AÃ‡ÃƒO 2C-6: AtualizaÃ§Ã£o Centralizada do Modo de LanÃ§amento PÃºblico (Restrito Ã  ComissÃ£o / Master)
+    // AÇÃO 2C-6: Atualização Centralizada do Modo de Lançamento Público (Restrito à Comissão / Master)
     if (action === 'update_launch_config') {
       if (!isAdminRequest) {
         return res.status(403).json({
           ok: false,
-          error: 'Apenas a ComissÃ£o Organizadora pode alterar os parÃ¢metros de lanÃ§amento pÃºblico.',
+          error: 'Apenas a Comissão Organizadora pode alterar os parâmetros de lançamento público.',
         });
       }
 
@@ -2013,17 +2052,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       return res.status(200).json({
         ok: true,
-        message: 'ConfiguraÃ§Ãµes de lanÃ§amento pÃºblico atualizadas com sucesso.',
+        message: 'Configurações de lançamento público atualizadas com sucesso.',
         launchConfig: store.launch_config,
       });
     }
 
-    // AÃ‡ÃƒO 2C-7: Salvamento / ImportaÃ§Ã£o de Chaveamento Oficial (Restrito Ã  ComissÃ£o)
+    // AÇÃO 2C-7: Salvamento / Importação de Chaveamento Oficial (Restrito à Comissão)
     if (action === 'save_bracket' || action === 'import_bracket') {
       if (!isAdminRequest) {
         return res.status(403).json({
           ok: false,
-          error: 'Apenas a ComissÃ£o Organizadora pode cadastrar ou importar chaveamentos oficiais.',
+          error: 'Apenas a Comissão Organizadora pode cadastrar ou importar chaveamentos oficiais.',
         });
       }
 
@@ -2033,7 +2072,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!modalityId || !bracketData) {
         return res.status(400).json({
           ok: false,
-          error: 'Dados do chaveamento e identificador da modalidade sÃ£o obrigatÃ³rios.',
+          error: 'Dados do chaveamento e identificador da modalidade são obrigatórios.',
         });
       }
 
@@ -2049,7 +2088,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 2D: Login Administrativo com Hierarquia RBAC (NÃ­veis 1 a 5)
+    // AÇÃO 2D: Login Administrativo com Hierarquia RBAC (Níveis 1 a 5)
     if (action === 'admin_login') {
       const emailInput = String(body.email || body.identifier || '')
         .trim()
@@ -2059,11 +2098,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!emailInput || !passwordInput) {
         return res.status(400).json({
           ok: false,
-          error: 'E-mail e senha sÃ£o obrigatÃ³rios.',
+          error: 'E-mail e senha são obrigatórios.',
         });
       }
 
-      // 1. ValidaÃ§Ã£o primÃ¡ria no Google Firebase Auth (PersistÃªncia Centralizada Oficial)
+      // 1. Validação primária no Google Firebase Auth (Persistência Centralizada Oficial)
       let fbUser: any = null;
       let fbAuthSuccess = false;
       try {
@@ -2073,7 +2112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           fbAuthSuccess = true;
         }
       } catch {
-        // Prossegue para checagem local se falha temporÃ¡ria de rede
+        // Prossegue para checagem local se falha temporária de rede
       }
 
       const adminUsers = store.admin_users || {};
@@ -2109,7 +2148,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const token = createSignedOperatorToken({
         role: userRole,
         email: emailInput,
-        officialName: (user?.name as string) || 'AtlÃ©tica Cangaceira',
+        officialName: (user?.name as string) || 'Atlética Cangaceira',
         mustChangePassword: mustChange,
       });
 
@@ -2117,9 +2156,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         user = {
           id: fbUser?.localId || 'usr_master_cangaceira',
           email: emailInput,
-          name: 'AtlÃ©tica Cangaceira',
+          name: 'Atlética Cangaceira',
           role: 'moderador_master',
-          organization: 'AssociaÃ§Ã£o AtlÃ©tica AcadÃªmica de Medicina UEMA â€“ Cangaceira',
+          organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
           mustChangePassword: mustChange,
           isActive: true,
           updatedAtIso: new Date().toISOString(),
@@ -2139,15 +2178,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         user: {
           id: user.id || fbUser?.localId || 'usr_master_cangaceira',
           email: emailInput,
-          name: user.name || 'AtlÃ©tica Cangaceira',
+          name: user.name || 'Atlética Cangaceira',
           role: userRole,
-          organization: user.organization || 'AssociaÃ§Ã£o AtlÃ©tica AcadÃªmica de Medicina UEMA â€“ Cangaceira',
+          organization: user.organization || 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
           mustChangePassword: mustChange,
         },
       });
     }
 
-    // AÃ‡ÃƒO 2E: AlteraÃ§Ã£o de Senha (Primeiro Acesso ObrigatÃ³rio ou Troca PeriÃ³dica)
+    // AÇÃO 2E: Alteração de Senha (Primeiro Acesso Obrigatório ou Troca Periódica)
     if (action === 'change_admin_password') {
       const emailInput = String(body.email || verifiedToken?.email || MASTER_MODERATOR_EMAIL).trim().toLowerCase();
       const currentPassword = String(body.currentPassword || '').trim();
@@ -2157,14 +2196,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!newPassword || newPassword.length < 6) {
         return res.status(400).json({
           ok: false,
-          error: 'A nova senha deve possuir no mÃ­nimo 6 caracteres.',
+          error: 'A nova senha deve possuir no mínimo 6 caracteres.',
         });
       }
 
       if (confirmPassword && newPassword !== confirmPassword) {
         return res.status(400).json({
           ok: false,
-          error: 'A confirmaÃ§Ã£o de senha nÃ£o confere.',
+          error: 'A confirmação de senha não confere.',
         });
       }
 
@@ -2181,14 +2220,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (!fbIdToken) {
-        // Se ainda nÃ£o existir no Firebase Auth, registra diretamente com a nova senha
+        // Se ainda não existir no Firebase Auth, registra diretamente com a nova senha
         const upRes = await firebaseAuthSignUp(emailInput, newPassword);
         if (upRes.ok && upRes.user?.idToken) {
           fbIdToken = upRes.user.idToken;
         } else if (!verifiedToken?.email && !currentPassword) {
           return res.status(401).json({
             ok: false,
-            error: 'Informe a senha atual ou inicial para autorizar a redefiniÃ§Ã£o.',
+            error: 'Informe a senha atual ou inicial para autorizar a redefinição.',
           });
         }
       }
@@ -2196,8 +2235,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Grava no Google Firebase Auth de forma permanente e centralizada
       const meta = {
         role: 'moderador_master',
-        name: 'AtlÃ©tica Cangaceira',
-        organization: 'AssociaÃ§Ã£o AtlÃ©tica AcadÃªmica de Medicina UEMA â€“ Cangaceira',
+        name: 'Atlética Cangaceira',
+        organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
         mustChangePassword: false,
         updatedAtIso: new Date().toISOString(),
       };
@@ -2206,19 +2245,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await firebaseAuthUpdateProfile({
           idToken: fbIdToken,
           password: newPassword,
-          displayName: 'AtlÃ©tica Cangaceira',
+          displayName: 'Atlética Cangaceira',
           photoUrl: encodeProfileMetadata(meta),
         });
       }
 
-      // Atualiza tambÃ©m no store local
+      // Atualiza também no store local
       const adminUsers = store.admin_users || {};
       const user = adminUsers[emailInput] || adminUsers['usr_master_cangaceira'] || {
         id: 'usr_master_cangaceira',
         email: emailInput,
-        name: 'AtlÃ©tica Cangaceira',
+        name: 'Atlética Cangaceira',
         role: 'moderador_master',
-        organization: 'AssociaÃ§Ã£o AtlÃ©tica AcadÃªmica de Medicina UEMA â€“ Cangaceira',
+        organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
         isActive: true,
       };
 
@@ -2239,7 +2278,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         performedByRole: 'moderador_master',
         targetEmail: emailInput,
         timestampIso: nowIso,
-        details: 'Senha administrativa redefinida e salva permanentemente no Firebase Auth; pendÃªncia de primeiro acesso removida.',
+        details: 'Senha administrativa redefinida e salva permanentemente no Firebase Auth; pendência de primeiro acesso removida.',
       });
 
       saveCloudStore(store);
@@ -2248,7 +2287,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const newToken = createSignedOperatorToken({
         role: 'moderador_master',
         email: emailInput,
-        officialName: 'AtlÃ©tica Cangaceira',
+        officialName: 'Atlética Cangaceira',
         mustChangePassword: false,
       });
 
@@ -2260,7 +2299,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         user: {
           id: user.id || 'usr_master_cangaceira',
           email: emailInput,
-          name: user.name || 'AtlÃ©tica Cangaceira',
+          name: user.name || 'Atlética Cangaceira',
           role: 'moderador_master',
           organization: user.organization,
           mustChangePassword: false,
@@ -2268,12 +2307,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 2F: Listagem de UsuÃ¡rios e Atletas com GestÃ£o RBAC (Restrito a Moderador / Master)
+    // AÇÃO 2F: Listagem de Usuários e Atletas com Gestão RBAC (Restrito a Moderador / Master)
     if (action === 'list_admin_users') {
       if (!isAdminRequest) {
         return res.status(403).json({
           ok: false,
-          error: 'Apenas moderadores e master podem visualizar a listagem completa de usuÃ¡rios.',
+          error: 'Apenas moderadores e master podem visualizar a listagem completa de usuários.',
         });
       }
 
@@ -2289,21 +2328,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         lastLoginAtIso: u.lastLoginAtIso,
       }));
 
+      const allUsersMap = new Map<string, Record<string, unknown>>();
+      for (const u of Object.values(store.users || {})) {
+        const email = String(u.email || '').trim().toLowerCase();
+        if (!email || isPurgedTestRecord(u)) continue;
+        const prof = u.id ? store.profiles?.[String(u.id)] : undefined;
+        allUsersMap.set(email, {
+          id: u.id,
+          email,
+          name: prof?.displayName || u.name || email.split('@')[0],
+          role: u.role || 'visitante',
+          organization: u.authProvider === 'google' ? 'Conta Google' : 'Cadastro E-mail',
+          isActive: u.isActive !== false,
+          mustChangePassword: Boolean(u.mustChangePassword),
+          createdAtIso: u.createdAtIso,
+          lastLoginAtIso: u.lastLoginAtIso,
+        });
+      }
+      for (const a of adminUsers) {
+        const email = String(a.email || '').trim().toLowerCase();
+        if (!email) continue;
+        allUsersMap.set(email, a);
+      }
       const auditLogs = (store.admin_audit_logs || []).slice(-50).reverse();
 
       return res.status(200).json({
         ok: true,
-        users: adminUsers,
+        users: Array.from(allUsersMap.values()),
         auditLogs: isMasterRequest ? auditLogs : [],
       });
     }
 
-    // AÃ‡ÃƒO 2G: AtualizaÃ§Ã£o de Papel/Cargo (Exclusivo do Moderador Master NÃ­vel 5)
+    // AÇÃO 2G: Atualização de Papel/Cargo (Exclusivo do Moderador Master Nível 5)
     if (action === 'update_user_role') {
       if (!isMasterRequest) {
         return res.status(403).json({
           ok: false,
-          error: 'Apenas o Moderador Master (NÃ­vel 5) pode alterar os cargos de usuÃ¡rios.',
+          error: 'Apenas o Moderador Master (Nível 5) pode alterar os cargos de usuários.',
         });
       }
 
@@ -2314,22 +2375,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!targetEmail || !targetRole) {
         return res.status(400).json({
           ok: false,
-          error: 'E-mail alvo e novo cargo sÃ£o obrigatÃ³rios.',
+          error: 'E-mail alvo e novo cargo são obrigatórios.',
         });
       }
 
       if (!validRoles.includes(targetRole)) {
         return res.status(400).json({
           ok: false,
-          error: 'Cargo invÃ¡lido para atribuiÃ§Ã£o. O cargo Moderador Master Ã© Ãºnico e intransferÃ­vel.',
+          error: 'Cargo inválido para atribuição. O cargo Moderador Master é único e intransferível.',
         });
       }
 
-      // Blindagem: Moderador Master nÃ£o pode ser rebaixado
+      // Blindagem: Moderador Master não pode ser rebaixado
       if (isMasterAccount(targetEmail)) {
         return res.status(403).json({
           ok: false,
-          error: `OperaÃ§Ã£o negada: A conta Moderador Master (${MASTER_MODERATOR_EMAIL}) nÃ£o pode ser alterada.`,
+          error: `Operação negada: A conta Moderador Master (${MASTER_MODERATOR_EMAIL}) não pode ser alterada.`,
         });
       }
 
@@ -2338,13 +2399,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const nowIso = new Date().toISOString();
 
       if (!targetUser) {
-        // Cria usuÃ¡rio no admin_users se ainda nÃ£o existia
+        // Cria usuário no admin_users se ainda não existia
         targetUser = {
           id: `usr_${Date.now()}`,
           email: targetEmail,
           name: String(body.targetName || targetEmail.split('@')[0]),
           role: targetRole,
-          organization: 'AssociaÃ§Ã£o AtlÃ©tica AcadÃªmica de Medicina UEMA â€“ Cangaceira',
+          organization: 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira',
           isActive: true,
           mustChangePassword: true,
           createdAtIso: nowIso,
@@ -2373,7 +2434,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       return res.status(200).json({
         ok: true,
-        message: `Cargo do usuÃ¡rio ${targetEmail} atualizado para ${targetRole}.`,
+        message: `Cargo do usuário ${targetEmail} atualizado para ${targetRole}.`,
         user: {
           email: targetUser.email,
           role: targetUser.role,
@@ -2381,7 +2442,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 2H: AtivaÃ§Ã£o / DesativaÃ§Ã£o de UsuÃ¡rio (Exclusivo do Moderador Master NÃ­vel 5)
+    // AÇÃO 2H: Ativação / Desativação de Usuário (Exclusivo do Moderador Master Nível 5)
     if (action === 'toggle_user_active') {
       if (!isMasterRequest) {
         return res.status(403).json({
@@ -2396,7 +2457,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (isMasterAccount(targetEmail) && !isActive) {
         return res.status(403).json({
           ok: false,
-          error: 'A conta Moderador Master nÃ£o pode ser desativada.',
+          error: 'A conta Moderador Master não pode ser desativada.',
         });
       }
 
@@ -2406,7 +2467,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!targetUser) {
         return res.status(404).json({
           ok: false,
-          error: 'UsuÃ¡rio nÃ£o encontrado.',
+          error: 'Usuário não encontrado.',
         });
       }
 
@@ -2434,12 +2495,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 2I: ValidaÃ§Ã£o e Auditoria de SÃ³cios da AtlÃ©tica
+    // AÇÃO 2I: Validação e Auditoria de Sócios da Atlética
     if (action === 'review_member_status') {
       if (!isAdminRequest) {
         return res.status(403).json({
           ok: false,
-          error: 'Apenas a moderaÃ§Ã£o pode aprovar ou rejeitar comprovaÃ§Ã£o de sÃ³cios.',
+          error: 'Apenas a moderação pode aprovar ou rejeitar comprovação de sócios.',
         });
       }
 
@@ -2451,7 +2512,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!reg) {
         return res.status(404).json({
           ok: false,
-          error: 'InscriÃ§Ã£o nÃ£o encontrada.',
+          error: 'Inscrição não encontrada.',
         });
       }
 
@@ -2470,7 +2531,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         reg.rejectionReason = justification;
       }
       reg.memberVerifiedAtIso = nowIso;
-      reg.memberVerifiedBy = verifiedToken?.email || 'moderaÃ§Ã£o';
+      reg.memberVerifiedBy = verifiedToken?.email || 'moderação';
       reg.updatedAtIso = nowIso;
       reg.revision = Number(reg.revision || 0) + 1;
 
@@ -2480,12 +2541,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       store.admin_audit_logs.push({
         id: `audit_${Date.now()}_member`,
         action: approved ? 'approve_member' : 'reject_member',
-        performedByEmail: verifiedToken?.email || 'moderaÃ§Ã£o',
+        performedByEmail: verifiedToken?.email || 'moderação',
         performedByRole: verifiedToken?.role || 'moderador',
         targetId: registrationId,
         timestampIso: nowIso,
         details: approved
-          ? 'Comprovante de sÃ³cio aprovado'
+          ? 'Comprovante de sócio aprovado'
           : `Comprovante rejeitado: ${justification || 'Sem justificativa'}`,
       });
 
@@ -2494,17 +2555,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       return res.status(200).json({
         ok: true,
-        message: approved ? 'CondiÃ§Ã£o de sÃ³cio aprovada!' : 'SolicitaÃ§Ã£o de sÃ³cio rejeitada.',
+        message: approved ? 'Condição de sócio aprovada!' : 'Solicitação de sócio rejeitada.',
         registration: sanitizeRegistrationForPublic(reg),
       });
     }
 
-    // AÃ‡ÃƒO 2C: ReconciliaÃ§Ã£o Geral de Pagamentos Pendentes no Mercado Pago (Restrito a Admin)
+    // AÇÃO 2C: Reconciliação Geral de Pagamentos Pendentes no Mercado Pago (Restrito a Admin)
     if (action === 'reconcile_pending_payments') {
       if (!isAdminRequest) {
         return res.status(403).json({
           ok: false,
-          error: 'Apenas administradores podem acionar a reconciliaÃ§Ã£o com o Mercado Pago.',
+          error: 'Apenas administradores podem acionar a reconciliação com o Mercado Pago.',
         });
       }
 
@@ -2512,7 +2573,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!mpAccessToken) {
         return res.status(500).json({
           ok: false,
-          error: 'Credencial MERCADOPAGO_ACCESS_TOKEN nÃ£o disponÃ­vel nesta instÃ¢ncia.',
+          error: 'Credencial MERCADOPAGO_ACCESS_TOKEN não disponível nesta instância.',
         });
       }
 
@@ -2594,14 +2655,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
         } catch {
-          // Continua para o prÃ³ximo registro
+          // Continua para o próximo registro
         }
       }
 
       appendServerSyncLog({
         category: 'payment_reconcile',
         level: 'info',
-        message: `ReconciliaÃ§Ã£o manual concluÃ­da: ${reconciledCount} pagamentos aprovados de ${pendingRegs.length} verificados`,
+        message: `Reconciliação manual concluída: ${reconciledCount} pagamentos aprovados de ${pendingRegs.length} verificados`,
         details: { pendingTotal: pendingRegs.length, reconciledCount, checkedDetails },
       });
 
@@ -2613,7 +2674,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 3: SincronizaÃ§Ã£o em Lote (Batch)
+    // AÇÃO 3: Sincronização em Lote (Batch)
     if (Array.isArray(batch)) {
       for (const item of batch) {
         const col = String(item?.collectionName || '');
@@ -2649,7 +2710,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // AÃ‡ÃƒO 4: SincronizaÃ§Ã£o de Documento Ãšnico com Whitelist e Versionamento
+    // AÇÃO 4: Sincronização de Documento Único com Whitelist e Versionamento
     const colStr = String(collectionName || '');
     const idStr = String(docId || '');
     if (colStr && idStr && data && ALLOWED_COLLECTIONS.has(colStr)) {
@@ -2664,7 +2725,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (!check.allowed) {
         return res.status(403).json({
-          error: check.reason || 'Escrita nÃ£o autorizada para este documento.',
+          error: check.reason || 'Escrita não autorizada para este documento.',
         });
       }
 
@@ -2695,8 +2756,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    return res.status(400).json({ error: 'Payload invÃ¡lido para sincronizaÃ§Ã£o.' });
+    return res.status(400).json({ error: 'Payload inválido para sincronização.' });
   }
 
-  return res.status(405).json({ error: 'MÃ©todo nÃ£o permitido.' });
+  return res.status(405).json({ error: 'Método não permitido.' });
 }

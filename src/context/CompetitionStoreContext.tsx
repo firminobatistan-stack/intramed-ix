@@ -3112,6 +3112,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         sessionStorage.setItem('intramed_admin_session', 'true');
       } else {
         sessionStorage.removeItem('intramed_admin_session');
+        if (!user)
         setStoredOperatorToken(null);
       }
     }
@@ -4101,6 +4102,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         }
 
         const updatedProfile = data.profile as PublicUserProfile;
+        if (typeof data.token === 'string' && data.token) {
+          setStoredOperatorToken(data.token);
+        }
         setState((prev) => {
           const list = [...(prev.publicProfiles || [])];
           const idx = list.findIndex((p) => p.id === targetUserId || p.userId === targetUserId);
@@ -4120,6 +4124,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             avatarUrl: updatedProfile.avatarUrl !== undefined ? updatedProfile.avatarUrl : state.currentUser.avatarUrl,
             teamId: updatedProfile.teamId !== undefined ? updatedProfile.teamId : state.currentUser.teamId,
             teamName: updatedProfile.teamName !== undefined ? updatedProfile.teamName : state.currentUser.teamName,
+            turma: updatedProfile.turma !== undefined ? updatedProfile.turma : state.currentUser.turma,
+            turmaLabel: updatedProfile.turmaLabel !== undefined ? updatedProfile.turmaLabel : state.currentUser.turmaLabel,
           });
         }
 
@@ -4206,6 +4212,28 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   // ==========================================
   const [socialNotifications, setSocialNotifications] = useState<SocialNotification[]>([]);
   const [socialPosts, setSocialPosts] = useState<SocialPost[]>([]);
+
+  // Recupera token automaticamente para usuários já logados cuja sessão anterior limpou o token
+  useEffect(() => {
+    if (!state.currentUser?.id || getStoredOperatorToken()) return;
+    fetch('/api/cloud-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'refresh_user_token',
+        userId: state.currentUser.id,
+        email: state.currentUser.email,
+        name: state.currentUser.name,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.ok && typeof data.token === 'string' && data.token) {
+          setStoredOperatorToken(data.token);
+        }
+      })
+      .catch(() => {});
+  }, [state.currentUser?.id, state.currentUser?.email, state.currentUser?.name]);
 
   // Validação estrita de sessão no boot (Item 1 e 2 da Auditoria - Zero Bypass Local)
   useEffect(() => {

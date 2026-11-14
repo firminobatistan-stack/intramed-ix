@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -46,15 +46,15 @@ const CARD_SUB_TYPES: MatchEventType[] = [
 ];
 
 /**
- * TELA DE DETALHES DA PARTIDA (MATCH INFO â€” Modelada diretamente nas Imagens 4 e 5 do Case "All Sports"):
- * - CabeÃ§alho Azul Royal com textura hexagonal (.all-sports-header), seta de voltar, "Match Info"
- *   e abas com sublinhado Amarelo (#FACC15): Detalhes | EscalaÃ§Ãµes | ClassificaÃ§Ã£o | EstatÃ­sticas;
- * - Card Superior do Confronto com pÃ­lula de status, escudos, placar central e Ã¡rvore bilateral de gols/pontos;
- * - Card "Pressing Threat / PressÃ£o e Ritmo de Jogo" (Imagem 5) com grÃ¡fico de barras espelhadas (verde/azul)
+ * TELA DE DETALHES DA PARTIDA (MATCH INFO — Modelada diretamente nas Imagens 4 e 5 do Case "All Sports"):
+ * - Cabeçalho Azul Royal com textura hexagonal (.all-sports-header), seta de voltar, "Match Info"
+ *   e abas com sublinhado Amarelo (#FACC15): Detalhes | Escalações | Classificação | Estatísticas;
+ * - Card Superior do Confronto com pílula de status, escudos, placar central e árvore bilateral de gols/pontos;
+ * - Card "Pressing Threat / Pressão e Ritmo de Jogo" (Imagem 5) com gráfico de barras espelhadas (verde/azul)
  *   e faixa "Star Performers / Destaques da Partida";
- * - Card "Who Will Win? / Quem Vai Vencer?" (Imagem 4) com grÃ¡fico de 3 bolhas sobrepostas (Azul, Verde, Amarelo)
- *   e sistema interativo de votaÃ§Ã£o da torcida (ðŸ‘);
- * - Card "Short Analysis / Resumo de CartÃµes e SubstituiÃ§Ãµes" (Imagem 5) e "Match Referee / Mesa Oficial" (Imagem 4).
+ * - Card "Who Will Win? / Quem Vai Vencer?" (Imagem 4) com gráfico de 3 bolhas sobrepostas (Azul, Verde, Amarelo)
+ *   e sistema interativo de votação da torcida (👍);
+ * - Card "Short Analysis / Resumo de Cartões e Substituições" (Imagem 5) e "Match Referee / Mesa Oficial" (Imagem 4).
  */
 export const PublicLiveScoreboardPage: React.FC = () => {
   const { matchId } = useParams<{ matchId: string }>();
@@ -76,7 +76,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MatchInfoTab>('details');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Estado interativo do Sistema de VotaÃ§Ã£o da Torcida ("Who Will Win?" - Imagem 4)
+  // Estado interativo do Sistema de Votação da Torcida ("Who Will Win?" - Imagem 4)
   const [votes, setVotes] = useState<{ home: number; away: number; draw: number }>({
     home: 45,
     away: 35,
@@ -145,7 +145,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
   const homeScore = resolvedMatch?.homeTeam.score ?? 0;
   const awayScore = resolvedMatch?.awayTeam.score ?? 0;
 
-  // Gera 28 barras para o grÃ¡fico "Pressing Threat" (Imagem 5)
+  // Gera 28 barras para o gráfico "Pressing Threat" (Imagem 5)
   const threatBars = Array.from({ length: 28 }, (_, idx) => {
     const matchingEvent = events[idx % Math.max(1, events.length)];
     if (!resolvedMatch) {
@@ -166,16 +166,16 @@ export const PublicLiveScoreboardPage: React.FC = () => {
 
   const tabs: Array<{ id: MatchInfoTab; label: string }> = [
     { id: 'details', label: 'Detalhes' },
-    { id: 'lineups', label: 'EscalaÃ§Ãµes' },
-    { id: 'standings', label: 'ClassificaÃ§Ã£o' },
-    { id: 'statistics', label: 'EstatÃ­sticas' },
+    { id: 'lineups', label: 'Escalações' },
+    { id: 'standings', label: 'Classificação' },
+    { id: 'statistics', label: 'Estatísticas' },
   ];
 
   return (
     <div className="min-h-screen bg-[#F4F6FB] text-slate-900 pb-16">
       <TestModeBanner />
 
-      {/* 1. CABEÃ‡ALHO AZUL ROYAL "MATCH INFO" + MENU BAR COM SUBLINHADO AMARELO (Imagens 4 e 5) */}
+      {/* 1. CABEÇALHO AZUL ROYAL "MATCH INFO" + MENU BAR COM SUBLINHADO AMARELO (Imagens 4 e 5) */}
       <header className="sticky top-0 z-30 all-sports-header text-white shadow-lg">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-4 pb-2.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -193,7 +193,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               </h1>
               <span className="block text-[11px] text-white/75">
                 {resolvedMatch
-                  ? `${resolvedMatch.phaseLabel}${resolvedMatch.scheduledDate ? ` â€¢ ${resolvedMatch.scheduledDate}` : ''}`
+                  ? `${resolvedMatch.phaseLabel}${resolvedMatch.scheduledDate ? ` • ${resolvedMatch.scheduledDate}` : ''}`
                   : 'INTRAMED IX'}
               </span>
             </div>
@@ -205,13 +205,13 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 type="button"
                 onClick={() => navigate(`/sumula/${resolvedMatch.id}`)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-brand-yellow text-[#0B218A] text-xs font-display font-extrabold shadow-sm hover:bg-brand-yellow-dark transition-colors"
-                title="Acesso para o MesÃ¡rio desta partida (solicita senha da partida)"
+                title="Acesso para o Mesário desta partida (solicita senha da partida)"
               >
                 <Play className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">
                   {canOperateMatch(resolvedMatch.id)
-                    ? 'Operar SÃºmula Ao Vivo'
-                    : 'Sou MesÃ¡rio (SÃºmula)'}
+                    ? 'Operar Súmula Ao Vivo'
+                    : 'Sou Mesário (Súmula)'}
                 </span>
               </button>
             )}
@@ -223,7 +223,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   payload={{
                     type: 'match',
                     title: `${resolvedMatch.modalityName}${
-                      resolvedMatch.phaseLabel ? ` â€¢ ${resolvedMatch.phaseLabel}` : ''
+                      resolvedMatch.phaseLabel ? ` • ${resolvedMatch.phaseLabel}` : ''
                     }`,
                     homeTeamName: resolvedMatch.homeTeam.teamName || 'A definir',
                     homeTeamCrestUrl: resolvedMatch.homeTeam.crestUrl,
@@ -248,7 +248,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                         ? 'FIM DE JOGO'
                         : 'CONFRONTO OFICIAL',
                     dateTimeLabel: `${resolvedMatch.scheduledDate || ''} ${
-                      resolvedMatch.scheduledTime ? `â€¢ ${resolvedMatch.scheduledTime}` : ''
+                      resolvedMatch.scheduledTime ? `• ${resolvedMatch.scheduledTime}` : ''
                     }`.trim(),
                     venueLabel: resolvedMatch.venue || 'Quadra Oficial',
                   }}
@@ -256,7 +256,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => navigate(`/sumula/${resolvedMatch.id}/documento`)}
-                  title="Visualizar Documento da SÃºmula"
+                  title="Visualizar Documento da Súmula"
                   className={
                     canOperateOfficialData() ||
                     (resolvedMatch.status === 'finished' &&
@@ -266,7 +266,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   }
                 >
                   <FileText className="w-3.5 h-3.5 text-brand-yellow" />
-                  <span className="hidden sm:inline">SÃºmula Oficial</span>
+                  <span className="hidden sm:inline">Súmula Oficial</span>
                 </button>
               </>
             )}
@@ -274,7 +274,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
             <button
               type="button"
               onClick={() => navigate('/jogos')}
-              aria-label="CalendÃ¡rio"
+              aria-label="Calendário"
               className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 flex items-center justify-center text-white transition-colors"
             >
               <Calendar className="w-4 h-4" />
@@ -335,9 +335,9 @@ export const PublicLiveScoreboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* CONTEÃšDO PRINCIPAL */}
+      {/* CONTEÚDO PRINCIPAL */}
       <main className="max-w-3xl mx-auto px-4 sm:px-6 pt-4 space-y-5">
-        {/* 2. CARD PRINCIPAL DO CONFRONTO (IdÃªntico ao topo das Imagens 4 e 5) */}
+        {/* 2. CARD PRINCIPAL DO CONFRONTO (Idêntico ao topo das Imagens 4 e 5) */}
         <section className="all-sports-card p-5 sm:p-6">
           <div className="flex justify-center mb-4">
             {resolvedMatch?.status === 'live' ||
@@ -376,7 +376,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
 
             <div className="text-center px-2">
               <div className="px-4 py-1.5 rounded-full bg-[#F3F4F9] border border-slate-200/80 text-slate-900 font-display font-extrabold text-base sm:text-lg tabular-nums">
-                {resolvedMatch ? `${homeScore} - ${awayScore}` : 'â€” : â€”'}
+                {resolvedMatch ? `${homeScore} - ${awayScore}` : '— : —'}
               </div>
               {sheet?.timer?.periodLabel && (
                 <span className="block text-[11px] font-semibold text-slate-400 mt-1">
@@ -412,7 +412,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Ãrvore de Gols / Pontos Bilateral (Imagem 5) */}
+          {/* Árvore de Gols / Pontos Bilateral (Imagem 5) */}
           {(homeScorers.length > 0 || awayScorers.length > 0) && (
             <div className="mt-4 grid grid-cols-2 gap-4 max-w-md mx-auto text-xs text-[#5B6B98]">
               <div className="flex flex-col items-end pr-3 border-r border-dashed border-slate-200 space-y-1.5">
@@ -443,11 +443,11 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           <div className="mt-4 pt-3 border-t border-slate-100 text-center space-y-0.5">
             <p className="text-xs font-bold text-slate-600">
               {resolvedMatch?.venue || 'Local a definir'}
-              {resolvedMatch?.scheduledTime ? ` â€¢ ${resolvedMatch.scheduledTime}` : ''}
+              {resolvedMatch?.scheduledTime ? ` • ${resolvedMatch.scheduledTime}` : ''}
             </p>
             {sheet?.tableOfficialName && (
               <p className="text-[11px] font-bold text-emerald-700 pt-0.5">
-                MesÃ¡rio: {sheet.tableOfficialName}
+                Mesário: {sheet.tableOfficialName}
               </p>
             )}
           </div>
@@ -506,7 +506,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                           </span>
                           {ev.periodLabel && (
                             <span className="text-[10px] font-bold text-slate-400">
-                              â€¢ {ev.periodLabel}
+                              • {ev.periodLabel}
                             </span>
                           )}
                         </div>
@@ -554,7 +554,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 Ritmo de Jogo
               </div>
 
-              {/* GrÃ¡fico de Barras Verticais Espelhadas (Verde em cima / Azul embaixo) */}
+              {/* Gráfico de Barras Verticais Espelhadas (Verde em cima / Azul embaixo) */}
               <div className="rounded-2xl overflow-hidden border border-slate-200/70">
                 {/* Metade Superior Verde (Mandante) */}
                 <div className="h-20 bg-gradient-to-b from-emerald-100/80 to-emerald-50/40 px-3 flex items-end justify-between gap-1 border-b border-slate-200/80">
@@ -588,11 +588,11 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 px-1">
-                <span>InÃ­cio â€¢ 1Âº PerÃ­odo</span>
+                <span>Início • 1º Período</span>
                 <span>Tempo Real / FT</span>
               </div>
 
-              {/* Faixa "Star Performers" (IdÃªntica Ã  Imagem 5) */}
+              {/* Faixa "Star Performers" (Idêntica à Imagem 5) */}
               <div className="rounded-2xl bg-[#F3F4F9] p-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-10 h-10 rounded-full bg-[#0B218A] text-white flex items-center justify-center shrink-0 font-display font-bold text-xs">
@@ -600,7 +600,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <span className="inline-block px-2 py-0.5 rounded bg-[#10B981] text-white text-[10px] font-extrabold">
-                      {resolvedMatch ? '7.8' : 'â€”'}
+                      {resolvedMatch ? '7.8' : '—'}
                     </span>
                     <span className="block text-xs font-bold text-slate-700 truncate mt-0.5">
                       {sheet?.homeLineup[0]?.athleteName || homeName}
@@ -615,7 +615,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 <div className="flex items-center gap-2.5 min-w-0 text-right">
                   <div className="min-w-0">
                     <span className="inline-block px-2 py-0.5 rounded bg-[#10B981] text-white text-[10px] font-extrabold">
-                      {resolvedMatch ? '7.5' : 'â€”'}
+                      {resolvedMatch ? '7.5' : '—'}
                     </span>
                     <span className="block text-xs font-bold text-slate-700 truncate mt-0.5">
                       {sheet?.awayLineup[0]?.athleteName || awayName}
@@ -634,7 +634,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   className="inline-flex items-center gap-1 text-xs font-display font-extrabold text-[#10B981] hover:underline"
                 >
                   <CircleDot className="w-3.5 h-3.5" />
-                  <span>EstatÃ­sticas</span>
+                  <span>Estatísticas</span>
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -647,7 +647,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.3fr] items-center gap-6">
-                {/* Legenda Ã  Esquerda */}
+                {/* Legenda à Esquerda */}
                 <div className="space-y-3 text-xs font-semibold text-slate-600">
                   <div className="flex items-center gap-2.5">
                     <span className="w-3 h-3 rounded-full bg-[#1D63FF] shrink-0" />
@@ -659,11 +659,11 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2.5">
                     <span className="w-3 h-3 rounded-full bg-[#FACC15] shrink-0" />
-                    <span>Empate / ProrrogaÃ§Ã£o</span>
+                    <span>Empate / Prorrogação</span>
                   </div>
                 </div>
 
-                {/* GrÃ¡fico de 3 Bolhas Circulares Sobrepostas (Azul, Verde e Amarelo - Imagem 4) */}
+                {/* Gráfico de 3 Bolhas Circulares Sobrepostas (Azul, Verde e Amarelo - Imagem 4) */}
                 <div className="relative h-44 w-full max-w-[270px] mx-auto select-none">
                   {/* Bolha Azul (Mandante) */}
                   <div className="absolute left-2 top-5 w-32 h-32 rounded-full bg-[#1D63FF] text-white flex flex-col items-center justify-center text-center p-2 shadow-lg ring-4 ring-white">
@@ -697,7 +697,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* 3 BotÃµes Interativos de VotaÃ§Ã£o na Base (ðŸ‘ com Anel Colorido - Imagem 4) */}
+              {/* 3 Botões Interativos de Votação na Base (👍 com Anel Colorido - Imagem 4) */}
               <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -767,10 +767,10 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               </div>
             </section>
 
-            {/* 5. CARD "CARTÃ•ES & SUBSTITUIÃ‡Ã•ES" */}
+            {/* 5. CARD "CARTÕES & SUBSTITUIÇÕES" */}
             <section className="all-sports-card p-5 sm:p-6 space-y-4">
               <div className="all-sports-section-pill flex items-center justify-center gap-2">
-                <span>CartÃµes &amp; AlteraÃ§Ãµes</span>
+                <span>Cartões &amp; Alterações</span>
               </div>
 
               {cardAndSubEvents.length > 0 ? (
@@ -819,7 +819,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 </div>
               ) : (
                 <p className="text-xs text-center text-slate-400 py-3">
-                  Sem cartÃµes ou substituiÃ§Ãµes.
+                  Sem cartões ou substituições.
                 </p>
               )}
             </section>
@@ -832,14 +832,14 @@ export const PublicLiveScoreboardPage: React.FC = () => {
 
               <div className="space-y-2.5 text-xs max-w-sm mx-auto">
                 <div className="flex items-center justify-between py-1 border-b border-slate-100">
-                  <span className="font-semibold text-slate-500">Ãrbitro / Mesa:</span>
+                  <span className="font-semibold text-slate-500">Árbitro / Mesa:</span>
                   <span className="font-display font-extrabold text-slate-800">
-                    {sheet?.refereeName || 'ComissÃ£o Oficial'}
+                    {sheet?.refereeName || 'Comissão Oficial'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-1">
                   <span className="font-semibold text-slate-500">
-                    CartÃµes:
+                    Cartões:
                   </span>
                   <div className="flex items-center gap-3 font-display font-bold text-slate-700">
                     <span className="inline-flex items-center gap-1">
@@ -865,7 +865,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#F3F4F9] hover:bg-blue-50 border border-slate-200 text-xs font-display font-bold text-[#0B218A] transition-colors"
                   >
                     <FileText className="w-4 h-4 text-[#1D63FF]" />
-                    <span>Ver SÃºmula (PDF)</span>
+                    <span>Ver Súmula (PDF)</span>
                   </button>
                 </div>
               )}
@@ -873,16 +873,16 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           </>
         )}
 
-        {/* ABA 2: ESCALAÃ‡Ã•ES & VISUALIZAÃ‡ÃƒO TÃTICA EM CAMPO/QUADRA */}
+        {/* ABA 2: ESCALAÇÕES & VISUALIZAÇÃO TÁTICA EM CAMPO/QUADRA */}
         {activeTab === 'lineups' && (
           <section className="all-sports-card p-5 sm:p-6 space-y-5">
             <div className="all-sports-section-pill">
-              Posicionamento TÃ¡tico &amp; Relacionados na SÃºmula
+              Posicionamento Tático &amp; Relacionados na Súmula
             </div>
 
             {/* Quadra / Campo Estilizado com Posicionamento Visual */}
             <div className="relative rounded-3xl bg-gradient-to-b from-[#166534] via-[#15803D] to-[#166534] text-white p-5 sm:p-6 overflow-hidden shadow-inner border-4 border-white">
-              {/* MarcaÃ§Ãµes da quadra/campo */}
+              {/* Marcações da quadra/campo */}
               <div className="pointer-events-none absolute inset-4 border-2 border-white/30 rounded-xl" />
               <div className="pointer-events-none absolute inset-x-4 top-1/2 h-0.5 bg-white/30" />
               <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full border-2 border-white/30" />
@@ -906,7 +906,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                         className="cursor-pointer hover:scale-105 transition-transform flex flex-col items-center text-center"
                       >
                         <div className="w-11 h-11 rounded-full bg-[#0B218A] border-2 border-white shadow-md flex items-center justify-center font-display font-extrabold text-xs text-brand-yellow">
-                          {p.jerseyNumber || 'â€¢'}
+                          {p.jerseyNumber || '•'}
                         </div>
                         <span className="mt-1 px-2 py-0.5 rounded bg-black/40 text-[10px] font-semibold">
                           {p.athleteName}
@@ -922,7 +922,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                         className="cursor-pointer hover:scale-105 transition-transform flex flex-col items-center text-center"
                       >
                         <div className="w-11 h-11 rounded-full bg-white text-[#0B218A] border-2 border-brand-yellow shadow-md flex items-center justify-center font-display font-extrabold text-xs">
-                          {p.jerseyNumber || 'â€¢'}
+                          {p.jerseyNumber || '•'}
                         </div>
                         <span className="mt-1 px-2 py-0.5 rounded bg-black/40 text-[10px] font-semibold">
                           {p.athleteName}
@@ -934,10 +934,10 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               ) : (
                 <div className="relative z-10 py-12 text-center space-y-2">
                   <p className="text-sm font-display font-extrabold text-white">
-                    EscalaÃ§Ãµes aguardando registro na SÃºmula
+                    Escalações aguardando registro na Súmula
                   </p>
                   <p className="text-xs text-white/80 max-w-md mx-auto">
-                    Assim que os atletas dos perÃ­odos forem adicionados na SÃºmula EletrÃ´nica, seus avatares e nÃºmeros aparecerÃ£o posicionados aqui.
+                    Assim que os atletas dos períodos forem adicionados na Súmula Eletrônica, seus avatares e números aparecerão posicionados aqui.
                   </p>
                 </div>
               )}
@@ -945,11 +945,11 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           </section>
         )}
 
-        {/* ABA 3: CLASSIFICAÃ‡ÃƒO */}
+        {/* ABA 3: CLASSIFICAÇÃO */}
         {activeTab === 'standings' && (
           <section className="all-sports-card p-5 sm:p-6 space-y-4">
             <div className="all-sports-section-pill">
-              Tabela de ClassificaÃ§Ã£o da Modalidade
+              Tabela de Classificação da Modalidade
             </div>
             <StandingsTable
               standings={getModalityStandings(
@@ -960,11 +960,11 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           </section>
         )}
 
-        {/* ABA 4: ESTATÃSTICAS COMPARATIVAS */}
+        {/* ABA 4: ESTATÍSTICAS COMPARATIVAS */}
         {activeTab === 'statistics' && (
           <section className="all-sports-card p-5 sm:p-6 space-y-5">
             <div className="all-sports-section-pill">
-              Comparativo EstatÃ­stico da SÃºmula
+              Comparativo Estatístico da Súmula
             </div>
 
             {[
@@ -974,7 +974,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 away: awayScore,
               },
               {
-                label: 'Faltas de Equipe no PerÃ­odo',
+                label: 'Faltas de Equipe no Período',
                 home: sheet?.homeFoulsCurrentPeriod ?? 0,
                 away: sheet?.awayFoulsCurrentPeriod ?? 0,
               },
