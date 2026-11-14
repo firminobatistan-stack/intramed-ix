@@ -200,7 +200,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {resolvedMatch && (
+            {resolvedMatch && (isAdmin || canOperateMatch(resolvedMatch.id)) && (
               <button
                 type="button"
                 onClick={() => navigate(`/sumula/${resolvedMatch.id}`)}
@@ -211,7 +211,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 <span className="hidden sm:inline">
                   {canOperateMatch(resolvedMatch.id)
                     ? 'Operar Súmula Ao Vivo'
-                    : 'Sou Mesário (Súmula)'}
+                    : 'Operar Súmula'}
                 </span>
               </button>
             )}
@@ -877,7 +877,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
         {activeTab === 'lineups' && (
           <section className="all-sports-card p-5 sm:p-6 space-y-5">
             <div className="all-sports-section-pill">
-              Posicionamento Tático &amp; Relacionados na Súmula
+              Posicionamento Tático &amp; Escalações
             </div>
 
             {/* Quadra / Campo Estilizado com Posicionamento Visual */}
@@ -934,10 +934,10 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               ) : (
                 <div className="relative z-10 py-12 text-center space-y-2">
                   <p className="text-sm font-display font-extrabold text-white">
-                    Escalações aguardando registro na Súmula
+                    Escalações da Partida
                   </p>
                   <p className="text-xs text-white/80 max-w-md mx-auto">
-                    Assim que os atletas dos períodos forem adicionados na Súmula Eletrônica, seus avatares e números aparecerão posicionados aqui.
+                    As escalações das equipes aparecerão posicionadas aqui assim que a partida iniciar.
                   </p>
                 </div>
               )}
@@ -964,7 +964,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
         {activeTab === 'statistics' && (
           <section className="all-sports-card p-5 sm:p-6 space-y-5">
             <div className="all-sports-section-pill">
-              Comparativo Estatístico da Súmula
+              Comparativo Estatístico da Partida
             </div>
 
             {[

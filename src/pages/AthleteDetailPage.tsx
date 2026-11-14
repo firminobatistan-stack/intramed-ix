@@ -526,7 +526,9 @@ export const AthleteDetailPage: React.FC = () => {
         !isTestMode && (
           <div className="all-sports-card p-4 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 border-slate-200">
             <div className="text-xs text-slate-600 font-medium">
-              Os atletas inscritos pelas 5 equipes oficiais aparecerão listados aqui assim que o cadastro for concluído pela Comissão Organizadora.
+              {isAdmin
+                ? 'Os atletas inscritos pelas 5 equipes oficiais aparecerão listados aqui assim que o cadastro for concluído pela Comissão Organizadora.'
+                : 'Ainda não há atletas confirmados no evento. Assim que as inscrições forem confirmadas, as fichas aparecerão listadas aqui.'}
             </div>
             {isAdmin && (
               <div className="flex items-center gap-2 shrink-0">
@@ -927,7 +929,7 @@ export const AthleteDetailPage: React.FC = () => {
             <EmptyState
               variant="matches"
               title={`Sem partidas registradas em ${activeModObj.name}`}
-              message="Assim que o atleta for relacionado em uma partida na Súmula Eletrônica, o confronto aparecerá listado aqui."
+              message="Assim que o atleta participar de uma partida nesta modalidade, o confronto aparecerá listado aqui."
             />
           )}
         </section>
@@ -938,7 +940,7 @@ export const AthleteDetailPage: React.FC = () => {
         <section className="space-y-4">
           <div className="all-sports-card p-5 sm:p-6 space-y-4">
             <div className="all-sports-section-pill">
-              Estatísticas Oficiais na Súmula • {activeModObj.name}
+              Estatísticas Oficiais • {activeModObj.name}
             </div>
 
             {resolvedAthlete ? (
@@ -947,7 +949,7 @@ export const AthleteDetailPage: React.FC = () => {
 
                 <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
                   <span>
-                    Jogos Oficializados (Súmula Fechada):{' '}
+                    Jogos Finalizados:{' '}
                     <strong className="text-slate-800">
                       {stats?.officialMatchesPlayed || 0}
                     </strong>
@@ -963,8 +965,8 @@ export const AthleteDetailPage: React.FC = () => {
             ) : (
               <EmptyState
                 variant="stats"
-                title="Registros Individuais na Súmula"
-                message="Selecione ou cadastre um atleta para visualizar seus números."
+                title="Estatísticas Individuais"
+                message="Selecione um atleta confirmado para visualizar seus números."
               />
             )}
           </div>

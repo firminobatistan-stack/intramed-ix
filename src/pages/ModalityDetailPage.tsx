@@ -360,7 +360,7 @@ export const ModalityDetailPage: React.FC = () => {
                   <EmptyState
                     variant="stats"
                     title={leaderboard.title}
-                    message="Assim que gols, cestas ou tempos forem lançados na Súmula Eletrônica desta modalidade, o ranking aparecerá automaticamente aqui."
+                    message="Assim que gols, cestas ou tempos forem registrados nas partidas desta modalidade, o ranking aparecerá automaticamente aqui."
                   />
                 )}
               </section>
@@ -370,7 +370,7 @@ export const ModalityDetailPage: React.FC = () => {
             {allModalityEvents.length > 0 && (
               <div className="all-sports-card p-5 sm:p-6 space-y-3">
                 <div className="all-sports-section-pill">
-                  Eventos Registrados na Súmula ({modality.name})
+                  Lances Registrados ({modality.name})
                 </div>
                 <div className="divide-y divide-brand-surface-border text-xs">
                   {allModalityEvents.map((ev) => (

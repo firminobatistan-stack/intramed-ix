@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText } from 'lucide-react';
 import { Match } from '../../types/domain';
+import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 import { TeamCrest } from './TeamCrest';
 import { StatusBadge } from '../ui/StatusBadge';
 import { EmptyState } from '../ui/EmptyState';
@@ -20,6 +21,10 @@ export const ResultCard: React.FC<ResultCardProps> = ({
   emptyMessage = 'Nenhum resultado disponível.',
 }) => {
   const navigate = useNavigate();
+  const { getSheetByMatchId, canOperateOfficialData } = useCompetitionStore();
+  const isAdmin = canOperateOfficialData();
+  const sheet = match ? getSheetByMatchId(match.id) : undefined;
+  const canViewSheet = isAdmin || Boolean(sheet?.isOfficialReleased);
 
   if (!match) {
     return <EmptyState variant="results" message={emptyMessage} compact />;
@@ -81,12 +86,12 @@ export const ResultCard: React.FC<ResultCardProps> = ({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          navigate(`/sumula/${match.id}/documento`);
+          navigate(canViewSheet ? `/sumula/${match.id}/documento` : `/placar/${match.id}`);
         }}
         className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-surface-muted hover:bg-blue-50 text-xs font-display font-bold text-brand-blue shrink-0"
       >
         <FileText className="w-3.5 h-3.5" />
-        <span>Ver Súmula</span>
+        <span>{canViewSheet ? 'Ver Súmula' : 'Ver Detalhes'}</span>
       </button>
     </div>
   );

@@ -32,7 +32,7 @@ export const ModalityCard: React.FC<ModalityCardProps> = ({ modality, onClick })
             {modality.name}
           </h3>
           <p className="text-xs text-brand-text-secondary mt-0.5">
-            Jogos • Chaveamento • Súmula
+            Jogos • Chaveamento • Classificação
           </p>
         </div>
       </div>

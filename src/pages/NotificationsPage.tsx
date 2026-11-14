@@ -290,7 +290,7 @@ export const NotificationsPage: React.FC = () => {
             {
               key: 'matchStart',
               label: 'Início de Partida',
-              desc: 'Aviso quando o cronômetro oficial for iniciado na mesa',
+              desc: 'Aviso quando a partida começar ao vivo',
               icon: Calendar,
             },
             {
@@ -302,7 +302,7 @@ export const NotificationsPage: React.FC = () => {
             {
               key: 'finalResults',
               label: 'Resultado Consolidado',
-              desc: 'Quando a súmula eletrônica da partida for encerrada',
+              desc: 'Quando o resultado oficial da partida for encerrado',
               icon: Trophy,
             },
             {

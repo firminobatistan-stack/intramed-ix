@@ -43,7 +43,7 @@ Este arquivo serve de memória e alinhamento de contexto para o agente Antigravi
 - **Natação:** Disputa simultânea entre as 5 turmas por tempo/raia (não aparece na grade de confrontos `Time A × Time B`, tendo visualização própria na página de Natação).
 
 ## 5. Diretrizes de UI/UX & Engajamento
-- **Design Minimalista:** Sem textos prolixos, sem repetições de rótulos (evitar `Futsal • Futsal` ou `Turma 21 • Turma 21`), tabelas limpas e cards diretos.
+- **Design Minimalista e Público Limpo:** Sem textos prolixos, sem repetições de rótulos (evitar `Futsal • Futsal` ou `Turma 21 • Turma 21`), tabelas limpas e cards diretos. Nenhuma instrução, botão ou jargão administrativo (`Painel Admin`, `aba Cadastros`, `Mesário`, `Súmula Eletrônica`, `Modo de Teste`) deve aparecer para o usuário comum (`!isAdmin`).
 - **Navegação Mobile Unificada (`Header.tsx` + `BottomNav.tsx`):** No celular, a barra de abas superior fica oculta (`hidden lg:block`), mantendo apenas o `BottomNav` inferior para um visual de app nativo.
 - **Cards de Jogos Compactos (`MatchCard.tsx`):** Altura reduzida em ~30% para exibir 3 a 4 jogos na tela do celular simultaneamente.
 - **Destaque de Byes no Chaveamento (`BracketView.tsx`):** Resumo visual no topo da chave indicando claramente as 3 turmas com *Bye* direto na Semifinal e as 2 turmas que disputam as Quartas.

@@ -39,7 +39,7 @@ const SCORING_EVENT_TYPES: MatchEventType[] = [
 export const MatchCard: React.FC<MatchCardProps> = ({
   match,
   showOperatorActions = true,
-  emptyMessage = 'Os jogos aparecerão aqui quando forem cadastrados.',
+  emptyMessage = 'Nenhuma partida encontrada para este filtro.',
   className = '',
 }) => {
   const navigate = useNavigate();
@@ -263,7 +263,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             <ChevronRight className="w-3 h-3" />
           </button>
 
-          {showOperatorActions && (
+          {showOperatorActions && isAdmin && (
             <>
               <span className="text-slate-200">|</span>
               <button
@@ -277,7 +277,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
             </>
           )}
 
-          {(isLive || isFinished) && (
+          {((isFinished && Boolean(sheet?.isOfficialReleased)) || (isAdmin && (isLive || isFinished))) && (
             <>
               <span className="text-slate-200">|</span>
               <button

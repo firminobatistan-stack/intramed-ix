@@ -456,7 +456,7 @@ export const HomePage: React.FC = () => {
           <div className="space-y-4">
             <MatchCard
               match={null}
-              emptyMessage="Os jogos aparecerão aqui quando forem cadastrados oficialmente."
+              emptyMessage="Nenhuma partida encontrada para o filtro selecionado."
             />
           </div>
         )}

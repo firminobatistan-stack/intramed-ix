@@ -680,7 +680,11 @@ export const TeamDetailPage: React.FC = () => {
             <EmptyState
               variant="teams"
               title={`Elenco Oficial • ${resolvedTeam?.name}`}
-              message={`Os atletas inscritos pela ${resolvedTeam?.name} aparecerão listados aqui. Você pode inscrevê-los na aba Cadastros do Painel Admin.`}
+              message={
+                isAdmin
+                  ? `Os atletas inscritos pela ${resolvedTeam?.name} aparecerão listados aqui. Você pode inscrevê-los na aba Cadastros do Painel Admin.`
+                  : `Ainda não há atletas confirmados na equipe ${resolvedTeam?.name}. Assim que as inscrições forem confirmadas, o elenco aparecerá listado aqui.`
+              }
             />
           )}
         </section>

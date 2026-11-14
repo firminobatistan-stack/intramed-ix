@@ -100,7 +100,7 @@ export const MatchesPage: React.FC = () => {
       case 'proximos':
       case 'todos':
       default:
-        return 'Os jogos aparecerão aqui quando forem cadastrados.';
+        return 'Nenhuma partida encontrada para o filtro selecionado.';
     }
   };
 

@@ -366,16 +366,16 @@ export const FavoritesPage: React.FC = () => {
         ) : (
           <EmptyState
             variant="teams"
-            title="Nenhum atleta cadastrado ainda"
-            message="Quando a relação oficial de atletas de cada período estiver disponível, você poderá seguir atletas específicos."
+            title="Nenhum atleta confirmado ainda"
+            message="Assim que as inscrições dos atletas forem confirmadas, você poderá seguir seus atletas favoritos aqui."
             action={
               <Button
                 variant="primary"
                 size="sm"
                 leftIcon={<Compass className="w-4 h-4" />}
-                onClick={() => navigate('/atleta')}
+                onClick={() => navigate('/equipe')}
               >
-                Visualizar Estrutura do Perfil de Atleta
+                Ver Equipes Oficiais
               </Button>
             }
           />

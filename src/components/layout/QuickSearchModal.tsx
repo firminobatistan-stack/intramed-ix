@@ -100,7 +100,7 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar modalidade, chaveamento, súmula ou placar..."
+            placeholder="Buscar modalidade, equipe, atleta ou jogo..."
             className="w-full text-sm text-brand-text-primary placeholder:text-brand-text-muted focus:outline-none"
           />
           <button
