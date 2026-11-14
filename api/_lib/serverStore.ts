@@ -226,6 +226,7 @@ export function isPurgedTestRecord(rec: Record<string, unknown> | null | undefin
   const username = String(rec.accountUsername || '').trim().toLowerCase();
 
   if (
+    id === 'test-sync-check' ||
     id.startsWith('reg-cang-') ||
     id.startsWith('ath-reg-cang-') ||
     id.startsWith('user-ath-') ||
@@ -691,6 +692,241 @@ export function protectMasterAccount(targetEmail: string, actionDesc: string): v
     throw new Error(
       `Operação negada (${actionDesc}): A conta Moderador Master (${MASTER_MODERATOR_EMAIL}) é protegida e não pode ser rebaixada, desativada ou excluída.`
     );
+  }
+}
+
+export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap): Promise<void> {
+  const nowIso = new Date().toISOString();
+  if (!store.registrations) store.registrations = {};
+  if (!store.athletes) store.athletes = {};
+  if (!store.users) store.users = {};
+  if (!store.profiles) store.profiles = {};
+
+  // 1. Deduplica registrations por athleteEmail (mantém a inscrição PAGA ou mais recente e mescla foto/camisa/insta da anterior)
+  const regsByEmail = new Map<string, Array<Record<string, unknown>>>();
+  for (const reg of Object.values(store.registrations)) {
+    if (!reg || !reg.id || isPurgedTestRecord(reg)) continue;
+    const email = String(reg.athleteEmail || '').trim().toLowerCase();
+    if (!email) continue;
+    const list = regsByEmail.get(email) || [];
+    list.push(reg);
+    regsByEmail.set(email, list);
+  }
+
+  for (const [, group] of regsByEmail.entries()) {
+    if (group.length <= 1) continue;
+    group.sort((a, b) => {
+      const aPaid = a.paymentStatus === 'pago' ? 1 : 0;
+      const bPaid = b.paymentStatus === 'pago' ? 1 : 0;
+      if (aPaid !== bPaid) return bPaid - aPaid;
+      const aTime = new Date(String(a.updatedAtIso || a.createdAtIso || 0)).getTime();
+      const bTime = new Date(String(b.updatedAtIso || b.createdAtIso || 0)).getTime();
+      return bTime - aTime;
+    });
+
+    const primaryReg = group[0];
+    const primaryRegId = String(primaryReg.id);
+    let primaryChanged = false;
+
+    for (let i = 1; i < group.length; i++) {
+      const dup = group[i];
+      const dupId = String(dup.id || '');
+      if (dup.paymentStatus === 'pago') continue; // Nunca apaga uma segunda inscrição paga distinta
+
+      if (!primaryReg.avatarUrl && dup.avatarUrl) {
+        primaryReg.avatarUrl = dup.avatarUrl;
+        primaryChanged = true;
+      }
+      if ((primaryReg.jerseyNumber === null || primaryReg.jerseyNumber === undefined) && dup.jerseyNumber !== null && dup.jerseyNumber !== undefined) {
+        primaryReg.jerseyNumber = dup.jerseyNumber;
+        primaryChanged = true;
+      }
+      if (!primaryReg.instagramHandle && dup.instagramHandle) {
+        primaryReg.instagramHandle = dup.instagramHandle;
+        primaryChanged = true;
+      }
+      if (!primaryReg.bio && dup.bio) {
+        primaryReg.bio = dup.bio;
+        primaryChanged = true;
+      }
+      if (dupId && dupId !== primaryRegId) {
+        delete store.registrations[dupId];
+        void DeleteDocumentFromFirestoreRest('registrations', dupId);
+      }
+    }
+
+    if (primaryChanged) {
+      primaryReg.revision = Number(primaryReg.revision || 1) + 1;
+      primaryReg.updatedAtIso = nowIso;
+      store.registrations[primaryRegId] = primaryReg;
+      void MirrorDocumentToFirestoreRest('registrations', primaryRegId, primaryReg);
+    }
+  }
+
+  // 2. Deduplica athletes por email (e vincula com a inscrição ativa do mesmo email)
+  const athsByEmail = new Map<string, Array<Record<string, unknown>>>();
+  for (const ath of Object.values(store.athletes)) {
+    if (!ath || !ath.id || isPurgedTestRecord(ath)) continue;
+    const regId = String(ath.registrationId || '');
+    const linkedReg = regId ? store.registrations[regId] : undefined;
+    if (linkedReg) {
+      if (ath.paymentStatus !== linkedReg.paymentStatus) {
+        ath.paymentStatus = linkedReg.paymentStatus;
+      }
+      if (!ath.email && linkedReg.athleteEmail) {
+        ath.email = linkedReg.athleteEmail;
+      }
+    }
+    const email = String(ath.email || '').trim().toLowerCase();
+    if (!email) continue;
+    const list = athsByEmail.get(email) || [];
+    list.push(ath);
+    athsByEmail.set(email, list);
+  }
+
+  for (const [email, group] of athsByEmail.entries()) {
+    const matchingReg = Object.values(store.registrations).find(
+      (r) => String(r?.athleteEmail || '').trim().toLowerCase() === email
+    );
+
+    group.sort((a, b) => {
+      const aMatchesReg = matchingReg && (a.id === matchingReg.linkedAthleteId || a.registrationId === matchingReg.id) ? 1 : 0;
+      const bMatchesReg = matchingReg && (b.id === matchingReg.linkedAthleteId || b.registrationId === matchingReg.id) ? 1 : 0;
+      if (aMatchesReg !== bMatchesReg) return bMatchesReg - aMatchesReg;
+      const aPaid = a.paymentStatus === 'pago' ? 1 : 0;
+      const bPaid = b.paymentStatus === 'pago' ? 1 : 0;
+      if (aPaid !== bPaid) return bPaid - aPaid;
+      const aTime = new Date(String(a.updatedAtIso || 0)).getTime();
+      const bTime = new Date(String(b.updatedAtIso || 0)).getTime();
+      return bTime - aTime;
+    });
+
+    const primaryAth = group[0];
+    const primaryAthId = String(primaryAth.id);
+    let athChanged = false;
+
+    if (matchingReg) {
+      if (primaryAth.paymentStatus !== matchingReg.paymentStatus) {
+        primaryAth.paymentStatus = matchingReg.paymentStatus;
+        athChanged = true;
+      }
+      if (!primaryAth.avatarUrl && matchingReg.avatarUrl) {
+        primaryAth.avatarUrl = matchingReg.avatarUrl;
+        athChanged = true;
+      }
+      if ((primaryAth.jerseyNumber === null || primaryAth.jerseyNumber === undefined) && matchingReg.jerseyNumber !== null && matchingReg.jerseyNumber !== undefined) {
+        primaryAth.jerseyNumber = matchingReg.jerseyNumber;
+        athChanged = true;
+      }
+      if (!primaryAth.instagramHandle && matchingReg.instagramHandle) {
+        primaryAth.instagramHandle = matchingReg.instagramHandle;
+        athChanged = true;
+      }
+    }
+
+    for (let i = 1; i < group.length; i++) {
+      const dup = group[i];
+      const dupId = String(dup.id || '');
+      if (!primaryAth.avatarUrl && dup.avatarUrl) {
+        primaryAth.avatarUrl = dup.avatarUrl;
+        athChanged = true;
+      }
+      if ((primaryAth.jerseyNumber === null || primaryAth.jerseyNumber === undefined) && dup.jerseyNumber !== null && dup.jerseyNumber !== undefined) {
+        primaryAth.jerseyNumber = dup.jerseyNumber;
+        athChanged = true;
+      }
+      if (!primaryAth.instagramHandle && dup.instagramHandle) {
+        primaryAth.instagramHandle = dup.instagramHandle;
+        athChanged = true;
+      }
+      if (!primaryAth.bio && dup.bio) {
+        primaryAth.bio = dup.bio;
+        athChanged = true;
+      }
+      if (dupId && dupId !== primaryAthId) {
+        delete store.athletes[dupId];
+        void DeleteDocumentFromFirestoreRest('athletes', dupId);
+      }
+    }
+
+    if (athChanged) {
+      primaryAth.revision = Number(primaryAth.revision || 1) + 1;
+      primaryAth.updatedAtIso = nowIso;
+      store.athletes[primaryAthId] = primaryAth;
+      void MirrorDocumentToFirestoreRest('athletes', primaryAthId, primaryAth);
+    }
+  }
+
+  // 3. Sincroniza profiles com users, registrations e athletes (e remove perfil duplicado usr_master_cangaceira se já houver UID real para a conta Master)
+  const masterRealUser = Object.values(store.users).find(
+    (u) =>
+      u &&
+      String(u.email || '').trim().toLowerCase() === MASTER_MODERATOR_EMAIL.toLowerCase() &&
+      String(u.id || '') !== 'usr_master_cangaceira'
+  );
+  if (masterRealUser && store.profiles['usr_master_cangaceira'] && store.profiles[String(masterRealUser.id)]) {
+    const realProf = store.profiles[String(masterRealUser.id)];
+    const legacyProf = store.profiles['usr_master_cangaceira'];
+    if (!realProf.instagramHandle && legacyProf.instagramHandle) {
+      realProf.instagramHandle = legacyProf.instagramHandle;
+      void MirrorDocumentToFirestoreRest('profiles', String(masterRealUser.id), realProf);
+    }
+    delete store.profiles['usr_master_cangaceira'];
+    void DeleteDocumentFromFirestoreRest('profiles', 'usr_master_cangaceira');
+  }
+
+  for (const [profId, prof] of Object.entries(store.profiles)) {
+    if (!prof || isPurgedTestRecord(prof)) continue;
+    const userObj = store.users[profId] || Object.values(store.users).find((u) => String(u?.id || '') === profId);
+    const userEmail = String(userObj?.email || prof.email || '').trim().toLowerCase();
+    const matchingReg = userEmail
+      ? Object.values(store.registrations).find(
+          (r) => String(r?.athleteEmail || '').trim().toLowerCase() === userEmail
+        )
+      : prof.linkedAthleteId
+      ? Object.values(store.registrations).find(
+          (r) => r?.linkedAthleteId === prof.linkedAthleteId
+        )
+      : undefined;
+
+    if (matchingReg) {
+      const expectedAthId = String(matchingReg.linkedAthleteId || `ath-${matchingReg.id}`);
+      const isPaid = matchingReg.paymentStatus === 'pago';
+      let profChanged = false;
+      if (prof.linkedAthleteId !== expectedAthId) {
+        prof.linkedAthleteId = expectedAthId;
+        profChanged = true;
+      }
+      if (Boolean(prof.isAthlete) !== isPaid) {
+        prof.isAthlete = isPaid;
+        profChanged = true;
+      }
+      if (!prof.turma && matchingReg.turma) {
+        prof.turma = matchingReg.turma;
+        profChanged = true;
+      }
+      if (!prof.turmaLabel && matchingReg.turmaLabel) {
+        prof.turmaLabel = matchingReg.turmaLabel;
+        profChanged = true;
+      }
+      if (!prof.teamId && matchingReg.teamId) {
+        prof.teamId = matchingReg.teamId;
+        profChanged = true;
+      }
+      if (!prof.teamName && matchingReg.teamName) {
+        prof.teamName = matchingReg.teamName;
+        profChanged = true;
+      }
+      if (!prof.avatarUrl && matchingReg.avatarUrl) {
+        prof.avatarUrl = matchingReg.avatarUrl;
+        profChanged = true;
+      }
+      if (profChanged) {
+        prof.updatedAtIso = nowIso;
+        store.profiles[profId] = prof;
+        void MirrorDocumentToFirestoreRest('profiles', profId, prof);
+      }
+    }
   }
 }
 
@@ -1208,6 +1444,7 @@ export async function ensureCloudStoreHydrated(force = false): Promise<CloudColl
         }
       })
     );
+    await deduplicateAndLinkCloudEntities(store);
     ensureMasterAccountProvisioned(store);
     saveCloudStore(store);
   } catch {
@@ -1474,9 +1711,41 @@ export async function markRegistrationPaidOnServer(params: {
   store.athletes[linkedAthId] = athleteRecord;
   await MirrorDocumentToFirestoreRest('athletes', linkedAthId, athleteRecord);
 
-  // Promove o usuário e perfil vinculados para papel 'atleta'
+  // Remove eventuais inscrições/atletas duplicados pendentes do mesmo e-mail
   const athleteEmail = String(existing.athleteEmail || '').trim().toLowerCase();
-  for (const [uid, user] of Object.entries(store.users || {})) {
+  if (athleteEmail) {
+    for (const [otherAthId, otherAth] of Object.entries(store.athletes || {})) {
+      if (
+        otherAthId !== linkedAthId &&
+        otherAth &&
+        String(otherAth.email || '').trim().toLowerCase() === athleteEmail
+      ) {
+        if (!athleteRecord.avatarUrl && otherAth.avatarUrl) athleteRecord.avatarUrl = otherAth.avatarUrl;
+        if ((athleteRecord.jerseyNumber === null || athleteRecord.jerseyNumber === undefined) && otherAth.jerseyNumber !== null && otherAth.jerseyNumber !== undefined) {
+          athleteRecord.jerseyNumber = otherAth.jerseyNumber;
+        }
+        if (!athleteRecord.instagramHandle && otherAth.instagramHandle) {
+          athleteRecord.instagramHandle = otherAth.instagramHandle;
+        }
+        delete store.athletes[otherAthId];
+        void DeleteDocumentFromFirestoreRest('athletes', otherAthId);
+      }
+    }
+    for (const [otherRegId, otherReg] of Object.entries(store.registrations || {})) {
+      if (
+        otherRegId !== params.registrationId &&
+        otherReg &&
+        otherReg.paymentStatus !== 'pago' &&
+        String(otherReg.athleteEmail || '').trim().toLowerCase() === athleteEmail
+      ) {
+        delete store.registrations[otherRegId];
+        void DeleteDocumentFromFirestoreRest('registrations', otherRegId);
+      }
+    }
+  }
+
+  // Promove o usuário e perfil vinculados para papel 'atleta'
+  for (const [, user] of Object.entries(store.users || {})) {
     if (user && (String(user.email || '').trim().toLowerCase() === athleteEmail || user.id === existing.userId)) {
       user.role = 'atleta';
       user.linkedAthleteId = linkedAthId;

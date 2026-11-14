@@ -7,6 +7,7 @@ import {
   computeAuthorizedServerPrice,
   createSignedOperatorToken,
   decodeProfileMetadata,
+  deduplicateAndLinkCloudEntities,
   DEFAULT_LAUNCH_CONFIG,
   DeleteDocumentFromFirestoreRest,
   encodeProfileMetadata,
@@ -323,7 +324,18 @@ function canClientWriteDocument(
   if (collectionName === 'athletes') {
     const regId = String(incoming.registrationId || existing?.registrationId || '');
     const store = getCloudStore();
-    const linkedReg = regId ? store.registrations[regId] : undefined;
+    const athEmail = String(incoming.email || existing?.email || '').trim().toLowerCase();
+    const linkedReg =
+      (regId ? store.registrations[regId] : undefined) ||
+      (athEmail
+        ? Object.values(store.registrations || {}).find(
+            (r) => String(r?.athleteEmail || '').trim().toLowerCase() === athEmail
+          )
+        : undefined);
+
+    const realPaymentStatus = linkedReg
+      ? linkedReg.paymentStatus
+      : existing?.paymentStatus ?? (isAdmin ? incoming.paymentStatus : 'pendente');
 
     return {
       allowed: true,
@@ -331,8 +343,9 @@ function canClientWriteDocument(
         ...(existing || {}),
         ...incoming,
         id: docId,
-        paymentStatus: linkedReg?.paymentStatus ?? existing?.paymentStatus ?? incoming.paymentStatus,
+        paymentStatus: realPaymentStatus,
         memberStatus: linkedReg?.memberStatus ?? existing?.memberStatus ?? incoming.memberStatus,
+        status: realPaymentStatus === 'pago' ? 'confirmado' : 'pendente',
         revision: Math.max(prevRevision + 1, incomingRevision),
         updatedAtIso: nowIso,
       },
@@ -2834,6 +2847,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
       }
+      await deduplicateAndLinkCloudEntities(store);
       saveCloudStore(store);
       return res.status(200).json({
         success: true,
@@ -2877,8 +2891,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         };
       }
 
-      saveCloudStore(store);
       await MirrorDocumentToFirestoreRest(colStr, idStr, check.sanitizedData);
+      await deduplicateAndLinkCloudEntities(store);
+      saveCloudStore(store);
 
       return res.status(200).json({
         success: true,

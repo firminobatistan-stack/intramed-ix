@@ -102,7 +102,7 @@ export const CommunityDirectoryPage: React.FC = () => {
     );
   }
 
-  // Combina perfis públicos com a lista de atletas oficiais para máxima cobertura
+  // Combina perfis públicos com a lista de atletas oficiais para máxima cobertura, sem duplicatas
   const combinedMembers = useMemo(() => {
     const list: Array<{
       id: string;
@@ -121,54 +121,192 @@ export const CommunityDirectoryPage: React.FC = () => {
     }> = [];
 
     const seenIds = new Set<string>();
+    const seenPersonKeys = new Map<string, number>(); // key -> index in list
+
+    const normalizeKey = (val?: string | null): string =>
+      String(val || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
     // 1. Adiciona perfis salvos no servidor
     (publicProfiles || []).forEach((p) => {
-      if (!p || seenIds.has(p.id) || seenIds.has(p.userId)) return;
-      seenIds.add(p.id);
-      seenIds.add(p.userId);
+      if (!p || !p.id) return;
+      if (p.id === 'test-sync-check' || p.displayName === 'undefined') return;
+      if (seenIds.has(p.id) || (p.userId && seenIds.has(p.userId))) return;
+      if (p.linkedAthleteId && seenIds.has(p.linkedAthleteId)) return;
 
-      const linkedAth = p.linkedAthleteId
-        ? visibleAthletes.find((a) => a.id === p.linkedAthleteId)
+      const normDisplayName = normalizeKey(p.displayName);
+      const linkedAth =
+        (p.linkedAthleteId
+          ? visibleAthletes.find(
+              (a) => a.id === p.linkedAthleteId || a.registrationId === p.linkedAthleteId
+            )
+          : null) ||
+        visibleAthletes.find((a) => {
+          if (a.id === p.id || a.id === p.userId) return true;
+          const normAthName = normalizeKey(a.name);
+          if (!normAthName || !normDisplayName) return false;
+          if (normAthName === normDisplayName) return true;
+          const sameTeamOrTurma =
+            (p.teamId && a.teamId && p.teamId === a.teamId) ||
+            (p.turma && a.turma && p.turma === a.turma);
+          if (
+            sameTeamOrTurma &&
+            (normAthName.startsWith(`${normDisplayName} `) ||
+              normDisplayName.startsWith(`${normAthName} `))
+          ) {
+            return true;
+          }
+          return false;
+        }) ||
+        null;
+
+      seenIds.add(p.id);
+      if (p.userId) seenIds.add(p.userId);
+      if (p.linkedAthleteId) seenIds.add(p.linkedAthleteId);
+      if (linkedAth) {
+        seenIds.add(linkedAth.id);
+        if (linkedAth.registrationId) seenIds.add(linkedAth.registrationId);
+      }
+
+      const resolvedTeamId = p.teamId || linkedAth?.teamId || null;
+      const resolvedTurma = p.turma || linkedAth?.turma || null;
+      const teamObj = resolvedTeamId
+        ? visibleTeams.find((t) => t.id === resolvedTeamId)
         : null;
 
-      list.push({
+      const entry = {
         id: p.id,
-        userId: p.userId,
-        name: p.displayName || 'Participante IntraMed',
+        userId: p.userId || p.id,
+        name: p.displayName || linkedAth?.name || 'Participante IntraMed',
         avatarUrl: p.avatarUrl || linkedAth?.avatarUrl || null,
-        turma: p.turma || linkedAth?.turma || null,
+        turma: resolvedTurma,
         turmaLabel: p.turmaLabel || linkedAth?.turmaLabel || null,
-        teamId: p.teamId || linkedAth?.teamId || null,
-        teamName: p.teamName || null,
+        teamId: resolvedTeamId,
+        teamName: p.teamName || teamObj?.name || null,
         bio: p.bio || linkedAth?.bio || null,
         instagramHandle: p.instagramHandle || linkedAth?.instagramHandle || null,
-        isAthlete: p.linkedAthleteId ? Boolean(linkedAth) : Boolean(p.isAthlete),
-        linkedAthleteId: p.linkedAthleteId || linkedAth?.id || null,
-        modalityCount: linkedAth?.modalityIds?.length || p.favoriteModalityIds?.length || 0,
-      });
+        isAthlete: Boolean(linkedAth),
+        linkedAthleteId: linkedAth?.id || p.linkedAthleteId || null,
+        modalityCount:
+          linkedAth?.modalityIds?.length || p.favoriteModalityIds?.length || 0,
+      };
+
+      const personKey = `${normDisplayName}::${resolvedTeamId || resolvedTurma || ''}`;
+      const existingIdx = normDisplayName
+        ? seenPersonKeys.get(personKey) ?? seenPersonKeys.get(normDisplayName)
+        : undefined;
+
+      if (existingIdx !== undefined && list[existingIdx]) {
+        const prev = list[existingIdx];
+        list[existingIdx] = {
+          ...prev,
+          avatarUrl: prev.avatarUrl || entry.avatarUrl,
+          turma: prev.turma || entry.turma,
+          turmaLabel: prev.turmaLabel || entry.turmaLabel,
+          teamId: prev.teamId || entry.teamId,
+          teamName: prev.teamName || entry.teamName,
+          bio: prev.bio || entry.bio,
+          instagramHandle: prev.instagramHandle || entry.instagramHandle,
+          isAthlete: prev.isAthlete || entry.isAthlete,
+          linkedAthleteId: prev.linkedAthleteId || entry.linkedAthleteId,
+          modalityCount: Math.max(prev.modalityCount || 0, entry.modalityCount || 0),
+        };
+        return;
+      }
+
+      const idx = list.length;
+      list.push(entry);
+      if (normDisplayName) {
+        seenPersonKeys.set(personKey, idx);
+        seenPersonKeys.set(normDisplayName, idx);
+      }
+      if (linkedAth?.name) {
+        const normAth = normalizeKey(linkedAth.name);
+        if (normAth) {
+          seenPersonKeys.set(`${normAth}::${resolvedTeamId || resolvedTurma || ''}`, idx);
+          seenPersonKeys.set(normAth, idx);
+        }
+      }
     });
 
     // 2. Adiciona atletas da competição que ainda não possuem perfil separado
     visibleAthletes.forEach((a) => {
-      if (a.id && !seenIds.has(a.id) && (!a.registrationId || !seenIds.has(a.registrationId))) {
-        seenIds.add(a.id);
-        const team = visibleTeams.find((t) => t.id === a.teamId);
-        list.push({
-          id: a.id,
-          userId: a.id,
-          name: a.name,
-          avatarUrl: a.avatarUrl || null,
-          turma: a.turma || null,
-          turmaLabel: a.turmaLabel || null,
-          teamId: a.teamId || null,
-          teamName: team?.name || null,
-          bio: a.bio || null,
-          instagramHandle: a.instagramHandle || null,
-          isAthlete: true,
-          linkedAthleteId: a.id,
-          modalityCount: a.modalityIds?.length || 0,
+      if (!a || !a.id || a.id === 'test-sync-check' || a.name === 'undefined') return;
+      if (seenIds.has(a.id) || (a.registrationId && seenIds.has(a.registrationId))) {
+        return;
+      }
+
+      const normAthName = normalizeKey(a.name);
+      const personKey = `${normAthName}::${a.teamId || a.turma || ''}`;
+      let existingIdx = normAthName
+        ? seenPersonKeys.get(personKey) ?? seenPersonKeys.get(normAthName)
+        : undefined;
+
+      if (existingIdx === undefined && normAthName) {
+        const foundIdx = list.findIndex((item) => {
+          const normItem = normalizeKey(item.name);
+          if (!normItem) return false;
+          const sameTeamOrTurma =
+            (item.teamId && a.teamId && item.teamId === a.teamId) ||
+            (item.turma && a.turma && item.turma === a.turma);
+          return (
+            sameTeamOrTurma &&
+            (normAthName.startsWith(`${normItem} `) ||
+              normItem.startsWith(`${normAthName} `))
+          );
         });
+        if (foundIdx >= 0) {
+          existingIdx = foundIdx;
+        }
+      }
+
+      seenIds.add(a.id);
+      if (a.registrationId) seenIds.add(a.registrationId);
+
+      const team = visibleTeams.find((t) => t.id === a.teamId);
+
+      if (existingIdx !== undefined && list[existingIdx]) {
+        const prev = list[existingIdx];
+        list[existingIdx] = {
+          ...prev,
+          avatarUrl: prev.avatarUrl || a.avatarUrl || null,
+          turma: prev.turma || a.turma || null,
+          turmaLabel: prev.turmaLabel || a.turmaLabel || null,
+          teamId: prev.teamId || a.teamId || null,
+          teamName: prev.teamName || team?.name || null,
+          bio: prev.bio || a.bio || null,
+          instagramHandle: prev.instagramHandle || a.instagramHandle || null,
+          isAthlete: true,
+          linkedAthleteId: prev.linkedAthleteId || a.id,
+          modalityCount: Math.max(prev.modalityCount || 0, a.modalityIds?.length || 0),
+        };
+        return;
+      }
+
+      const idx = list.length;
+      list.push({
+        id: a.id,
+        userId: a.id,
+        name: a.name,
+        avatarUrl: a.avatarUrl || null,
+        turma: a.turma || null,
+        turmaLabel: a.turmaLabel || null,
+        teamId: a.teamId || null,
+        teamName: team?.name || null,
+        bio: a.bio || null,
+        instagramHandle: a.instagramHandle || null,
+        isAthlete: true,
+        linkedAthleteId: a.id,
+        modalityCount: a.modalityIds?.length || 0,
+      });
+      if (normAthName) {
+        seenPersonKeys.set(personKey, idx);
+        seenPersonKeys.set(normAthName, idx);
       }
     });
 

@@ -736,9 +736,26 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             (r) => r && r.id && !r.isTestOnly && !isPurgedTestEntity(r)
           );
           const remoteAthIds = new Set(cleanRemoteAthletes.map((r) => r.id));
+          const remoteAthEmails = new Set(
+            cleanRemoteAthletes
+              .map((r) => r.email?.trim().toLowerCase())
+              .filter((e): e is string => Boolean(e))
+          );
 
           // Auto-Cura (Self-Healing): se este aparelho possui um atleta legítimo que ainda não consta na nuvem, reenvia!
+          // Porém, se o servidor já tem um atleta com o mesmo e-mail (consolidação de duplicata), descarta a duplicata local obsoleta.
+          const filteredNextAthletes: Athlete[] = [];
           for (const localAth of nextAthletes) {
+            const localEmail = localAth.email?.trim().toLowerCase();
+            if (
+              !remoteAthIds.has(localAth.id) &&
+              localEmail &&
+              remoteAthEmails.has(localEmail)
+            ) {
+              changed = true;
+              continue;
+            }
+            filteredNextAthletes.push(localAth);
             if (!localAth.isTestOnly && !remoteAthIds.has(localAth.id)) {
               enqueueOfflineMutation('athletes', localAth.id, localAth);
               try {
@@ -747,6 +764,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               } catch {}
             }
           }
+          nextAthletes = filteredNextAthletes;
 
           if (cleanRemoteAthletes.length > 0) {
             const byId = new Map<string, Athlete>();
@@ -1155,10 +1173,21 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               id: d.id,
             }))
             .filter((r) => !isPurgedTestEntity(r));
+          const remoteIds = new Set(remoteAthletes.map((r) => r.id));
+          const remoteEmails = new Set(
+            remoteAthletes
+              .map((r) => r.email?.trim().toLowerCase())
+              .filter((e): e is string => Boolean(e))
+          );
           setState((prev) => {
             const byId = new Map<string, Athlete>();
             for (const a of prev.officialAthletes) {
-              if (!isPurgedTestEntity(a)) byId.set(a.id, a);
+              if (isPurgedTestEntity(a)) continue;
+              const email = a.email?.trim().toLowerCase();
+              if (!remoteIds.has(a.id) && email && remoteEmails.has(email)) {
+                continue;
+              }
+              byId.set(a.id, a);
             }
             for (const r of remoteAthletes) {
               if (!r.isTestOnly) {
@@ -1707,10 +1736,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   const visibleTeams = state.isTestMode ? state.testTeams : state.officialTeams;
   const rawAthletes = state.isTestMode ? state.testAthletes : state.officialAthletes;
   const visibleAthletes = useMemo(() => {
-    return (rawAthletes || []).filter(
+    const eligible = (rawAthletes || []).filter(
       (a) =>
         a &&
         a.id &&
+        a.id !== 'test-sync-check' &&
+        a.name !== 'undefined' &&
         isEligiblePaidAthlete(a) &&
         !a.id.startsWith('ath-reg-cang-') &&
         !a.id.startsWith('user-ath-') &&
@@ -1719,6 +1750,74 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         !a.name?.includes('Beatriz Vasconcelos') &&
         !a.name?.includes('Lucas Albuquerque')
     );
+
+    const deduplicated: Athlete[] = [];
+    const byEmail = new Map<string, number>();
+    const byRegId = new Map<string, number>();
+    const byNameTeam = new Map<string, number>();
+
+    const normalizeName = (val?: string | null): string =>
+      String(val || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    for (const a of eligible) {
+      const emailKey = a.email?.trim().toLowerCase() || '';
+      const regKey = a.registrationId?.trim() || '';
+      const normName = normalizeName(a.name);
+      const nameTeamKey = normName ? `${normName}::${a.teamId || a.turma || ''}` : '';
+
+      let matchIdx: number | undefined =
+        (emailKey ? byEmail.get(emailKey) : undefined) ??
+        (regKey ? byRegId.get(regKey) : undefined) ??
+        (nameTeamKey ? byNameTeam.get(nameTeamKey) : undefined);
+
+      if (matchIdx === undefined && normName && (a.teamId || a.turma)) {
+        const foundIdx = deduplicated.findIndex((ex) => {
+          const exNorm = normalizeName(ex.name);
+          if (!exNorm) return false;
+          const sameTeamOrTurma =
+            (ex.teamId && a.teamId && ex.teamId === a.teamId) ||
+            (ex.turma && a.turma && ex.turma === a.turma);
+          return (
+            sameTeamOrTurma &&
+            (normName.startsWith(`${exNorm} `) || exNorm.startsWith(`${normName} `))
+          );
+        });
+        if (foundIdx >= 0) {
+          matchIdx = foundIdx;
+        }
+      }
+
+      if (matchIdx !== undefined && deduplicated[matchIdx]) {
+        const prev = deduplicated[matchIdx];
+        // Escolhe o nome mais completo (ex: "Naby Salem" ou preserva foto/camisa/instagram do outro registro)
+        const chosenName =
+          (a.name?.length || 0) > (prev.name?.length || 0) ? a.name : prev.name;
+        deduplicated[matchIdx] = {
+          ...prev,
+          ...a,
+          id: prev.id,
+          name: chosenName,
+          avatarUrl: a.avatarUrl || prev.avatarUrl || null,
+          jerseyNumber: a.jerseyNumber ?? prev.jerseyNumber ?? null,
+          instagramHandle: a.instagramHandle || prev.instagramHandle || null,
+          bio: a.bio || prev.bio || null,
+        };
+      } else {
+        const idx = deduplicated.length;
+        deduplicated.push(a);
+        if (emailKey) byEmail.set(emailKey, idx);
+        if (regKey) byRegId.set(regKey, idx);
+        if (nameTeamKey) byNameTeam.set(nameTeamKey, idx);
+      }
+    }
+
+    return deduplicated;
   }, [rawAthletes]);
   const activeSheetsMap = state.isTestMode ? state.testSheets : state.officialSheets;
 
@@ -3615,14 +3714,25 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           ? payload.modalityIds
           : OFFICIAL_MODALITIES.map((m) => m.id);
 
-      const existing = state.officialAthletes.find(
-        (a) =>
-          (payload.id && a.id === payload.id) ||
-          (payload.registrationId && a.registrationId === payload.registrationId) ||
-          (cleanEmail && a.email?.toLowerCase() === cleanEmail) ||
-          (a.teamId === payload.teamId &&
-            a.name.trim().toLowerCase() === cleanName.toLowerCase())
-      );
+      const existing = state.officialAthletes.find((a) => {
+        if (payload.id && a.id === payload.id) return true;
+        if (payload.registrationId && a.registrationId === payload.registrationId) {
+          return true;
+        }
+        // Se o payload está vinculado a uma inscrição específica, não sobrescreve um atleta vinculado a outra inscrição diferente
+        if (
+          payload.registrationId &&
+          a.registrationId &&
+          a.registrationId !== payload.registrationId
+        ) {
+          return false;
+        }
+        if (cleanEmail && a.email?.toLowerCase() === cleanEmail) return true;
+        return (
+          a.teamId === payload.teamId &&
+          a.name.trim().toLowerCase() === cleanName.toLowerCase()
+        );
+      });
 
       const resolvedId =
         existing?.id ||

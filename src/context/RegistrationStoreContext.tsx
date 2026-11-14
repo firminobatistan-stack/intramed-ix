@@ -371,20 +371,37 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         );
 
         const remoteIds = new Set(cleanRemote.map((cr) => cr.id));
+        const remoteEmails = new Set(
+          cleanRemote
+            .map((cr) => cr.athleteEmail?.trim().toLowerCase())
+            .filter((e): e is string => Boolean(e))
+        );
+
         // Auto-Cura (Self-Healing): se este dispositivo possui uma inscrição legítima que não veio no snapshot remoto, reenvia para a nuvem!
+        // Porém, se o servidor já tem outra inscrição para o mesmo e-mail (ex: inscrição duplicada mesclada/removida no servidor), descarta a duplicata local obsoleta.
+        const filteredPrev: Registration[] = [];
         for (const localReg of cleanPrev) {
+          const localEmail = localReg.athleteEmail?.trim().toLowerCase();
+          if (
+            !remoteIds.has(localReg.id) &&
+            localEmail &&
+            remoteEmails.has(localEmail)
+          ) {
+            continue;
+          }
+          filteredPrev.push(localReg);
           if (!remoteIds.has(localReg.id)) {
             pushRegistrationToCloud(localReg);
           }
         }
 
         if (cleanRemote.length === 0) {
-          return cleanPrev;
+          return filteredPrev;
         }
 
         const byId = new Map<string, Registration>();
-        for (const r of cleanPrev) byId.set(r.id, r);
-        let hasDiff = cleanPrev.length !== prev.length;
+        for (const r of filteredPrev) byId.set(r.id, r);
+        let hasDiff = filteredPrev.length !== prev.length;
 
         for (const cr of cleanRemote) {
           const ex = byId.get(cr.id);
@@ -511,8 +528,18 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         ? lot.priceMember
         : lot.priceNonMember;
 
-      const regId = generateUniqueId('reg');
-      const linkedAthleteId = `ath-${regId}`;
+      const normalizedEmail = payload.athleteEmail.trim().toLowerCase();
+      const existingUnpaidForSameEmail = registrations.find(
+        (r) =>
+          r &&
+          r.paymentStatus !== 'pago' &&
+          r.paymentStatus !== 'cancelado' &&
+          r.athleteEmail.trim().toLowerCase() === normalizedEmail
+      );
+
+      const regId = existingUnpaidForSameEmail?.id || generateUniqueId('reg');
+      const linkedAthleteId =
+        existingUnpaidForSameEmail?.linkedAthleteId || `ath-${regId}`;
       const chosenModalities =
         payload.selectedModalities && payload.selectedModalities.length > 0
           ? payload.selectedModalities
@@ -528,14 +555,14 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         id: regId,
         eventId: payload.eventId,
         lotId: lot.id,
-        userId: `usr-${linkedAthleteId}`,
+        userId: existingUnpaidForSameEmail?.userId || `usr-${linkedAthleteId}`,
         linkedAthleteId,
         accountUsername: resolvedUsername,
-        hasAccountPassword: Boolean(payload.accountPassword?.trim()),
+        hasAccountPassword: Boolean(payload.accountPassword?.trim() || existingUnpaidForSameEmail?.hasAccountPassword),
         athleteName: payload.athleteName.trim(),
         athleteEmail: payload.athleteEmail.trim(),
-        athletePhone: payload.athletePhone.trim(),
-        athleteDocument: payload.athleteDocument.trim(),
+        athletePhone: payload.athletePhone.trim() || existingUnpaidForSameEmail?.athletePhone || '',
+        athleteDocument: payload.athleteDocument.trim() || existingUnpaidForSameEmail?.athleteDocument || '',
         turma: payload.turma,
         turmaLabel: payload.turmaLabel,
         teamId: payload.teamId,
@@ -559,16 +586,16 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           ? 'aguardando_validacao'
           : 'pendente',
         authorizedPrice: initialPrice,
-        avatarUrl: payload.avatarUrl || null,
-        jerseyNumber: payload.jerseyNumber ?? null,
+        avatarUrl: payload.avatarUrl || existingUnpaidForSameEmail?.avatarUrl || null,
+        jerseyNumber: payload.jerseyNumber ?? existingUnpaidForSameEmail?.jerseyNumber ?? null,
         position:
           payload.position?.trim() ||
           (isGuest ? 'Atleta Convidado T21' : 'Atleta Inscrito'),
-        bio: payload.bio?.trim() || null,
-        instagramHandle: payload.instagramHandle?.trim() || null,
-        createdAtIso: nowIso,
+        bio: payload.bio?.trim() || existingUnpaidForSameEmail?.bio || null,
+        instagramHandle: payload.instagramHandle?.trim() || existingUnpaidForSameEmail?.instagramHandle || null,
+        createdAtIso: existingUnpaidForSameEmail?.createdAtIso || nowIso,
         updatedAtIso: nowIso,
-        revision: 1,
+        revision: (existingUnpaidForSameEmail?.revision ?? 0) + 1,
       };
 
       upsertParticipantAthlete({
@@ -605,7 +632,9 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         timestampIso: nowIso,
       };
 
-      const nextRegs = [newRegistration, ...registrations];
+      const nextRegs = existingUnpaidForSameEmail
+        ? registrations.map((r) => (r.id === regId ? newRegistration : r))
+        : [newRegistration, ...registrations];
       const nextLogs = [auditEntry, ...auditLogs];
       setRegistrations(nextRegs);
       setAuditLogs(nextLogs);
