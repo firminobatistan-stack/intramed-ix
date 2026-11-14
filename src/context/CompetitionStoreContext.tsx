@@ -3586,7 +3586,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           let nextUser = prev.currentUser;
           if (payload.autoLogin) {
             const isRegistrationPaid = athleteRecord.paymentStatus === 'pago';
-            const preservedRole: UserRole =
+            const preservedRole: UserProfile['role'] =
               prev.currentUser?.role && prev.currentUser.role !== 'usuario'
                 ? prev.currentUser.role
                 : isRegistrationPaid
