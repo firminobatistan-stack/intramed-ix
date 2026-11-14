@@ -143,7 +143,7 @@ export const CommunityDirectoryPage: React.FC = () => {
         teamName: p.teamName || null,
         bio: p.bio || linkedAth?.bio || null,
         instagramHandle: p.instagramHandle || linkedAth?.instagramHandle || null,
-        isAthlete: Boolean(p.isAthlete || linkedAth),
+        isAthlete: p.linkedAthleteId ? Boolean(linkedAth) : Boolean(p.isAthlete),
         linkedAthleteId: p.linkedAthleteId || linkedAth?.id || null,
         modalityCount: linkedAth?.modalityIds?.length || p.favoriteModalityIds?.length || 0,
       });

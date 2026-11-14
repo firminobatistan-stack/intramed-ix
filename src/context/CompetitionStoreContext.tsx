@@ -149,6 +149,16 @@ interface CompetitionStoreContextValue {
     athleteId: string,
     field: 'isStarter' | 'isCaptain' | 'isGoalkeeper' | 'isPairMember'
   ) => void;
+  addAthleteToMatchLineup: (
+    matchId: string,
+    teamSide: 'home' | 'away',
+    athleteId: string
+  ) => void;
+  removeAthleteFromMatchLineup: (
+    matchId: string,
+    teamSide: 'home' | 'away',
+    athleteId: string
+  ) => void;
   finishCurrentSet: (matchId: string) => void;
   recordTableTennisPoint: (
     matchId: string,
@@ -388,6 +398,15 @@ const CompetitionStoreContext = createContext<CompetitionStoreContextValue | nul
   null
 );
 
+function isEligiblePaidAthlete(athlete: Athlete | undefined | null): boolean {
+  if (!athlete || !athlete.id) return false;
+  if (athlete.isTestOnly) return true;
+  if (athlete.registrationId || athlete.paymentStatus !== undefined) {
+    return athlete.paymentStatus === 'pago';
+  }
+  return true;
+}
+
 function buildDefaultOfficialSheetForMatch(
   match: Match,
   athletesPool: Athlete[]
@@ -401,11 +420,13 @@ function buildDefaultOfficialSheetForMatch(
 
   const homePlayers = athletesPool.filter(
     (a) =>
+      isEligiblePaidAthlete(a) &&
       a.teamId === match.homeTeam.teamId &&
       a.modalityIds?.includes(match.modalityId)
   );
   const awayPlayers = athletesPool.filter(
     (a) =>
+      isEligiblePaidAthlete(a) &&
       a.teamId === match.awayTeam.teamId &&
       a.modalityIds?.includes(match.modalityId)
   );
@@ -1690,6 +1711,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       (a) =>
         a &&
         a.id &&
+        isEligiblePaidAthlete(a) &&
         !a.id.startsWith('ath-reg-cang-') &&
         !a.id.startsWith('user-ath-') &&
         !a.id.startsWith('ath-demo-') &&
@@ -1741,7 +1763,19 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         return state.testSheets[matchId];
       }
       const existing = state.officialSheets[matchId];
-      if (existing) return existing;
+      if (existing) {
+        if (existing.isClosed) return existing;
+        const filterEligibleLineup = (lineup: MatchLineupEntry[]) =>
+          lineup.filter((entry) => {
+            const ath = state.officialAthletes.find((a) => a.id === entry.athleteId);
+            return ath ? isEligiblePaidAthlete(ath) : false;
+          });
+        return {
+          ...existing,
+          homeLineup: filterEligibleLineup(existing.homeLineup),
+          awayLineup: filterEligibleLineup(existing.awayLineup),
+        };
+      }
       const targetMatch = state.officialMatches.find((m) => m.id === matchId);
       if (!targetMatch) return undefined;
       return buildDefaultOfficialSheetForMatch(targetMatch, state.officialAthletes);
@@ -2432,6 +2466,70 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           return item;
         });
 
+        return {
+          match,
+          sheet: {
+            ...sheet,
+            ...(teamSide === 'home'
+              ? { homeLineup: updated }
+              : { awayLineup: updated }),
+          },
+        };
+      });
+    },
+    [updateMatchAndSheet]
+  );
+
+  const addAthleteToMatchLineup = useCallback(
+    (matchId: string, teamSide: 'home' | 'away', athleteId: string) => {
+      updateMatchAndSheet(matchId, (match, sheet) => {
+        if (sheet.isClosed) return { match, sheet };
+        const isTest = matchId.startsWith('test-');
+        const pool = isTest ? state.testAthletes : state.officialAthletes;
+        const athlete = pool.find((a) => a.id === athleteId);
+        if (!athlete || !isEligiblePaidAthlete(athlete)) return { match, sheet };
+
+        const currentList =
+          teamSide === 'home' ? [...sheet.homeLineup] : [...sheet.awayLineup];
+        if (currentList.some((item) => item.athleteId === athlete.id)) {
+          return { match, sheet };
+        }
+
+        const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
+        const starterLimit = engine?.supportsPairs ? 2 : 5;
+        const currentStartersCount = currentList.filter((i) => i.isStarter).length;
+
+        const newEntry: MatchLineupEntry = {
+          athleteId: athlete.id,
+          athleteName: athlete.name,
+          jerseyNumber: athlete.jerseyNumber ?? null,
+          isStarter: currentStartersCount < starterLimit,
+          isCaptain: currentList.length === 0,
+          isPairMember: engine?.supportsPairs ? currentStartersCount < 2 : undefined,
+        };
+
+        const updated = [...currentList, newEntry];
+        return {
+          match,
+          sheet: {
+            ...sheet,
+            ...(teamSide === 'home'
+              ? { homeLineup: updated }
+              : { awayLineup: updated }),
+          },
+        };
+      });
+    },
+    [updateMatchAndSheet, state.testAthletes, state.officialAthletes]
+  );
+
+  const removeAthleteFromMatchLineup = useCallback(
+    (matchId: string, teamSide: 'home' | 'away', athleteId: string) => {
+      updateMatchAndSheet(matchId, (match, sheet) => {
+        if (sheet.isClosed) return { match, sheet };
+        const currentList =
+          teamSide === 'home' ? [...sheet.homeLineup] : [...sheet.awayLineup];
+        const updated = currentList.filter((item) => item.athleteId !== athleteId);
         return {
           match,
           sheet: {
@@ -3567,7 +3665,18 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         enqueueCloudSync('athletes', athleteRecord.id, athleteRecord);
       }
 
-      if (hasChanged || payload.autoLogin) {
+      const isEligibleForLineup = isEligiblePaidAthlete(athleteRecord);
+      const needsUnpaidLineupCleanup =
+        !isEligibleForLineup &&
+        Object.values(state.officialSheets).some(
+          (s) =>
+            s &&
+            !s.isClosed &&
+            (s.homeLineup.some((l) => l.athleteId === athleteRecord.id) ||
+              s.awayLineup.some((l) => l.athleteId === athleteRecord.id))
+        );
+
+      if (hasChanged || payload.autoLogin || needsUnpaidLineupCleanup) {
         setState((prev) => {
           const existsIdx = prev.officialAthletes.findIndex(
             (a) => a.id === athleteRecord.id
@@ -3610,12 +3719,35 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             };
           }
 
-          // Atualiza súmulas em aberto (não encerradas) da equipe para incluir o atleta na escalação
+          // Atualiza súmulas em aberto (não encerradas) da equipe:
+          // - Se o atleta está PAGO, inclui na escalação das modalidades selecionadas;
+          // - Se o atleta NÃO está pago (ex: pendente de sócio ou pagamento), remove de súmulas não encerradas caso tenha entrado antes.
+          const isEligibleForLineup = isEligiblePaidAthlete(athleteRecord);
           const updatedSheets = { ...prev.officialSheets };
           for (const m of prev.officialMatches) {
-            if (!athleteRecord.modalityIds.includes(m.modalityId)) continue;
             const s = updatedSheets[m.id];
             if (!s || s.isClosed) continue;
+
+            if (!isEligibleForLineup || !athleteRecord.modalityIds.includes(m.modalityId)) {
+              const inHome = s.homeLineup.some((l) => l.athleteId === athleteRecord.id);
+              const inAway = s.awayLineup.some((l) => l.athleteId === athleteRecord.id);
+              if (inHome || inAway) {
+                const updatedSheet = {
+                  ...s,
+                  homeLineup: inHome
+                    ? s.homeLineup.filter((l) => l.athleteId !== athleteRecord.id)
+                    : s.homeLineup,
+                  awayLineup: inAway
+                    ? s.awayLineup.filter((l) => l.athleteId !== athleteRecord.id)
+                    : s.awayLineup,
+                  revision: (s.revision ?? 0) + 1,
+                  lastUpdatedIso: new Date().toISOString(),
+                };
+                updatedSheets[m.id] = updatedSheet;
+                enqueueCloudSync('match_sheets', m.id, updatedSheet);
+              }
+              continue;
+            }
 
             if (m.homeTeam.teamId === athleteRecord.teamId) {
               const inLineup = s.homeLineup.some((l) => l.athleteId === athleteRecord.id);
@@ -3879,11 +4011,15 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       const homePlayers = athletesPool.filter(
         (a) =>
-          a.teamId === homeTeam.id && a.modalityIds.includes(payload.modalityId)
+          isEligiblePaidAthlete(a) &&
+          a.teamId === homeTeam.id &&
+          a.modalityIds.includes(payload.modalityId)
       );
       const awayPlayers = athletesPool.filter(
         (a) =>
-          a.teamId === awayTeam.id && a.modalityIds.includes(payload.modalityId)
+          isEligiblePaidAthlete(a) &&
+          a.teamId === awayTeam.id &&
+          a.modalityIds.includes(payload.modalityId)
       );
 
       // Item 8 da Auditoria: código aleatório de 8 caracteres para o mesário
@@ -4717,6 +4853,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       dismissReleasedSuspension,
       cancelActiveTimeout,
       toggleLineupRole,
+      addAthleteToMatchLineup,
+      removeAthleteFromMatchLineup,
       finishCurrentSet,
       recordTableTennisPoint,
       finishTableTennisSet,
@@ -4833,6 +4971,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       dismissReleasedSuspension,
       cancelActiveTimeout,
       toggleLineupRole,
+      addAthleteToMatchLineup,
+      removeAthleteFromMatchLineup,
       finishCurrentSet,
       recordTableTennisPoint,
       finishTableTennisSet,

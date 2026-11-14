@@ -155,7 +155,7 @@ export const ProfilePage: React.FC = () => {
   const targetProfile = useMemo(() => {
     if (userId) {
       const found = getPublicProfileById(userId);
-      if (found) return found;
+      if (found) return found.linkedAthleteId ? { ...found, isAthlete: visibleAthletes.some((a) => a.id === found.linkedAthleteId) } : found;
       // Fallback para atleta
       const ath = visibleAthletes.find((a) => a.id === userId || a.registrationId === userId);
       if (ath) {
@@ -178,6 +178,7 @@ export const ProfilePage: React.FC = () => {
     }
     if (currentUser) {
       const myPublic = getPublicProfileById(currentUser.id);
+      if (myPublic) return myPublic.linkedAthleteId ? { ...myPublic, isAthlete: visibleAthletes.some((a) => a.id === myPublic.linkedAthleteId) } : myPublic;
       return (
         myPublic || {
           id: currentUser.id,
@@ -190,7 +191,7 @@ export const ProfilePage: React.FC = () => {
           teamName: currentUser.teamName || null,
           bio: null,
           instagramHandle: null,
-          isAthlete: currentUser.role === 'atleta' || Boolean(currentUser.linkedAthleteId),
+          isAthlete: currentUser.linkedAthleteId ? visibleAthletes.some((a) => a.id === currentUser.linkedAthleteId) : currentUser.role === 'atleta',
           linkedAthleteId: currentUser.linkedAthleteId || null,
           favoriteModalityIds: currentUser.modalityIds || [],
           createdAtIso: new Date().toISOString(),

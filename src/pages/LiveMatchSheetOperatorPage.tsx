@@ -54,6 +54,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     setTestMode,
     getMatchById,
     getSheetByMatchId,
+    getAthletesByTeam,
     startOrResumeTimer,
     pauseTimer,
     resetPeriodTimer,
@@ -67,6 +68,8 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     dismissReleasedSuspension,
     cancelActiveTimeout,
     toggleLineupRole,
+    addAthleteToMatchLineup,
+    removeAthleteFromMatchLineup,
     finishCurrentSet,
     recordTableTennisPoint,
     finishTableTennisSet,
@@ -2113,43 +2116,59 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
         description={
           isTestMode
             ? 'Configure titulares, reservas, capitão (C) e goleiro (GK) para as equipes de teste.'
-            : 'Os atletas aparecerão aqui quando forem cadastrados.'
+            : 'Apenas atletas com inscrição e pagamento confirmados podem ser escalados na partida.'
         }
       >
-        {!isTestMode ? (
-          <div className="py-6 text-center text-sm text-brand-text-secondary">
-            Nenhum atleta cadastrado na base oficial.
-          </div>
-        ) : (
-          <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
-            {(['home', 'away'] as const).map((side) => {
-              const teamName =
-                side === 'home'
-                  ? match.homeTeam.teamName
-                  : match.awayTeam.teamName;
-              const lineup =
-                side === 'home' ? sheet.homeLineup : sheet.awayLineup;
+        <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+          {(['home', 'away'] as const).map((side) => {
+            const teamObj = side === 'home' ? match.homeTeam : match.awayTeam;
+            const teamName = teamObj.teamName;
+            const lineup =
+              side === 'home' ? sheet.homeLineup : sheet.awayLineup;
+            const eligibleTeamAthletes = teamObj.teamId ? getAthletesByTeam(teamObj.teamId) : [];
+            const availableToAdd = eligibleTeamAthletes.filter(
+              (a) => !lineup.some((l) => l.athleteId === a.id)
+            );
 
-              return (
-                <div
-                  key={side}
-                  className="rounded-2xl bg-brand-surface-muted p-3.5 border border-brand-surface-border space-y-2.5"
-                >
+            return (
+              <div
+                key={side}
+                className="rounded-2xl bg-brand-surface-muted p-3.5 border border-brand-surface-border space-y-2.5"
+              >
+                <div className="flex items-center justify-between gap-2">
                   <h4 className="text-xs font-display font-extrabold uppercase text-brand-blue">
                     {teamName}
                   </h4>
+                  <span className="text-[11px] font-bold text-brand-text-secondary">
+                    {lineup.length} escalado(s)
+                  </span>
+                </div>
+
+                {lineup.length === 0 ? (
+                  <div className="py-3 px-3 rounded-xl bg-white border border-brand-surface-border text-xs text-brand-text-secondary text-center">
+                    Nenhum atleta escalado nesta partida.
+                  </div>
+                ) : (
                   <div className="space-y-1.5">
                     {lineup.map((ath) => (
                       <div
                         key={ath.athleteId}
                         className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-xl border border-brand-surface-border text-xs"
                       >
-                        <span className="font-semibold text-brand-text-primary">
-                          {ath.athleteName}
-                        </span>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {ath.jerseyNumber != null && (
+                            <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-brand-blue-light/60 text-brand-blue shrink-0">
+                              #{ath.jerseyNumber}
+                            </span>
+                          )}
+                          <span className="font-semibold text-brand-text-primary truncate">
+                            {ath.athleteName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
                           <button
                             type="button"
+                            disabled={sheet.isClosed}
                             onClick={() =>
                               toggleLineupRole(
                                 match.id,
@@ -2168,6 +2187,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                           </button>
                           <button
                             type="button"
+                            disabled={sheet.isClosed}
                             onClick={() =>
                               toggleLineupRole(
                                 match.id,
@@ -2187,6 +2207,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                           {engine.supportsGoalkeeper && (
                             <button
                               type="button"
+                              disabled={sheet.isClosed}
                               onClick={() =>
                                 toggleLineupRole(
                                   match.id,
@@ -2204,15 +2225,88 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                               GK
                             </button>
                           )}
+                          {engine.supportsPairs && (
+                            <button
+                              type="button"
+                              disabled={sheet.isClosed}
+                              onClick={() =>
+                                toggleLineupRole(
+                                  match.id,
+                                  side,
+                                  ath.athleteId,
+                                  'isPairMember'
+                                )
+                              }
+                              className={`px-2 py-1 rounded font-bold ${
+                                ath.isPairMember
+                                  ? 'bg-indigo-600 text-white'
+                                  : 'bg-brand-surface-muted text-brand-text-muted'
+                              }`}
+                            >
+                              Dupla
+                            </button>
+                          )}
+                          {!sheet.isClosed && (
+                            <button
+                              type="button"
+                              title="Remover atleta dos inscritos desta partida"
+                              onClick={() =>
+                                removeAthleteFromMatchLineup(
+                                  match.id,
+                                  side,
+                                  ath.athleteId
+                                )
+                              }
+                              className="p-1 rounded text-brand-text-muted hover:text-red-600 hover:bg-red-50 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                )}
+
+                {!sheet.isClosed && (
+                  <div className="pt-2 border-t border-brand-surface-border space-y-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-brand-text-secondary block">
+                      Atletas aptos com pagamento confirmado ({availableToAdd.length}):
+                    </span>
+                    {availableToAdd.length === 0 ? (
+                      <p className="text-[11px] text-brand-text-muted">
+                        {eligibleTeamAthletes.length === 0
+                          ? 'Nenhum atleta com inscrição e pagamento confirmados nesta equipe.'
+                          : 'Todos os atletas aptos desta equipe já estão escalados na partida.'}
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {availableToAdd.map((ath) => (
+                          <button
+                            key={ath.id}
+                            type="button"
+                            onClick={() =>
+                              addAthleteToMatchLineup(match.id, side, ath.id)
+                            }
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-brand-surface-border hover:border-brand-blue text-xs font-semibold text-brand-text-primary transition-colors"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-brand-blue" />
+                            {ath.jerseyNumber != null && (
+                              <span className="font-mono text-[10px] font-bold text-brand-blue">
+                                #{ath.jerseyNumber}
+                              </span>
+                            )}
+                            <span>{ath.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </Modal>
 
       {/* =====================================================================
