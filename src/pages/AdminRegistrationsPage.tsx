@@ -114,7 +114,7 @@ export const AdminRegistrationsPage: React.FC = () => {
         id: p.userId || p.id,
         email: '',
         name: p.displayName || 'Participante',
-        role: p.role || (p.isAthlete ? 'atleta' : 'visitante'),
+        role: p.isAthlete ? 'atleta' : 'visitante',
         organization: p.teamName || p.turmaLabel || 'Comunidade IntraMed',
         isActive: true,
         isHiddenFromPublic: Boolean((p as unknown as Record<string, unknown>).isHiddenFromPublic),
