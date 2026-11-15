@@ -3707,8 +3707,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       autoLogin?: boolean;
       skipCloudSync?: boolean;
     }): Athlete => {
-      const cleanName = payload.name.trim();
-      const cleanEmail = payload.email?.trim().toLowerCase() || null;
+      const cleanName = (payload.name || '').trim();
+      const cleanEmail = (payload.email || '').trim().toLowerCase() || null;
       const defaultModalities: ModalitySlug[] =
         payload.modalityIds && payload.modalityIds.length > 0
           ? payload.modalityIds
@@ -3729,8 +3729,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         }
         if (cleanEmail && a.email?.toLowerCase() === cleanEmail) return true;
         return (
+          Boolean(cleanName) &&
           a.teamId === payload.teamId &&
-          a.name.trim().toLowerCase() === cleanName.toLowerCase()
+          (a.name || '').trim().toLowerCase() === cleanName.toLowerCase()
         );
       });
 

@@ -271,16 +271,17 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!registrations || registrations.length === 0) return;
 
     registrations.forEach((reg) => {
-      if (reg.paymentStatus === 'cancelado' || isPurgedTestEntity(reg)) return;
+      if (!reg || !reg.id || reg.paymentStatus === 'cancelado' || isPurgedTestEntity(reg)) return;
+      if (!reg.athleteName && !reg.athleteEmail) return;
       const sig = `${reg.updatedAtIso}_${reg.paymentStatus}_${reg.memberStatus}_${reg.avatarUrl || ''}_${reg.jerseyNumber || ''}_${reg.position || ''}`;
       if (syncedRegSignaturesRef.current.get(reg.id) === sig) return;
       syncedRegSignaturesRef.current.set(reg.id, sig);
 
       upsertParticipantAthlete({
         id: reg.linkedAthleteId || `ath-${reg.id}`,
-        name: reg.athleteName,
-        email: reg.athleteEmail,
-        teamId: reg.teamId,
+        name: reg.athleteName || 'Atleta IntraMed',
+        email: reg.athleteEmail || '',
+        teamId: reg.teamId || 'predadora',
         turma: reg.turma,
         turmaLabel: reg.turmaLabel,
         jerseyNumber: reg.jerseyNumber ?? null,
@@ -442,11 +443,13 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         }
 
         if (!hasDiff) return prev;
-        const merged = Array.from(byId.values());
+        const merged = Array.from(byId.values()).filter(
+          (r) => r && r.id && (r.athleteName || r.athleteEmail)
+        );
         merged.sort(
           (a, b) =>
-            new Date(b.createdAtIso).getTime() -
-            new Date(a.createdAtIso).getTime()
+            new Date(b.createdAtIso || b.updatedAtIso || 0).getTime() -
+            new Date(a.createdAtIso || a.updatedAtIso || 0).getTime()
         );
         return merged;
       });
@@ -509,14 +512,15 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         const existingGuest = registrations.find(
           (r) =>
+            r &&
             r.paymentStatus !== 'cancelado' &&
             Boolean(r.isGuestAthlete) &&
             (r.turma === '21' || r.teamId === 'sanguinaria') &&
-            r.categoryName.toLowerCase() === payload.categoryName.toLowerCase()
+            (r.categoryName || '').toLowerCase() === (payload.categoryName || '').toLowerCase()
         );
         if (existingGuest) {
           throw new Error(
-            `O limite de 1 Atleta Convidado ${payload.categoryName} para a Turma 21 já foi preenchido (${existingGuest.athleteName}).`
+            `O limite de 1 Atleta Convidado ${payload.categoryName} para a Turma 21 já foi preenchido (${existingGuest.athleteName || 'Atleta'}).`
           );
         }
       }
@@ -528,13 +532,13 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         ? lot.priceMember
         : lot.priceNonMember;
 
-      const normalizedEmail = payload.athleteEmail.trim().toLowerCase();
+      const normalizedEmail = (payload.athleteEmail || '').trim().toLowerCase();
       const existingUnpaidForSameEmail = registrations.find(
         (r) =>
           r &&
           r.paymentStatus !== 'pago' &&
           r.paymentStatus !== 'cancelado' &&
-          r.athleteEmail.trim().toLowerCase() === normalizedEmail
+          (r.athleteEmail || '').trim().toLowerCase() === normalizedEmail
       );
 
       const regId = existingUnpaidForSameEmail?.id || generateUniqueId('reg');
@@ -963,14 +967,15 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const getMyRegistrations = useCallback(
     (query: string) => {
-      const q = query.toLowerCase().trim();
+      const q = (query || '').toLowerCase().trim();
       if (!q) return [];
       return registrations.filter(
         (r) =>
-          r.athleteEmail.toLowerCase().includes(q) ||
-          r.athleteDocument.toLowerCase().includes(q) ||
-          r.athleteName.toLowerCase().includes(q) ||
-          r.id.toLowerCase().includes(q)
+          r &&
+          ((r.athleteEmail || '').toLowerCase().includes(q) ||
+            (r.athleteDocument || '').toLowerCase().includes(q) ||
+            (r.athleteName || '').toLowerCase().includes(q) ||
+            (r.id || '').toLowerCase().includes(q))
       );
     },
     [registrations]
@@ -978,9 +983,11 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const myRegistrations = useMemo(() => {
     return registrations.filter((r) => {
+      if (!r || !r.id) return false;
       if (myRegisteredIds.includes(r.id)) return true;
       if (
         currentUser?.email &&
+        r.athleteEmail &&
         r.athleteEmail.toLowerCase() === currentUser.email.toLowerCase()
       ) {
         return true;

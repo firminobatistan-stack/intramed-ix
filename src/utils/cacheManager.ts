@@ -3,7 +3,7 @@
  * Garante que dados locais obsoletos não mascarem a base central (Firebase e Vercel Hub).
  */
 
-export const CURRENT_APP_CACHE_VERSION = '2.3.0-centralized-firebase-clean';
+export const CURRENT_APP_CACHE_VERSION = '2.3.1-centralized-firebase-clean';
 const CACHE_VERSION_KEY = 'intramed_cache_version';
 const OFFLINE_QUEUE_KEY = 'intramed_offline_sync_queue_v2';
 
@@ -126,7 +126,7 @@ export async function initializeCacheManager(): Promise<CacheIntegrityReport> {
         const parsedRegs = JSON.parse(savedRegsRaw);
         if (parsedRegs && Array.isArray(parsedRegs.registrations)) {
           parsedRegs.registrations = parsedRegs.registrations.filter(
-            (r: unknown) => !isPurgedTestEntity(r)
+            (r: any) => r && r.id && (r.athleteName || r.athleteEmail) && !isPurgedTestEntity(r)
           );
           localStorage.setItem('intramed_registrations_store_v1', JSON.stringify(parsedRegs));
         }

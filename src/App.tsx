@@ -19,16 +19,23 @@ if (typeof window !== 'undefined') {
   try {
     const regKey = 'intramed_registrations_store_v1';
     const rawRegs = localStorage.getItem(regKey);
-    if (rawRegs && (rawRegs.includes('reg-cang-') || rawRegs.includes('user-ath-') || rawRegs.includes('Gabriel Medeiros') || rawRegs.includes('Beatriz Vasconcelos') || rawRegs.includes('Lucas Albuquerque'))) {
+    if (rawRegs) {
       const parsed = JSON.parse(rawRegs);
       if (Array.isArray(parsed?.registrations)) {
-        parsed.registrations = parsed.registrations.filter((r: any) =>
-          r && r.id && !r.id.startsWith('reg-cang-') && !r.userId?.startsWith('user-ath-') &&
+        const filteredRegs = parsed.registrations.filter((r: any) =>
+          r &&
+          r.id &&
+          (r.athleteName || r.athleteEmail) &&
+          !r.id.startsWith('reg-cang-') &&
+          !r.userId?.startsWith('user-ath-') &&
           !r.athleteName?.includes('Gabriel Medeiros') &&
           !r.athleteName?.includes('Beatriz Vasconcelos') &&
           !r.athleteName?.includes('Lucas Albuquerque')
         );
-        localStorage.setItem(regKey, JSON.stringify(parsed));
+        if (filteredRegs.length !== parsed.registrations.length) {
+          parsed.registrations = filteredRegs;
+          localStorage.setItem(regKey, JSON.stringify(parsed));
+        }
       }
     }
     for (const compKey of ['intramed_ix_live_engine_v3', 'intramed_competition_store_v2']) {

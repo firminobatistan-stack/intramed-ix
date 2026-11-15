@@ -704,6 +704,113 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
 
   const mutationPromises: Array<Promise<unknown>> = [];
 
+  // 0. Reconstrói campos ausentes de registrations (ex: quando o webhook do Mercado Pago confirmou pagamento antes do doc completo da inscrição chegar) a partir do athlete/profile vinculado
+  for (const [regId, reg] of Object.entries(store.registrations)) {
+    if (!reg || isPurgedTestRecord(reg)) continue;
+    const linkedAthId = String(reg.linkedAthleteId || `ath-${regId}`);
+    const linkedAth =
+      store.athletes[linkedAthId] ||
+      Object.values(store.athletes).find(
+        (a) => a && (a.id === linkedAthId || a.registrationId === regId)
+      );
+
+    let regRepaired = false;
+    if (linkedAth) {
+      if (!reg.athleteName && linkedAth.name) {
+        reg.athleteName = linkedAth.name;
+        regRepaired = true;
+      }
+      if (!reg.athleteEmail && linkedAth.email) {
+        reg.athleteEmail = linkedAth.email;
+        regRepaired = true;
+      }
+      if (!reg.teamId && linkedAth.teamId) {
+        reg.teamId = linkedAth.teamId;
+        regRepaired = true;
+      }
+      if (!reg.turma && linkedAth.turma) {
+        reg.turma = linkedAth.turma;
+        regRepaired = true;
+      }
+      if (!reg.turmaLabel && linkedAth.turmaLabel) {
+        reg.turmaLabel = linkedAth.turmaLabel;
+        regRepaired = true;
+      }
+      if (!reg.teamName && linkedAth.turmaLabel) {
+        reg.teamName = String(linkedAth.turmaLabel).split('•')[0].trim();
+        regRepaired = true;
+      }
+      if (!reg.linkedAthleteId && linkedAth.id) {
+        reg.linkedAthleteId = linkedAth.id;
+        regRepaired = true;
+      }
+      if (
+        (reg.jerseyNumber === undefined || reg.jerseyNumber === null) &&
+        linkedAth.jerseyNumber !== undefined &&
+        linkedAth.jerseyNumber !== null
+      ) {
+        reg.jerseyNumber = linkedAth.jerseyNumber;
+        regRepaired = true;
+      }
+      if (!reg.position && linkedAth.position) {
+        reg.position = linkedAth.position;
+        regRepaired = true;
+      }
+      if (!reg.instagramHandle && linkedAth.instagramHandle) {
+        reg.instagramHandle = linkedAth.instagramHandle;
+        regRepaired = true;
+      }
+      if (!reg.avatarUrl && linkedAth.avatarUrl) {
+        reg.avatarUrl = linkedAth.avatarUrl;
+        regRepaired = true;
+      }
+      if (!reg.bio && linkedAth.bio) {
+        reg.bio = linkedAth.bio;
+        regRepaired = true;
+      }
+      if (
+        (!Array.isArray(reg.selectedModalities) || reg.selectedModalities.length === 0) &&
+        Array.isArray(linkedAth.modalityIds) &&
+        linkedAth.modalityIds.length > 0
+      ) {
+        reg.selectedModalities = linkedAth.modalityIds;
+        regRepaired = true;
+      }
+      if (!reg.memberStatus && linkedAth.memberStatus) {
+        reg.memberStatus = linkedAth.memberStatus;
+        regRepaired = true;
+      }
+    }
+
+    if (!reg.eventId) {
+      reg.eventId = 'intramed-ix-2026';
+      regRepaired = true;
+    }
+    if (!reg.lotId) {
+      reg.lotId = 'lote-1-cangaceira';
+      regRepaired = true;
+    }
+    if (!reg.modalityId) {
+      reg.modalityId = 'todas';
+      regRepaired = true;
+    }
+    if (!reg.modalityName) {
+      reg.modalityName = 'Passaporte Geral (Todas as 16 Modalidades)';
+      regRepaired = true;
+    }
+    if (!reg.createdAtIso) {
+      reg.createdAtIso = reg.paidAtIso || reg.updatedAtIso || nowIso;
+      regRepaired = true;
+    }
+
+    if (regRepaired) {
+      reg.revision = Number(reg.revision || 1) + 1;
+      reg.updatedAtIso = nowIso;
+      store.registrations[regId] = reg;
+      mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', regId, reg));
+    }
+  }
+
   // 1. Deduplica registrations por athleteEmail (mantém a inscrição PAGA ou mais recente e mescla foto/camisa/insta da anterior)
   const regsByEmail = new Map<string, Array<Record<string, unknown>>>();
   for (const reg of Object.values(store.registrations)) {
@@ -1668,9 +1775,27 @@ export async function markRegistrationPaidOnServer(params: {
   paymentMethod: 'pix' | 'credit_card' | 'ticket';
   paidAmount: number;
 }): Promise<Record<string, unknown> | null> {
-  const store = getCloudStore();
+  const store = await ensureCloudStoreHydrated();
+  const linkedAthIdInitial = `ath-${params.registrationId}`;
+  const fallbackAth = store.athletes[linkedAthIdInitial];
   const existing = store.registrations[params.registrationId] || {
     id: params.registrationId,
+    ...(fallbackAth
+      ? {
+          athleteName: fallbackAth.name,
+          athleteEmail: fallbackAth.email,
+          teamId: fallbackAth.teamId,
+          turma: fallbackAth.turma,
+          turmaLabel: fallbackAth.turmaLabel,
+          jerseyNumber: fallbackAth.jerseyNumber,
+          position: fallbackAth.position,
+          instagramHandle: fallbackAth.instagramHandle,
+          avatarUrl: fallbackAth.avatarUrl,
+          bio: fallbackAth.bio,
+          selectedModalities: fallbackAth.modalityIds,
+          linkedAthleteId: fallbackAth.id,
+        }
+      : {}),
   };
 
   if (
