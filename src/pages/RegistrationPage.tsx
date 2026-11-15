@@ -532,7 +532,8 @@ export const RegistrationPage: React.FC = () => {
       payingRegistration.memberStatus === 'pendente' ||
       payingRegistration.paymentStatus === 'aguardando_validacao' ||
       (payingRegistration.requestedMemberDiscount &&
-        payingRegistration.memberStatus !== 'aprovado')
+        payingRegistration.memberStatus !== 'aprovado' &&
+        payingRegistration.memberStatus !== 'rejeitado')
     ) {
       setPixData(null);
       setPixError(null);
@@ -696,7 +697,8 @@ export const RegistrationPage: React.FC = () => {
       payingRegistration.memberStatus === 'pendente' ||
       payingRegistration.paymentStatus === 'aguardando_validacao' ||
       (payingRegistration.requestedMemberDiscount &&
-        payingRegistration.memberStatus !== 'aprovado')
+        payingRegistration.memberStatus !== 'aprovado' &&
+        payingRegistration.memberStatus !== 'rejeitado')
     ) {
       alert(
         'Sua solicitação de sócio ainda está em análise pela diretoria. Aguarde a aprovação para realizar o pagamento.'
