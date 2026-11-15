@@ -358,7 +358,16 @@ export const AdminRegistrationsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="https://docs.google.com/spreadsheets/d/1NALEYpJlg513E7prbk2WHoq9jfQQKVl-K_3ZgpI9hMc/edit"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-display font-bold shadow-sm transition-colors"
+              title="Abrir Planilha Online no Google Sheets"
+            >
+              <span>📊 Planilha Online</span>
+            </a>
             <Button
               variant="secondary"
               size="sm"
