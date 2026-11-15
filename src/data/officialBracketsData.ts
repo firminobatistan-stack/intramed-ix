@@ -334,100 +334,100 @@ export const OFFICIAL_MATCH_SCHEDULE_MAP: Record<
   },
 
   // =========================================================================
-  // DOMINGO, 22/11/2026 — SEMIFINAIS HANDEBOL & FUTSAL (Quartas + Semifinais)
+  // DOMINGO, 22/11/2026 — FUTSAL (Escola Bayma, 07h-12h) & SEMIFINAIS HANDEBOL (Antenor Viana, 16h-19h)
   // =========================================================================
-  'match_handebol-masc_sf2': {
+  'match_futsal-masc_qf': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '07:00',
+    venue: 'Escola Bayma',
+  },
+  'match_futsal-fem_qf': {
     scheduledDate: '22/11 (Dom)',
     scheduledTime: '08:00',
+    venue: 'Escola Bayma',
+  },
+  'match_futsal-masc_sf2': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '09:00',
+    venue: 'Escola Bayma',
+  },
+  'match_futsal-fem_sf2': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '10:00',
+    venue: 'Escola Bayma',
+  },
+  'match_futsal-masc_sf1': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '11:00',
+    venue: 'Escola Bayma',
+  },
+  'match_futsal-fem_sf1': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '12:00',
+    venue: 'Escola Bayma',
+  },
+  'match_handebol-masc_sf2': {
+    scheduledDate: '22/11 (Dom)',
+    scheduledTime: '16:00',
     venue: 'Escola Antenor Viana',
   },
   'match_handebol-fem_sf2': {
     scheduledDate: '22/11 (Dom)',
-    scheduledTime: '09:00',
+    scheduledTime: '17:00',
     venue: 'Escola Antenor Viana',
   },
   'match_handebol-masc_sf1': {
     scheduledDate: '22/11 (Dom)',
-    scheduledTime: '10:00',
+    scheduledTime: '18:00',
     venue: 'Escola Antenor Viana',
   },
   'match_handebol-fem_sf1': {
     scheduledDate: '22/11 (Dom)',
-    scheduledTime: '11:00',
-    venue: 'Escola Antenor Viana',
-  },
-  'match_futsal-masc_qf': {
-    scheduledDate: '22/11 (Dom)',
-    scheduledTime: '15:00',
-    venue: 'Quadra Oficial',
-  },
-  'match_futsal-fem_qf': {
-    scheduledDate: '22/11 (Dom)',
-    scheduledTime: '16:00',
-    venue: 'Quadra Oficial',
-  },
-  'match_futsal-masc_sf2': {
-    scheduledDate: '22/11 (Dom)',
-    scheduledTime: '17:00',
-    venue: 'Quadra Oficial',
-  },
-  'match_futsal-fem_sf2': {
-    scheduledDate: '22/11 (Dom)',
-    scheduledTime: '18:00',
-    venue: 'Quadra Oficial',
-  },
-  'match_futsal-masc_sf1': {
-    scheduledDate: '22/11 (Dom)',
     scheduledTime: '19:00',
-    venue: 'Quadra Oficial',
-  },
-  'match_futsal-fem_sf1': {
-    scheduledDate: '22/11 (Dom)',
-    scheduledTime: '20:00',
-    venue: 'Quadra Oficial',
+    venue: 'Escola Antenor Viana',
   },
 
   // =========================================================================
-  // SÁBADO, 28/11/2026 — TÊNIS DE MESA (08h-12h) & SINUCA / VÔLEI DE PRAIA (16h-21h)
+  // SÁBADO, 28/11/2026 — TÊNIS DE MESA (Shopping de Caxias, 07h-13h) & SINUCA / VÔLEI DE PRAIA (Arena AMK Sports, 15h-23h)
   // =========================================================================
+  'match_tenis-mesa-fem_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '07:00',
+    venue: 'Shopping de Caxias',
+  },
   'match_tenis-mesa-masc_qf': {
     scheduledDate: '28/11 (Sáb)',
     scheduledTime: '08:00',
-    venue: 'Arena Tênis de Mesa',
-  },
-  'match_tenis-mesa-fem_qf': {
-    scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '08:30',
-    venue: 'Arena Tênis de Mesa',
-  },
-  'match_tenis-mesa-masc_sf2': {
-    scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '09:00',
-    venue: 'Arena Tênis de Mesa',
+    venue: 'Shopping de Caxias',
   },
   'match_tenis-mesa-fem_sf2': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '09:30',
-    venue: 'Arena Tênis de Mesa',
+    scheduledTime: '09:00',
+    venue: 'Shopping de Caxias',
   },
-  'match_tenis-mesa-masc_sf1': {
+  'match_tenis-mesa-masc_sf2': {
     scheduledDate: '28/11 (Sáb)',
     scheduledTime: '10:00',
-    venue: 'Arena Tênis de Mesa',
+    venue: 'Shopping de Caxias',
   },
   'match_tenis-mesa-fem_sf1': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '10:30',
-    venue: 'Arena Tênis de Mesa',
+    scheduledTime: '11:00',
+    venue: 'Shopping de Caxias',
+  },
+  'match_tenis-mesa-masc_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '12:00',
+    venue: 'Shopping de Caxias',
   },
   'match_tenis-mesa-masc_final': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '11:00',
-    venue: 'Arena Tênis de Mesa',
+    scheduledTime: '13:00',
+    venue: 'Shopping de Caxias',
   },
   'match_tenis-mesa-fem_final': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '11:30',
+    scheduledTime: '13:00',
     venue: 'Arena Tênis de Mesa',
   },
 
