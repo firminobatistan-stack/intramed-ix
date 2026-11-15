@@ -792,7 +792,9 @@ export interface Registration {
   // Preço e Status de Pagamento
   paymentStatus: RegistrationPaymentStatus;
   authorizedPrice: number; // Calculado e selado pelo backend
-  
+  paidAmount?: number | null;
+  qrValidationToken?: string | null;
+
   // Vínculo com Mercado Pago
   paymentTransactionId?: string | null;
   paymentMethod?: 'pix' | 'credit_card' | 'ticket' | null;
