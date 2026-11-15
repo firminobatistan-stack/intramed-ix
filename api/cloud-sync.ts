@@ -429,14 +429,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const normalizeRegServerPrice = (reg: Record<string, unknown>) => {
-      if (reg.paymentStatus === 'pago') return reg;
       const expected = computeAuthorizedServerPrice(
         String(reg.lotId || 'lote-1-cangaceira'),
         String(reg.memberStatus || 'nao_solicitado'),
         Boolean(reg.requestedMemberDiscount),
         Boolean(reg.isGuestAthlete)
       );
-      return { ...reg, authorizedPrice: expected };
+      const paidNum = Number(reg.paidAmount);
+      const safePrice =
+        reg.paymentStatus === 'pago'
+          ? typeof reg.authorizedPrice === 'number' && !Number.isNaN(reg.authorizedPrice)
+            ? reg.authorizedPrice
+            : !Number.isNaN(paidNum) && paidNum > 0
+            ? paidNum === 64.2
+              ? 60
+              : paidNum
+            : expected
+          : expected;
+      return {
+        ...reg,
+        eventId: reg.eventId || 'intramed-ix-2026',
+        lotId: reg.lotId || 'lote-1-cangaceira',
+        modalityId: reg.modalityId || 'todas',
+        modalityName: reg.modalityName || 'Passaporte Geral (Todas as 16 Modalidades)',
+        categoryName: String(reg.categoryName || 'Geral'),
+        athleteName: String(reg.athleteName || 'Atleta IntraMed'),
+        athleteEmail: String(reg.athleteEmail || ''),
+        athletePhone: String(reg.athletePhone || ''),
+        athleteDocument: String(reg.athleteDocument || ''),
+        memberStatus: String(reg.memberStatus || 'nao_solicitado'),
+        paymentStatus: String(reg.paymentStatus || 'pendente'),
+        authorizedPrice: safePrice,
+      };
     };
 
     const launchConfig: PublicLaunchConfig = store.launch_config || DEFAULT_LAUNCH_CONFIG;

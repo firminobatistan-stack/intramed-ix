@@ -147,25 +147,43 @@ function normalizePendingRegistrationPrice(reg: Registration): Registration {
   const normalizedModName =
     reg.modalityName?.includes('10 Modalidades')
       ? 'Passaporte Geral (Todas as 16 Modalidades)'
-      : reg.modalityName;
-  if (reg.paymentStatus === 'pago') {
-    return normalizedModName !== reg.modalityName
-      ? { ...reg, modalityName: normalizedModName }
-      : reg;
-  }
+      : reg.modalityName || 'Passaporte Geral (Todas as 16 Modalidades)';
   const expectedPrice = resolveLotAuthorizedPrice(
-    reg.lotId,
-    reg.memberStatus,
-    reg.requestedMemberDiscount,
-    reg.isGuestAthlete
+    reg.lotId || 'lote-1-cangaceira',
+    reg.memberStatus || 'nao_solicitado',
+    Boolean(reg.requestedMemberDiscount),
+    Boolean(reg.isGuestAthlete)
   );
-  if (reg.authorizedPrice === expectedPrice && normalizedModName === reg.modalityName) {
-    return reg;
-  }
+  const paidNum = Number(reg.paidAmount);
+  const safePrice =
+    reg.paymentStatus === 'pago'
+      ? typeof reg.authorizedPrice === 'number' && !Number.isNaN(reg.authorizedPrice)
+        ? reg.authorizedPrice
+        : !Number.isNaN(paidNum) && paidNum > 0
+        ? paidNum === 64.2
+          ? 60
+          : paidNum
+        : expectedPrice
+      : expectedPrice;
+
   return {
     ...reg,
+    eventId: reg.eventId || 'intramed-ix-2026',
+    lotId: reg.lotId || 'lote-1-cangaceira',
+    modalityId: reg.modalityId || 'todas',
     modalityName: normalizedModName,
-    authorizedPrice: expectedPrice,
+    categoryName: reg.categoryName || 'Geral',
+    athleteName: reg.athleteName || 'Atleta IntraMed',
+    athleteEmail: reg.athleteEmail || '',
+    athletePhone: reg.athletePhone || '',
+    athleteDocument: reg.athleteDocument || '',
+    memberStatus: reg.memberStatus || 'nao_solicitado',
+    paymentStatus: reg.paymentStatus || 'pendente',
+    authorizedPrice: safePrice,
+    qrValidationToken:
+      reg.paymentStatus === 'pago'
+        ? reg.qrValidationToken || `INTRAMED-IX-${String(reg.id || '').toUpperCase()}-VERIFIED`
+        : reg.qrValidationToken || null,
   };
 }
 
@@ -334,7 +352,12 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         (snap) => {
           if (snap.empty) return;
           const firestoreRegs = snap.docs
-            .map((d) => ({ ...(d.data() as Registration), id: d.id }))
+            .map((d) =>
+              normalizePendingRegistrationPrice({
+                ...(d.data() as Registration),
+                id: d.id,
+              })
+            )
             .filter((r) => r && r.id && !isPurgedTestEntity(r));
           if (firestoreRegs.length > 0) {
             window.dispatchEvent(
@@ -361,15 +384,15 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       const remoteList = customEv.detail;
       if (!Array.isArray(remoteList)) return;
 
-      const cleanRemote = remoteList.filter(
-        (cr) => cr && cr.id && !isPurgedTestEntity(cr)
-      );
+      const cleanRemote = remoteList
+        .filter((cr) => cr && cr.id && !isPurgedTestEntity(cr))
+        .map((cr) => normalizePendingRegistrationPrice(cr));
 
       setRegistrations((prev) => {
         // Remove qualquer registro fictício/teste que possa estar no estado local
-        const cleanPrev = prev.filter(
-          (r) => r && r.id && !isPurgedTestEntity(r)
-        );
+        const cleanPrev = prev
+          .filter((r) => r && r.id && !isPurgedTestEntity(r))
+          .map((r) => normalizePendingRegistrationPrice(r));
 
         const remoteIds = new Set(cleanRemote.map((cr) => cr.id));
         const remoteEmails = new Set(

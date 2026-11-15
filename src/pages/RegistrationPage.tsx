@@ -224,7 +224,7 @@ export const RegistrationPage: React.FC = () => {
           r.paymentStatus !== 'cancelado' &&
           Boolean(r.isGuestAthlete) &&
           (r.turma === '21' || r.teamId === 'sanguinaria') &&
-          r.categoryName.toLowerCase() === 'masculino'
+          (r.categoryName || '').toLowerCase() === 'masculino'
       ),
     [registrations]
   );
@@ -236,7 +236,7 @@ export const RegistrationPage: React.FC = () => {
           r.paymentStatus !== 'cancelado' &&
           Boolean(r.isGuestAthlete) &&
           (r.turma === '21' || r.teamId === 'sanguinaria') &&
-          r.categoryName.toLowerCase() === 'feminino'
+          (r.categoryName || '').toLowerCase() === 'feminino'
       ),
     [registrations]
   );
@@ -279,10 +279,10 @@ export const RegistrationPage: React.FC = () => {
     return registrations.filter((r) => {
       if (
         currentUser?.email &&
-        r.athleteEmail.toLowerCase() === currentUser.email.toLowerCase()
+        (r.athleteEmail || '').toLowerCase() === currentUser.email.toLowerCase()
       )
         return true;
-      if (athleteEmail && r.athleteEmail.toLowerCase() === athleteEmail.toLowerCase())
+      if (athleteEmail && (r.athleteEmail || '').toLowerCase() === athleteEmail.toLowerCase())
         return true;
       return false;
     });
@@ -1561,9 +1561,9 @@ export const RegistrationPage: React.FC = () => {
                           <p>
                             <strong>Condição:</strong>{' '}
                             {reg.isGuestAthlete
-                              ? `Atleta Convidado • Turma 21 (${reg.categoryName})`
+                              ? `Atleta Convidado • Turma 21 (${reg.categoryName || 'Geral'})`
                               : reg.requestedMemberDiscount
-                              ? `Sócio da Atlética (${reg.memberStatus.toUpperCase()})`
+                              ? `Sócio da Atlética (${(reg.memberStatus || 'nao_solicitado').toUpperCase()})`
                               : 'Não Sócio'}
                           </p>
                           {reg.memberNotes && (
@@ -1581,7 +1581,7 @@ export const RegistrationPage: React.FC = () => {
                             Valor Autorizado:
                           </span>
                           <span className="text-xl font-display font-extrabold text-brand-blue">
-                            R$ {reg.authorizedPrice.toFixed(2)}
+                            R$ {(Number(reg.authorizedPrice ?? reg.paidAmount) || 0).toFixed(2)}
                           </span>
                         </div>
 

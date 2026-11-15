@@ -216,7 +216,7 @@ export const AdminRegistrationsPage: React.FC = () => {
   const paidCount = registrations.filter((r) => r.paymentStatus === 'pago').length;
   const totalRevenue = registrations
     .filter((r) => r.paymentStatus === 'pago')
-    .reduce((acc, r) => acc + r.authorizedPrice, 0);
+    .reduce((acc, r) => acc + (Number(r.authorizedPrice ?? r.paidAmount) || 0), 0);
 
   // Filtragem
   const filteredRegistrations = registrations.filter((reg) => {
@@ -234,9 +234,9 @@ export const AdminRegistrationsPage: React.FC = () => {
 
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
-      const matchName = reg.athleteName.toLowerCase().includes(q);
-      const matchEmail = reg.athleteEmail.toLowerCase().includes(q);
-      const matchDoc = reg.athleteDocument.includes(q);
+      const matchName = (reg.athleteName || '').toLowerCase().includes(q);
+      const matchEmail = (reg.athleteEmail || '').toLowerCase().includes(q);
+      const matchDoc = (reg.athleteDocument || '').includes(q);
       const matchTurma = (reg.turmaLabel || reg.teamName || '').toLowerCase().includes(q);
       const matchMod = (reg.modalityName || '').toLowerCase().includes(q);
       return matchName || matchEmail || matchDoc || matchTurma || matchMod;
@@ -265,20 +265,20 @@ export const AdminRegistrationsPage: React.FC = () => {
 
     const rows = registrations.map((r) => [
       r.id,
-      `"${r.athleteName}"`,
-      r.athleteEmail,
-      r.athletePhone,
-      r.athleteDocument,
-      `"${r.turmaLabel || r.teamName || ('Turma ' + r.turma)}"`,
+      `"${r.athleteName || ''}"`,
+      r.athleteEmail || '',
+      r.athletePhone || '',
+      r.athleteDocument || '',
+      `"${r.turmaLabel || r.teamName || ('Turma ' + (r.turma || ''))}"`,
       '"Passaporte Geral (Todas as 16 Modalidades)"',
-      r.categoryName,
+      r.categoryName || 'Geral',
       r.requestedMemberDiscount ? 'SIM' : 'NÃO',
-      r.memberStatus.toUpperCase(),
-      r.authorizedPrice.toFixed(2),
-      r.paymentStatus.toUpperCase(),
+      (r.memberStatus || 'nao_solicitado').toUpperCase(),
+      (Number(r.authorizedPrice ?? r.paidAmount) || 0).toFixed(2),
+      (r.paymentStatus || 'pendente').toUpperCase(),
       r.paymentMethod || '—',
       r.mpPaymentId || '—',
-      r.createdAtIso,
+      r.createdAtIso || '',
     ]);
 
     const csvContent =
@@ -585,15 +585,15 @@ export const AdminRegistrationsPage: React.FC = () => {
                       if (searchTerm.trim()) {
                         const q = searchTerm.toLowerCase();
                         return (
-                          u.name.toLowerCase().includes(q) ||
-                          u.email.toLowerCase().includes(q) ||
+                          (u.name || '').toLowerCase().includes(q) ||
+                          (u.email || '').toLowerCase().includes(q) ||
                           (u.turmaLabel || '').toLowerCase().includes(q)
                         );
                       }
                       return true;
                     })
                     .map((u) => {
-                      const isTargetMaster = u.email.toLowerCase() === 'cangaceira@uema.com';
+                      const isTargetMaster = (u.email || '').toLowerCase() === 'cangaceira@uema.com';
                       return (
                         <tr key={u.id || u.email} className="hover:bg-brand-surface-muted/40 transition-colors">
                           <td className="py-3 px-4 font-extrabold text-brand-text-primary">
@@ -703,17 +703,17 @@ export const AdminRegistrationsPage: React.FC = () => {
 
                         <td className="py-3 px-3">
                           <span className="font-display font-black text-slate-900 block">
-                            {reg.turmaLabel || reg.teamName || ('Turma ' + reg.turma)}
+                            {reg.turmaLabel || reg.teamName || ('Turma ' + (reg.turma || ''))}
                           </span>
                           <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-bold inline-block mt-0.5">
-                            Passaporte Geral (Todas as 16 Modalidades) • {reg.categoryName}
+                            Passaporte Geral (Todas as 16 Modalidades) • {reg.categoryName || 'Geral'}
                           </span>
                         </td>
 
                         <td className="py-3 px-3">
                           {reg.isGuestAthlete ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold inline-block bg-amber-100 text-amber-900 border border-amber-300">
-                              ★ ATLETA CONVIDADO T21 ({reg.categoryName.toUpperCase()})
+                              ★ ATLETA CONVIDADO T21 ({(reg.categoryName || 'Geral').toUpperCase()})
                             </span>
                           ) : reg.requestedMemberDiscount ? (
                             <div className="space-y-0.5">
@@ -747,7 +747,7 @@ export const AdminRegistrationsPage: React.FC = () => {
 
                         <td className="py-3 px-3">
                           <span className="font-display font-extrabold text-brand-blue text-sm">
-                            R$ {reg.authorizedPrice.toFixed(2)}
+                            R$ {(Number(reg.authorizedPrice ?? reg.paidAmount) || 0).toFixed(2)}
                           </span>
                         </td>
 
@@ -857,7 +857,7 @@ export const AdminRegistrationsPage: React.FC = () => {
                         </span>
                       </div>
                       <span className="text-sm font-black text-brand-blue shrink-0">
-                        R$ {reg.authorizedPrice.toFixed(2)}
+                        R$ {(Number(reg.authorizedPrice ?? reg.paidAmount) || 0).toFixed(2)}
                       </span>
                     </div>
 
@@ -1045,7 +1045,7 @@ export const AdminRegistrationsPage: React.FC = () => {
               <div className="flex justify-between pt-1 pb-1">
                 <span className="text-slate-500">Valor Pago:</span>
                 <span className="font-display font-extrabold text-emerald-700 text-sm">
-                  R$ {selectedReceiptReg.authorizedPrice.toFixed(2)}
+                  R$ {(Number(selectedReceiptReg.authorizedPrice ?? selectedReceiptReg.paidAmount) || 0).toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between pt-1">

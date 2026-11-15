@@ -798,6 +798,44 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
       reg.modalityName = 'Passaporte Geral (Todas as 16 Modalidades)';
       regRepaired = true;
     }
+    if (!reg.categoryName) {
+      reg.categoryName = 'Geral';
+      regRepaired = true;
+    }
+    if (!reg.memberStatus) {
+      reg.memberStatus = 'nao_solicitado';
+      regRepaired = true;
+    }
+    if (!reg.paymentStatus) {
+      reg.paymentStatus = 'pendente';
+      regRepaired = true;
+    }
+    if (typeof reg.athleteName !== 'string' || !reg.athleteName.trim()) {
+      reg.athleteName = String(linkedAth?.name || 'Atleta IntraMed');
+      regRepaired = true;
+    }
+    if (typeof reg.athleteEmail !== 'string') {
+      reg.athleteEmail = String(linkedAth?.email || '');
+      regRepaired = true;
+    }
+    if (typeof reg.athletePhone !== 'string') {
+      reg.athletePhone = '';
+      regRepaired = true;
+    }
+    if (typeof reg.athleteDocument !== 'string') {
+      reg.athleteDocument = '';
+      regRepaired = true;
+    }
+    if (typeof reg.authorizedPrice !== 'number' || Number.isNaN(reg.authorizedPrice)) {
+      const paidNum = Number(reg.paidAmount);
+      reg.authorizedPrice =
+        !Number.isNaN(paidNum) && paidNum > 0
+          ? paidNum === 64.2
+            ? 60
+            : paidNum
+          : 60;
+      regRepaired = true;
+    }
     if (!reg.createdAtIso) {
       reg.createdAtIso = reg.paidAtIso || reg.updatedAtIso || nowIso;
       regRepaired = true;
@@ -1821,11 +1859,28 @@ export async function markRegistrationPaidOnServer(params: {
   const updated: Record<string, unknown> = {
     ...existing,
     id: params.registrationId,
+    eventId: existing.eventId || 'intramed-ix-2026',
+    lotId: existing.lotId || 'lote-1-cangaceira',
+    modalityId: existing.modalityId || 'todas',
+    modalityName: existing.modalityName || 'Passaporte Geral (Todas as 16 Modalidades)',
+    categoryName: existing.categoryName || 'Geral',
+    athleteName: existing.athleteName || fallbackAth?.name || 'Atleta IntraMed',
+    athleteEmail: existing.athleteEmail || fallbackAth?.email || '',
+    athletePhone: existing.athletePhone || '',
+    athleteDocument: existing.athleteDocument || '',
+    memberStatus: existing.memberStatus || 'nao_solicitado',
+    authorizedPrice:
+      typeof existing.authorizedPrice === 'number' && !Number.isNaN(existing.authorizedPrice)
+        ? existing.authorizedPrice
+        : params.paidAmount === 64.2
+        ? 60
+        : params.paidAmount || 60,
     paymentStatus: 'pago',
     paymentMethod: params.paymentMethod,
     mpPaymentId: String(params.mpPaymentId),
     paidAmount: params.paidAmount,
     qrValidationToken: qrToken,
+    createdAtIso: existing.createdAtIso || nowIso,
     paidAtIso: nowIso,
     updatedAtIso: nowIso,
     revision: nextRevision,
