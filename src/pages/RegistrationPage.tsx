@@ -1785,7 +1785,7 @@ export const RegistrationPage: React.FC = () => {
 
                         {/* Corpo do Card */}
                         <div className="px-5 pb-4">
-                          <div className="-mt-8 flex items-end justify-between gap-2 mb-2.5">
+                          <div className="relative z-10 -mt-8 flex items-end justify-between gap-2 mb-2.5">
                             <div className="w-16 h-16 rounded-full bg-white p-1 shadow-md">
                               <div className="w-full h-full rounded-full bg-slate-100 overflow-hidden flex items-center justify-center">
                                 {ath.avatarUrl ? (
