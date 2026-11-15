@@ -1081,9 +1081,32 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         prof.teamName = matchingReg.teamName;
         profChanged = true;
       }
-      if (!prof.avatarUrl && matchingReg.avatarUrl) {
-        prof.avatarUrl = matchingReg.avatarUrl;
-        profChanged = true;
+      const linkedAth = store.athletes[expectedAthId];
+      const avatarCandidates = [
+        { url: prof.avatarUrl, ts: new Date(String(prof.updatedAtIso || prof.createdAtIso || 0)).getTime() },
+        { url: linkedAth?.avatarUrl, ts: new Date(String(linkedAth?.updatedAtIso || 0)).getTime() },
+        { url: matchingReg.avatarUrl, ts: new Date(String(matchingReg.updatedAtIso || matchingReg.createdAtIso || 0)).getTime() },
+      ].filter((c) => typeof c.url === 'string' && c.url.trim().length > 0);
+
+      if (avatarCandidates.length > 0) {
+        avatarCandidates.sort((a, b) => b.ts - a.ts);
+        const canonicalAvatar = String(avatarCandidates[0].url);
+        if (prof.avatarUrl !== canonicalAvatar) {
+          prof.avatarUrl = canonicalAvatar;
+          profChanged = true;
+        }
+        if (linkedAth && linkedAth.avatarUrl !== canonicalAvatar) {
+          linkedAth.avatarUrl = canonicalAvatar;
+          linkedAth.updatedAtIso = nowIso;
+          store.athletes[expectedAthId] = linkedAth;
+          mutationPromises.push(MirrorDocumentToFirestoreRest('athletes', expectedAthId, linkedAth));
+        }
+        if (matchingReg.avatarUrl !== canonicalAvatar) {
+          matchingReg.avatarUrl = canonicalAvatar;
+          matchingReg.updatedAtIso = nowIso;
+          store.registrations[String(matchingReg.id)] = matchingReg;
+          mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', String(matchingReg.id), matchingReg));
+        }
       }
       if (profChanged) {
         prof.updatedAtIso = nowIso;
