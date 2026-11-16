@@ -249,6 +249,7 @@ const RoutedApp: React.FC = () => {
           />
           <Route path="/chaveamento" element={<BracketPage />} />
           <Route path="/jogos" element={<MatchesPage />} />
+          <Route path="/artilharia" element={<TopPlayersPage />} />
           <Route path="/favoritos" element={<FavoritesPage />} />
           <Route path="/notificacoes" element={<NotificationsPage />} />
           <Route path="/equipe" element={<TeamDetailPage />} />

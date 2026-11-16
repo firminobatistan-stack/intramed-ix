@@ -55,6 +55,12 @@ const PRIMARY_ITEMS: SidebarItem[] = [
     matchPrefix: '/jogos',
   },
   {
+    to: '/artilharia',
+    label: 'Artilharia & Top Players',
+    icon: Trophy,
+    matchPrefix: '/artilharia',
+  },
+  {
     to: '/favoritos',
     label: 'Favoritos',
     icon: Heart,
