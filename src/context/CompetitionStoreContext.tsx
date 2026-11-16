@@ -1734,7 +1734,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   const visibleMatches = state.isTestMode ? state.testMatches : state.officialMatches;
   const visibleTeams = state.isTestMode ? state.testTeams : state.officialTeams;
-  const rawAthletes = state.isTestMode ? state.testAthletes : state.officialAthletes;
+  const rawAthletes = state.isTestMode
+    ? [...(state.officialAthletes || []), ...(state.testAthletes || [])]
+    : state.officialAthletes;
   const visibleAthletes = useMemo(() => {
     const eligible = (rawAthletes || []).filter(
       (a) =>
