@@ -8,6 +8,22 @@ import {
  * Configuração Parametrizável do Motor de Súmula por Modalidade — INTRAMED IX
  * Separada da camada visual para permitir ajustes conforme o regulamento oficial.
  */
+export const OFFICIAL_MODALITY_ROSTER_LIMITS: Record<
+  ModalitySlug,
+  { min: number; max: number }
+> = {
+  futsal: { min: 4, max: 14 },
+  handebol: { min: 5, max: 12 },
+  basquete: { min: 5, max: 10 },
+  volei: { min: 6, max: 12 },
+  'tenis-de-mesa': { min: 1, max: 2 },
+  'volei-de-praia': { min: 2, max: 3 },
+  sinuca: { min: 2, max: 3 },
+  truco: { min: 2, max: 2 },
+  poker: { min: 2, max: 2 },
+  natacao: { min: 1, max: 10 },
+};
+
 export const SWIMMING_STROKES: SwimmingStrokeType[] = [
   'Crawl',
   'Borboleta',
