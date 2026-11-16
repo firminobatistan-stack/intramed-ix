@@ -314,6 +314,8 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         registrationId: reg.id,
         paymentStatus: reg.paymentStatus,
         memberStatus: reg.memberStatus,
+        categoryName: reg.categoryName,
+        gender: reg.categoryName as any,
         autoLogin: false,
       });
     });
@@ -641,6 +643,8 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         registrationId: newRegistration.id,
         paymentStatus: newRegistration.paymentStatus,
         memberStatus: newRegistration.memberStatus,
+        categoryName: newRegistration.categoryName,
+        gender: newRegistration.categoryName as any,
         autoLogin: true,
       });
 
@@ -924,6 +928,8 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         registrationId: target.id,
         paymentStatus: 'pago',
         memberStatus: target.memberStatus,
+        categoryName: target.categoryName,
+        gender: target.categoryName as any,
         autoLogin:
           !isAdmin ||
           (Boolean(currentUser?.email) &&

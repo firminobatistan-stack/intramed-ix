@@ -62,28 +62,39 @@ export function buildInitialTestWorkbench(): {
     'Universal',
   ];
 
-  const athletes: Athlete[] = [
-    ...numbers.map((num, idx) => ({
-      id: `test-home-ath-${num}`,
-      name: `Atleta Casa #${num}`,
-      avatarUrl: null,
-      jerseyNumber: num,
-      position: positions[idx] || 'Atleta',
-      teamId: 'colossal',
-      modalityIds: allModalitySlugs,
-      isTestOnly: true,
-    })),
-    ...numbers.map((num, idx) => ({
-      id: `test-away-ath-${num}`,
-      name: `Atleta Visitante #${num}`,
-      avatarUrl: null,
-      jerseyNumber: num,
-      position: positions[idx] || 'Atleta',
-      teamId: 'soberana',
-      modalityIds: allModalitySlugs,
-      isTestOnly: true,
-    })),
-  ];
+  const athletes: Athlete[] = [];
+  for (const team of teams) {
+    for (let i = 0; i < numbers.length; i++) {
+      const num = numbers[i];
+      const pos = positions[i] || 'Atleta';
+      // Atleta Masculino
+      athletes.push({
+        id: `test-${team.id}-masc-${num}`,
+        name: `[${team.shortName || team.name}] Atleta Masc #${num}`,
+        avatarUrl: null,
+        jerseyNumber: num,
+        position: pos,
+        teamId: team.id,
+        modalityIds: allModalitySlugs,
+        categoryName: 'Masculino',
+        gender: 'Masculino',
+        isTestOnly: true,
+      });
+      // Atleta Feminino
+      athletes.push({
+        id: `test-${team.id}-fem-${num}`,
+        name: `[${team.shortName || team.name}] Atleta Fem #${num}`,
+        avatarUrl: null,
+        jerseyNumber: num,
+        position: pos,
+        teamId: team.id,
+        modalityIds: allModalitySlugs,
+        categoryName: 'Feminino',
+        gender: 'Feminino',
+        isTestOnly: true,
+      });
+    }
+  }
 
   const matches: Match[] = [];
   const sheets: Record<string, MatchSheet> = {};
@@ -175,20 +186,8 @@ export function buildInitialTestWorkbench(): {
       modalityId: mod.id,
       scoringModel: engine.scoringModel,
       isTestMode: true,
-      homeLineup: createNeutralTestLineup(
-        'home',
-        isPairs ? 2 : 8,
-        isPairs ? 2 : 5,
-        engine.supportsGoalkeeper,
-        isPairs
-      ),
-      awayLineup: createNeutralTestLineup(
-        'away',
-        isPairs ? 2 : 8,
-        isPairs ? 2 : 5,
-        engine.supportsGoalkeeper,
-        isPairs
-      ),
+      homeLineup: [],
+      awayLineup: [],
       timer: {
         currentPeriod: 1,
         totalPeriods: catRule.periodsCount,

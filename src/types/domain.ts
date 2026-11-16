@@ -203,6 +203,8 @@ export interface Athlete {
   registrationId?: string | null;
   paymentStatus?: RegistrationPaymentStatus;
   memberStatus?: MemberStatus;
+  categoryName?: string | null;
+  gender?: 'M' | 'F' | 'Masculino' | 'Feminino' | null;
   isTestOnly?: boolean;
 }
 

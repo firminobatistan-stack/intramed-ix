@@ -532,6 +532,35 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
+      {/* 5.5. CARD DE DESTAQUE: ARTILHARIA & TOP PLAYERS */}
+      <section className="rounded-3xl p-5 sm:p-6 shadow-xl border border-white/15 text-white flex flex-col sm:flex-row items-center justify-between gap-4 bg-gradient-to-r from-[#0B218A] via-[#1030B8] to-[#07134A]">
+        <div className="flex items-center gap-4 text-center sm:text-left flex-col sm:flex-row">
+          <div className="w-14 h-14 rounded-2xl bg-brand-yellow/20 border-2 border-brand-yellow/40 flex items-center justify-center shrink-0 shadow-inner">
+            <Trophy className="w-7 h-7 text-brand-yellow drop-shadow" />
+          </div>
+          <div className="space-y-0.5">
+            <span className="text-[10px] font-black uppercase tracking-wider text-brand-yellow block">
+              Estatísticas Oficiais • INTRAMED IX
+            </span>
+            <h3 className="text-lg sm:text-xl font-display font-black text-white">
+              Artilharia &amp; Top Players
+            </h3>
+            <p className="text-xs sm:text-sm text-white/80 max-w-md">
+              Acompanhe os artilheiros do Futsal e Handebol, cestinhas do Basquete e destaques de cada turma.
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => navigate('/artilharia')}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl bg-brand-yellow hover:bg-amber-300 text-slate-950 font-display font-black text-xs sm:text-sm shadow-lg transition-all shrink-0 hover:scale-105 active:scale-95"
+        >
+          <span>Ver Artilharia Completa</span>
+          <ArrowRight className="w-4 h-4 text-slate-950" />
+        </button>
+      </section>
+
       {/* 6. TABELA DE CLASSIFICAÇÃO COMPACTA */}
       <section className="all-sports-card p-5 sm:p-6 space-y-4">
         <div className="all-sports-section-pill">

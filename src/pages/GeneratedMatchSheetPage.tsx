@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { formatSecondsToClock } from '../data/sportRulesConfig';
+import { exportElementToPdf } from '../utils/pdfGenerator';
 import { TeamCrest } from '../components/sports/TeamCrest';
 import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -47,7 +48,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
 
   const [viewMode, setViewMode] = useState<SheetDocumentViewMode>('official_federation');
   const [activeHandballPage, setActiveHandballPage] = useState<1 | 2 | 3 | 'all'>('all');
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const [signatures, setSignatures] = useState<{
     referee: boolean;
@@ -353,46 +354,28 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     window.print();
   };
 
-  const handleDownloadStandaloneFile = () => {
+  const handleDownloadPdf = async () => {
     const sheetElement = document.getElementById('printable-official-scoresheet');
     if (!sheetElement) {
       window.print();
       return;
     }
-
-    const htmlContent = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <title>Súmula Oficial INTRAMED IX — ${match.modalityName} (${match.homeTeam.teamName} x ${match.awayTeam.teamName})</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @page { size: A4 portrait; margin: 8mm; }
-    body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .cbhb-print-page { page-break-after: always; break-after: page; margin-bottom: 24px; }
-    .cbhb-print-page:last-child { page-break-after: auto; break-after: auto; }
-  </style>
-</head>
-<body class="p-4">
-  ${sheetElement.innerHTML}
-</body>
-</html>`;
-
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const cleanHome = (match.homeTeam.teamName || 'equipeA')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-');
-    const cleanAway = (match.awayTeam.teamName || 'equipeB')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '-');
-    a.href = url;
-    a.download = `sumula-oficial-intramed-ix-${match.modalityId}-${cleanHome}-vs-${cleanAway}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      setIsGeneratingPdf(true);
+      const cleanHome = (match.homeTeam.teamName || 'equipeA')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '-');
+      const cleanAway = (match.awayTeam.teamName || 'equipeB')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '-');
+      const fileName = `sumula-oficial-intramed-ix-${match.modalityId}-${cleanHome}-vs-${cleanAway}.pdf`;
+      await exportElementToPdf(sheetElement, fileName);
+    } catch (err) {
+      console.error('Erro ao gerar PDF:', err);
+      window.print();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   const handleShare = async () => {
@@ -1437,7 +1420,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     );
   };
 
-  const currentTemplate = selectedTemplate || match.modalityId || 'futsal';
+  const currentTemplate = match.modalityId || 'futsal';
 
   return (
     <div className="min-h-screen bg-brand-surface-muted pb-12 print:bg-white print:pb-0">
@@ -1504,12 +1487,22 @@ export const GeneratedMatchSheetPage: React.FC = () => {
               </div>
 
               <Button
+                variant="primary"
+                size="sm"
+                disabled={isGeneratingPdf}
+                leftIcon={<Download className="w-3.5 h-3.5" />}
+                onClick={handleDownloadPdf}
+              >
+                {isGeneratingPdf ? 'Gerando PDF Oficial...' : 'Baixar Súmula em PDF (.pdf)'}
+              </Button>
+
+              <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<Download className="w-3.5 h-3.5" />}
-                onClick={handleDownloadStandaloneFile}
+                leftIcon={<Printer className="w-3.5 h-3.5" />}
+                onClick={handlePrintPdf}
               >
-                Baixar Súmula (.html)
+                Imprimir / Diálogo do Sistema
               </Button>
 
               <Button
@@ -1520,73 +1513,49 @@ export const GeneratedMatchSheetPage: React.FC = () => {
               >
                 Compartilhar
               </Button>
-
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<Printer className="w-3.5 h-3.5" />}
-                onClick={handlePrintPdf}
-              >
-                Salvar PDF / Imprimir (A4)
-              </Button>
             </div>
           </div>
 
-          {/* Seletor de Modelo de Federação + Seletor de Folhas */}
-          {viewMode === 'official_federation' && (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">
-                  Modelo Oficial:
-                </span>
+          {/* Informações da Súmula Oficial (Travada na Modalidade da Partida) */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">
+                Modalidade Vinculada:
+              </span>
+              <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-[#0B218A] text-white tracking-wide">
+                {match.modalityName} ({match.categoryName || 'Oficial'})
+              </span>
+              <span className="text-xs text-slate-500 font-medium hidden sm:inline">
+                • {match.phaseLabel} • {match.venue || 'Ginásio'}
+              </span>
+            </div>
+
+            {currentTemplate === 'handebol' && (
+              <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-300 text-xs font-bold">
                 {[
-                  { id: 'futsal', label: 'Futsal (CBFS)' },
-                  { id: 'handebol', label: 'Handebol (CBHb)' },
-                  { id: 'basquete', label: 'Basquetebol (CBB)' },
-                  { id: 'volei', label: 'Voleibol (CBV)' },
-                ].map((m) => (
+                  { id: 'all', label: 'Todas as Folhas' },
+                  { id: 1, label: 'Folha 1 (Jogo)' },
+                  { id: 2, label: 'Folha 2 (Gols)' },
+                  { id: 3, label: 'Folha 3 (Crono)' },
+                ].map((p) => (
                   <button
-                    key={m.id}
+                    key={p.id}
                     type="button"
-                    onClick={() => setSelectedTemplate(m.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                      currentTemplate === m.id
-                        ? 'bg-[#0B218A] text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    onClick={() => setActiveHandballPage(p.id as 1 | 2 | 3 | 'all')}
+                    className={`px-2 py-0.5 rounded text-[11px] transition-all ${
+                      activeHandballPage === p.id
+                        ? 'bg-[#0B218A] text-white'
+                        : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    {m.label}
+                    {p.label}
                   </button>
                 ))}
               </div>
-
-              {currentTemplate === 'handebol' && (
-                <div className="inline-flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-300 text-xs font-bold">
-                  {[
-                    { id: 'all', label: 'Todas as Folhas' },
-                    { id: 1, label: 'Folha 1 (Jogo)' },
-                    { id: 2, label: 'Folha 2 (Gols)' },
-                    { id: 3, label: 'Folha 3 (Crono)' },
-                  ].map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setActiveHandballPage(p.id as 1 | 2 | 3 | 'all')}
-                      className={`px-2 py-0.5 rounded text-[11px] transition-all ${
-                        activeHandballPage === p.id
-                          ? 'bg-[#0B218A] text-white'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
-      </header>
+</header>
 
       {/* ÁREA DE IMPRESSÃO / VISUALIZAÇÃO */}
       <main

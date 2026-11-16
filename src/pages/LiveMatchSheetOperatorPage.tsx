@@ -236,6 +236,41 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
   }
 
   const engine = MODALITY_RULE_ENGINE[match.modalityId];
+
+  const rosterLimits = OFFICIAL_MODALITY_ROSTER_LIMITS[match.modalityId] || { min: 1, max: 20 };
+  const isLineupIncomplete =
+    !sheet.isClosed &&
+    engine.scoringModel !== 'swimming_heats' &&
+    (sheet.homeLineup.length < rosterLimits.min || sheet.awayLineup.length < rosterLimits.min);
+
+  const autoOpenedLineupRef = React.useRef(false);
+  useEffect(() => {
+    if (
+      !autoOpenedLineupRef.current &&
+      !sheet.isClosed &&
+      engine.scoringModel !== 'swimming_heats' &&
+      (sheet.homeLineup.length === 0 || sheet.awayLineup.length === 0)
+    ) {
+      autoOpenedLineupRef.current = true;
+      setIsLineupModalOpen(true);
+    }
+  }, [sheet.homeLineup.length, sheet.awayLineup.length, sheet.isClosed, engine.scoringModel]);
+
+  const handleStartOrResumeTimer = () => {
+    if (engine.scoringModel !== 'swimming_heats') {
+      const limits = OFFICIAL_MODALITY_ROSTER_LIMITS[match.modalityId] || { min: 1, max: 20 };
+      if (sheet.homeLineup.length < limits.min || sheet.awayLineup.length < limits.min) {
+        try { matchSound.playBuzzer(); } catch {}
+        setIsLineupModalOpen(true);
+        alert(
+          `Escalação Incompleta!\n\nPelo Regulamento IX INTRAMED, cada equipe deve ter no mínimo ${limits.min} atletas escalados para iniciar a partida de ${match.modalityName}.\n\nAtualmente:\n• ${match.homeTeam.teamName}: ${sheet.homeLineup.length}/${limits.min}\n• ${match.awayTeam.teamName}: ${sheet.awayLineup.length}/${limits.min}\n\nPor favor, complete a escalação dos atletas antes de iniciar o cronômetro.`
+        );
+        return;
+      }
+    }
+    startOrResumeTimer(match.id);
+  };
+
   const categoryOptions = Object.keys(engine.defaultCategoryRules);
   const currentCatRule =
     engine.defaultCategoryRules[match.categoryName || ''] ||
@@ -440,28 +475,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                 </span>
               </div>
 
-              {/* Seletor rápido de Categoria (ex: Masculino 2x20 vs Feminino 2x15) */}
-              {categoryOptions.length > 1 &&
-                sheet.timer.lifecycle === 'not_started' &&
-                !sheet.isClosed && (
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-[11px] text-white/60">Regra de tempo:</span>
-                    {categoryOptions.map((catKey) => (
-                      <button
-                        key={catKey}
-                        type="button"
-                        onClick={() => configureMatchCategoryRule(match.id, catKey)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors min-h-[32px] ${
-                          match.categoryName === catKey
-                            ? 'bg-brand-yellow text-brand-blue-dark'
-                            : 'bg-white/10 text-white/80 hover:bg-white/20'
-                        }`}
-                      >
-                        {catKey}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              
             </div>
           </div>
 
@@ -611,6 +625,33 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
 
       {/* CONTEÚDO PRINCIPAL DO OPERADOR */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-5 space-y-5">
+        {/* AVISO DE ESCALAÇÃO OBRIGATÓRIA ANTES DE INICIAR */}
+        {isLineupIncomplete && (
+          <div className="rounded-2xl border-2 border-amber-400 p-4 text-slate-900 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md bg-gradient-to-r from-amber-50 to-amber-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-400 text-brand-blue-dark flex items-center justify-center shrink-0 shadow-sm">
+                <Users className="w-5 h-5 text-brand-blue-dark" />
+              </div>
+              <div>
+                <h4 className="text-sm font-display font-black text-amber-950 uppercase tracking-tight">
+                  Escalação Obrigatória Antes de Iniciar a Partida
+                </h4>
+                <p className="text-xs text-amber-900 font-medium">
+                  Regulamento ({match.modalityName}): Mínimo de <strong>{rosterLimits.min} atletas por equipe</strong>.
+                  Escalação atual: {match.homeTeam.teamName} ({sheet.homeLineup.length}/{rosterLimits.min}) • {match.awayTeam.teamName} ({sheet.awayLineup.length}/{rosterLimits.min}).
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Users className="w-4 h-4" />}
+              onClick={() => setIsLineupModalOpen(true)}
+            >
+              Escalar Atletas Agora
+            </Button>
+          </div>
+        )}
         {/* 4 & 5. PLACAR PRINCIPAL GIGANTE + CRONÔMETRO DA PARTIDA */}
         <section
           aria-label="Placar Principal e Cronômetro"
@@ -710,7 +751,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                         variant="primary"
                         size="md"
                         leftIcon={<Play className="w-4 h-4" />}
-                        onClick={() => startOrResumeTimer(match.id)}
+                        onClick={() => handleStartOrResumeTimer()}
                       >
                         {sheet.timer.elapsedSeconds > 0 ? 'Retomar' : 'Largada'}
                       </Button>
@@ -1029,7 +1070,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                           variant="primary"
                           size="lg"
                           leftIcon={<Play className="w-5 h-5" />}
-                          onClick={() => startOrResumeTimer(match.id)}
+                          onClick={() => handleStartOrResumeTimer()}
                         >
                           {sheet.timer.lifecycle === 'paused'
                             ? 'RETOMAR CRONÔMETRO'
@@ -2138,18 +2179,26 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             const allowOtherGender = Boolean(allowOtherGenderBySide[side]) && canAddOtherGender;
             const matchIsFem = (match.categoryName || '').toLowerCase().includes('fem');
             const eligibleTeamAthletes = teamObj.teamId ? getAthletesByTeam(teamObj.teamId) : [];
+
+            const getAthleteGender = (ath: any): 'Masculino' | 'Feminino' => {
+              const reg = registrations.find((r) => r.linkedAthleteId === ath.id || r.id === ath.registrationId);
+              const cat = (reg?.categoryName || ath.categoryName || ath.gender || '').toLowerCase();
+              if (cat.includes('fem')) return 'Feminino';
+              if (cat.includes('masc')) return 'Masculino';
+              const text = `${ath.id} ${ath.name}`.toLowerCase();
+              if (text.includes('fem')) return 'Feminino';
+              if (text.includes('masc')) return 'Masculino';
+              return 'Masculino';
+            };
+
             const availableToAdd = eligibleTeamAthletes.filter((a) => {
               if (lineup.some((l) => l.athleteId === a.id)) return false;
-              const reg = registrations.find((r) => r.linkedAthleteId === a.id || r.id === a.registrationId);
-              const athCat = (reg?.categoryName || '').toLowerCase();
-              if (athCat.includes('masc') || athCat.includes('fem')) {
-                const sameGender = matchIsFem ? athCat.includes('fem') : !athCat.includes('fem');
-                if (!sameGender && !allowOtherGender) return false;
-              }
+              const athGender = getAthleteGender(a);
+              const sameGender = matchIsFem ? athGender === 'Feminino' : athGender === 'Masculino';
+              if (!sameGender && !allowOtherGender) return false;
               return true;
             });
-
-            return (
+return (
               <div
                 key={side}
                 className="rounded-2xl bg-brand-surface-muted p-3.5 border border-brand-surface-border space-y-2.5"

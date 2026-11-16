@@ -252,6 +252,8 @@ interface CompetitionStoreContextValue {
     registrationId?: string | null;
     paymentStatus?: RegistrationPaymentStatus;
     memberStatus?: MemberStatus;
+    categoryName?: string | null;
+    gender?: 'M' | 'F' | 'Masculino' | 'Feminino' | null;
     autoLogin?: boolean;
   }) => Athlete;
   registerTeam: (payload: {
@@ -266,6 +268,8 @@ interface CompetitionStoreContextValue {
     jerseyNumber?: number | null;
     position?: string | null;
     avatarUrl?: string | null;
+    categoryName?: string | null;
+    gender?: 'M' | 'F' | 'Masculino' | 'Feminino' | null;
     modalityIds: ModalitySlug[];
   }) => { ok: boolean; error?: string; athlete?: Athlete };
   createOfficialMatch: (payload: {
@@ -453,20 +457,8 @@ function buildDefaultOfficialSheetForMatch(
     modalityId: match.modalityId,
     scoringModel: engine.scoringModel,
     isTestMode: false,
-    homeLineup: homePlayers.map((p, idx) => ({
-      athleteId: p.id,
-      athleteName: p.name,
-      jerseyNumber: p.jerseyNumber,
-      isStarter: idx < (isPairs ? 2 : 5),
-      isCaptain: idx === 0,
-    })),
-    awayLineup: awayPlayers.map((p, idx) => ({
-      athleteId: p.id,
-      athleteName: p.name,
-      jerseyNumber: p.jerseyNumber,
-      isStarter: idx < (isPairs ? 2 : 5),
-      isCaptain: idx === 0,
-    })),
+    homeLineup: [],
+    awayLineup: [],
     timer: {
       currentPeriod: 1,
       totalPeriods: catRule.periodsCount,
@@ -3704,8 +3696,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       avatarUrl?: string | null;
       modalityIds?: ModalitySlug[];
       registrationId?: string | null;
-      paymentStatus?: RegistrationPaymentStatus;
+            paymentStatus?: RegistrationPaymentStatus;
       memberStatus?: MemberStatus;
+      categoryName?: string | null;
+      gender?: 'M' | 'F' | 'Masculino' | 'Feminino' | null;
       autoLogin?: boolean;
       skipCloudSync?: boolean;
     }): Athlete => {
@@ -3761,6 +3755,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         registrationId: payload.registrationId ?? existing?.registrationId ?? null,
         paymentStatus: payload.paymentStatus ?? existing?.paymentStatus,
         memberStatus: payload.memberStatus ?? existing?.memberStatus,
+        categoryName: payload.categoryName ?? existing?.categoryName ?? null,
+        gender: (payload.gender || (payload.categoryName as any)) ?? existing?.gender ?? null,
         isTestOnly: false,
       };
 
@@ -3862,47 +3858,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               continue;
             }
 
-            if (m.homeTeam.teamId === athleteRecord.teamId) {
-              const inLineup = s.homeLineup.some((l) => l.athleteId === athleteRecord.id);
-              if (!inLineup) {
-                const updatedSheet = {
-                  ...s,
-                  homeLineup: [
-                    ...s.homeLineup,
-                    {
-                      athleteId: athleteRecord.id,
-                      athleteName: athleteRecord.name,
-                      jerseyNumber: athleteRecord.jerseyNumber,
-                      isStarter: s.homeLineup.length < 5,
-                    },
-                  ],
-                  revision: (s.revision ?? 0) + 1,
-                  lastUpdatedIso: new Date().toISOString(),
-                };
-                updatedSheets[m.id] = updatedSheet;
-                enqueueCloudSync('match_sheets', m.id, updatedSheet);
-              }
-            } else if (m.awayTeam.teamId === athleteRecord.teamId) {
-              const inLineup = s.awayLineup.some((l) => l.athleteId === athleteRecord.id);
-              if (!inLineup) {
-                const updatedSheet = {
-                  ...s,
-                  awayLineup: [
-                    ...s.awayLineup,
-                    {
-                      athleteId: athleteRecord.id,
-                      athleteName: athleteRecord.name,
-                      jerseyNumber: athleteRecord.jerseyNumber,
-                      isStarter: s.awayLineup.length < 5,
-                    },
-                  ],
-                  revision: (s.revision ?? 0) + 1,
-                  lastUpdatedIso: new Date().toISOString(),
-                };
-                updatedSheets[m.id] = updatedSheet;
-                enqueueCloudSync('match_sheets', m.id, updatedSheet);
-              }
-            }
+
           }
 
           return {
@@ -4196,20 +4152,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         modalityId: payload.modalityId,
         scoringModel: engine.scoringModel,
         isTestMode: state.isTestMode,
-        homeLineup: homePlayers.map((p, idx) => ({
-          athleteId: p.id,
-          athleteName: p.name,
-          jerseyNumber: p.jerseyNumber,
-          isStarter: idx < 5,
-          isCaptain: idx === 0,
-        })),
-        awayLineup: awayPlayers.map((p, idx) => ({
-          athleteId: p.id,
-          athleteName: p.name,
-          jerseyNumber: p.jerseyNumber,
-          isStarter: idx < 5,
-          isCaptain: idx === 0,
-        })),
+        homeLineup: [],
+        awayLineup: [],
         timer: {
           currentPeriod: 1,
           totalPeriods: catRule.periodsCount,

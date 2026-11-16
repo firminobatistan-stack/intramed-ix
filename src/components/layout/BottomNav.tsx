@@ -6,6 +6,7 @@ import {
   GitBranch,
   CreditCard,
   Calendar,
+  Trophy,
   LogIn,
   Menu,
 } from 'lucide-react';
@@ -34,30 +35,22 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
     }
   };
 
-  const navItems = [
+  interface DockNavItem {
+    to: string;
+    label: string;
+    icon: any;
+    exact?: boolean;
+    isLive?: boolean;
+    highlight?: boolean;
+  }
+
+  const navItems: DockNavItem[] = [
     {
       to: '/',
       label: 'Início',
       icon: Home,
       exact: true,
     },
-    ...(currentUser
-      ? [
-          {
-            to: '/inscricao',
-            label: hasCompletedRegistration ? 'Ingresso' : 'Inscrição',
-            icon: CreditCard,
-            highlight: !hasCompletedRegistration && launchConfig.publicRegistrationEnabled,
-          },
-        ]
-      : [
-          {
-            to: '/login',
-            label: 'Entrar',
-            icon: LogIn,
-            highlight: true,
-          },
-        ]),
     ...(hasActiveLiveMatch
       ? [
           {
@@ -74,6 +67,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
             icon: Calendar,
           },
         ]),
+    {
+      to: '/artilharia',
+      label: 'Artilharia',
+      icon: Trophy,
+    },
     {
       to: '/chaveamento',
       label: 'Chaves',

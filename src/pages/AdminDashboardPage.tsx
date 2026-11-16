@@ -139,6 +139,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [athTeamId, setAthTeamId] = useState('');
   const [athNumber, setAthNumber] = useState('');
   const [athPosition, setAthPosition] = useState('');
+  const [athGender, setAthGender] = useState<'Masculino' | 'Feminino'>('Masculino');
   const [athModalities, setAthModalities] = useState<ModalitySlug[]>(['futsal']);
 
   // Estado do formulário 3: Criar Partida Oficial
@@ -496,6 +497,8 @@ export const AdminDashboardPage: React.FC = () => {
       teamId: targetTeam,
       jerseyNumber: athNumber ? Number(athNumber) : null,
       position: athPosition || 'Atleta Inscrito',
+      categoryName: athGender,
+      gender: athGender,
       modalityIds:
         athModalities.length > 0
           ? athModalities
