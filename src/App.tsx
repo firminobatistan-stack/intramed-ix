@@ -11,6 +11,7 @@ import { SplashScreen } from './components/layout/SplashScreen';
 import { AppShell } from './components/layout/AppShell';
 import { AdminRouteGuard } from './components/layout/AdminRouteGuard';
 import { HomePage } from './pages/HomePage';
+import { TopPlayersPage } from './pages/TopPlayersPage';
 import { RegistrationProvider } from './context/RegistrationStoreContext';
 import { OFFICIAL_MODALITIES } from './data/officialData';
 
