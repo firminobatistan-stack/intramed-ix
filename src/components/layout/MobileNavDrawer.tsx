@@ -323,6 +323,19 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
 
             <button
               type="button"
+              onClick={() => handleNav('/artilharia')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                location.pathname.startsWith('/artilharia')
+                  ? 'bg-brand-yellow text-brand-blue-dark shadow-sm'
+                  : 'text-white/80 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              <Trophy className="w-4 h-4 shrink-0 text-brand-yellow" />
+              <span>Artilharia &amp; Top Players</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => handleNav('/equipe')}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
                 location.pathname.startsWith('/equipe')

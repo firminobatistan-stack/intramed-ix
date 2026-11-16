@@ -70,6 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
       { id: 'matches', label: 'Início', path: '/' },
       { id: 'chaveamento', label: 'Chaveamento', path: '/chaveamento' },
       { id: 'leagues', label: 'Modalidades', path: '/competicoes' },
+      { id: 'artilharia', label: 'Artilharia', path: '/artilharia' },
       { id: 'teams', label: 'Equipes', path: '/equipe' },
     ];
     if (hasActiveLiveMatch) {
@@ -86,6 +87,7 @@ export const Header: React.FC<HeaderProps> = ({
     if (location.pathname.startsWith('/placar')) return 'livetv';
     if (location.pathname.startsWith('/chaveamento')) return 'chaveamento';
     if (location.pathname.startsWith('/competicoes')) return 'leagues';
+    if (location.pathname.startsWith('/artilharia')) return 'artilharia';
     if (location.pathname.startsWith('/equipe')) return 'teams';
     if (location.pathname.startsWith('/atleta')) return 'athletes';
     if (
