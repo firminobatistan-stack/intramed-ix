@@ -2133,10 +2133,21 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             const teamName = teamObj.teamName;
             const lineup =
               side === 'home' ? sheet.homeLineup : sheet.awayLineup;
+            const rosterLimits = OFFICIAL_MODALITY_ROSTER_LIMITS[match.modalityId] || { min: 1, max: 20 };
+            const canAddOtherGender = lineup.length < rosterLimits.min;
+            const allowOtherGender = Boolean(allowOtherGenderBySide[side]) && canAddOtherGender;
+            const matchIsFem = (match.categoryName || '').toLowerCase().includes('fem');
             const eligibleTeamAthletes = teamObj.teamId ? getAthletesByTeam(teamObj.teamId) : [];
-            const availableToAdd = eligibleTeamAthletes.filter(
-              (a) => !lineup.some((l) => l.athleteId === a.id)
-            );
+            const availableToAdd = eligibleTeamAthletes.filter((a) => {
+              if (lineup.some((l) => l.athleteId === a.id)) return false;
+              const reg = registrations.find((r) => r.linkedAthleteId === a.id || r.id === a.registrationId);
+              const athCat = (reg?.categoryName || '').toLowerCase();
+              if (athCat.includes('masc') || athCat.includes('fem')) {
+                const sameGender = matchIsFem ? athCat.includes('fem') : !athCat.includes('fem');
+                if (!sameGender && !allowOtherGender) return false;
+              }
+              return true;
+            });
 
             return (
               <div
@@ -2147,9 +2158,25 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                   <h4 className="text-xs font-display font-extrabold uppercase text-brand-blue">
                     {teamName}
                   </h4>
-                  <span className="text-[11px] font-bold text-brand-text-secondary">
-                    {lineup.length} escalado(s)
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={!canAddOtherGender}
+                      onClick={() => setAllowOtherGenderBySide((prev) => ({ ...prev, [side]: !prev[side] }))}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                        !canAddOtherGender
+                          ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                          : allowOtherGender
+                          ? 'bg-amber-500 text-white border-amber-600'
+                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {allowOtherGender ? 'Outro gênero liberado' : '+ Outro gênero'}
+                    </button>
+                    <span className="text-[11px] font-bold text-brand-text-secondary">
+                      {lineup.length}/{rosterLimits.max} (mín {rosterLimits.min})
+                    </span>
+                  </div>
                 </div>
 
                 {lineup.length === 0 ? (
