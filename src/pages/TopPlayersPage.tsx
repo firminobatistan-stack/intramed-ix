@@ -58,7 +58,7 @@ function assignTiedRanks(items: Omit<RankedPlayer, 'rank'>[]): RankedPlayer[] {
 
 export const TopPlayersPage: React.FC = () => {
   const navigate = useNavigate();
-  const { visibleMatches, visibleAthletes, getTeamById, getMatchSheet } =
+  const { visibleMatches, visibleAthletes, getTeamById, getSheetByMatchId } =
     useCompetitionStore();
 
   const [activeTab, setActiveTab] = useState<RankingTab>('futsal');
@@ -115,7 +115,7 @@ export const TopPlayersPage: React.FC = () => {
     });
 
     for (const match of relevantMatches) {
-      const sheet = getMatchSheet(match.id);
+      const sheet = getSheetByMatchId(match.id);
       if (!sheet) continue;
 
       const homeScore = match.homeTeam.score ?? 0;
@@ -123,8 +123,8 @@ export const TopPlayersPage: React.FC = () => {
       const homeWon = match.status === 'finished' && homeScore > awayScore;
       const awayWon = match.status === 'finished' && awayScore > homeScore;
 
-      const homeIds = new Set((sheet.homeLineup || []).map((l) => l.athleteId));
-      const awayIds = new Set((sheet.awayLineup || []).map((l) => l.athleteId));
+      const homeIds = new Set((sheet.homeLineup || []).map((l: { athleteId: string }) => l.athleteId));
+      const awayIds = new Set((sheet.awayLineup || []).map((l: { athleteId: string }) => l.athleteId));
 
       for (const athId of [...homeIds, ...awayIds]) {
         const entry = ensureEntry(athId);
@@ -190,12 +190,11 @@ export const TopPlayersPage: React.FC = () => {
         value: entry.value,
         secondaryLabel,
         matchesPlayed: entry.matches.size,
-        rank: 1,
       });
     }
 
     return assignTiedRanks(list);
-  }, [visibleMatches, visibleAthletes, activeTab, genderFilter, getMatchSheet, getTeamById]);
+  }, [visibleMatches, visibleAthletes, activeTab, genderFilter, getSheetByMatchId, getTeamById]);
 
   const podiumPlayers = rankedPlayers.slice(0, 3);
   const restPlayers = rankedPlayers.slice(3);
