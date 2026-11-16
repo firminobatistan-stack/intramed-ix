@@ -23,9 +23,11 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
+import { useRegistrationStore } from '../context/RegistrationStoreContext';
 import { matchSound } from '../utils/soundEffects';
 import {
   MODALITY_RULE_ENGINE,
+  OFFICIAL_MODALITY_ROSTER_LIMITS,
   SWIMMING_STROKES,
   formatSecondsToClock,
 } from '../data/sportRulesConfig';
@@ -48,6 +50,12 @@ import {
 export const LiveMatchSheetOperatorPage: React.FC = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
+
+  const { registrations } = useRegistrationStore();
+  const [allowOtherGenderBySide, setAllowOtherGenderBySide] = useState<{
+    home: boolean;
+    away: boolean;
+  }>({ home: false, away: false });
 
   const {
     isTestMode,
