@@ -229,6 +229,8 @@ export function isPurgedTestRecord(rec: Record<string, unknown> | null | undefin
     id === 'test-sync-check' ||
     id.startsWith('reg-cang-') ||
     id.startsWith('ath-reg-cang-') ||
+    id.startsWith('reg-ext-t24-') ||
+    id.startsWith('ath-reg-ext-t24-') ||
     id.startsWith('user-ath-') ||
     id.startsWith('ath-demo-') ||
     userId.startsWith('user-ath-')
@@ -242,6 +244,110 @@ export function isPurgedTestRecord(rec: Record<string, unknown> | null | undefin
     }
   }
   return false;
+}
+
+export function normalizePersonNameForMatch(val: unknown): string {
+  return String(val || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function namesMatchForPrepaidAthlete(nameA: unknown, nameB: unknown): boolean {
+  const normA = normalizePersonNameForMatch(nameA);
+  const normB = normalizePersonNameForMatch(nameB);
+  if (!normA || !normB) return false;
+  if (normA === normB) return true;
+  const stopWords = new Set(['da', 'de', 'do', 'das', 'dos', 'e']);
+  const tokensA = normA.split(' ').filter((t) => t.length > 1 && !stopWords.has(t));
+  const tokensB = normB.split(' ').filter((t) => t.length > 1 && !stopWords.has(t));
+  if (tokensA.length < 2 || tokensB.length < 2) return false;
+  if (tokensA[0] !== tokensB[0]) return false;
+  const [shorter, longer] =
+    tokensA.length <= tokensB.length ? [tokensA, tokensB] : [tokensB, tokensA];
+  const longerSet = new Set(longer);
+  return shorter.every((t) => longerSet.has(t));
+}
+
+export interface ServerPreApprovedExternalCredit {
+  key: string;
+  athleteName: string;
+  turma: string;
+  turmaLabel: string;
+  teamId: string;
+  teamName: string;
+  categoryName: 'Masculino' | 'Feminino';
+  isSocio: boolean;
+  paidAmount: number;
+  externalRef: string;
+}
+
+export const PREPAID_EXTERNAL_ATHLETES_SERVER_QUEUE: ServerPreApprovedExternalCredit[] = [
+  {
+    key: 't24-lais-ferreira-aguiar',
+    athleteName: 'Laís Ferreira Aguiar',
+    turma: '24',
+    turmaLabel: 'Colossal • T24',
+    teamId: 'colossal',
+    teamName: 'Colossal',
+    categoryName: 'Feminino',
+    isSocio: true,
+    paidAmount: 50,
+    externalRef: 'EXTERNO-T24-SOCIO-02',
+  },
+  {
+    key: 't24-emily-da-fonseca-leal',
+    athleteName: 'Emily da Fonseca Leal',
+    turma: '24',
+    turmaLabel: 'Colossal • T24',
+    teamId: 'colossal',
+    teamName: 'Colossal',
+    categoryName: 'Feminino',
+    isSocio: false,
+    paidAmount: 60,
+    externalRef: 'EXTERNO-T24-NSOCIO-06',
+  },
+  {
+    key: 't24-david-arison-castro-e-silva',
+    athleteName: 'David Arison Castro e Silva',
+    turma: '24',
+    turmaLabel: 'Colossal • T24',
+    teamId: 'colossal',
+    teamName: 'Colossal',
+    categoryName: 'Masculino',
+    isSocio: false,
+    paidAmount: 60,
+    externalRef: 'EXTERNO-T24-NSOCIO-11',
+  },
+];
+
+export function findUnclaimedPreApprovedCredit(
+  store: CloudCollectionMap,
+  candidateName: unknown,
+  candidateTurma?: unknown
+): ServerPreApprovedExternalCredit | undefined {
+  const cleanName = String(candidateName || '').trim();
+  if (!cleanName) return undefined;
+  const cleanTurma = String(candidateTurma || '').trim();
+
+  return PREPAID_EXTERNAL_ATHLETES_SERVER_QUEUE.find((credit) => {
+    if (cleanTurma && cleanTurma !== credit.turma) return false;
+    const alreadyClaimed = Object.values(store.registrations || {}).some(
+      (r) =>
+        r &&
+        !isPurgedTestRecord(r) &&
+        r.paymentStatus === 'pago' &&
+        Boolean(String(r.athleteEmail || '').trim()) &&
+        (r.mpPaymentId === credit.externalRef ||
+          (String(r.turma || '').trim() === credit.turma &&
+            namesMatchForPrepaidAthlete(credit.athleteName, r.athleteName)))
+    );
+    if (alreadyClaimed) return false;
+    return namesMatchForPrepaidAthlete(credit.athleteName, cleanName);
+  });
 }
 
 declare global {
@@ -849,6 +955,69 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
     }
   }
 
+  // 0.85. Remove registros pré-criados obsoletos ou de teste e ativa automaticamente créditos pré-aprovados para quem já criou conta
+  for (const [rId, rObj] of Object.entries(store.registrations)) {
+    if (isPurgedTestRecord(rObj)) {
+      delete store.registrations[rId];
+      mutationPromises.push(DeleteDocumentFromFirestoreRest('registrations', rId));
+    }
+  }
+  for (const [aId, aObj] of Object.entries(store.athletes)) {
+    if (isPurgedTestRecord(aObj)) {
+      delete store.athletes[aId];
+      mutationPromises.push(DeleteDocumentFromFirestoreRest('athletes', aId));
+    }
+  }
+
+  for (const [regId, reg] of Object.entries(store.registrations)) {
+    if (!reg || isPurgedTestRecord(reg) || reg.paymentStatus === 'pago') continue;
+    const email = String(reg.athleteEmail || '').trim().toLowerCase();
+    if (!email) continue;
+    const matchedCredit = findUnclaimedPreApprovedCredit(store, reg.athleteName, reg.turma);
+    if (matchedCredit) {
+      const linkedAthId = String(reg.linkedAthleteId || `ath-${regId}`);
+      reg.turma = matchedCredit.turma;
+      reg.turmaLabel = matchedCredit.turmaLabel;
+      reg.teamId = matchedCredit.teamId;
+      reg.teamName = matchedCredit.teamName;
+      reg.categoryName = String(reg.categoryName && reg.categoryName !== 'Geral' ? reg.categoryName : matchedCredit.categoryName);
+      reg.requestedMemberDiscount = matchedCredit.isSocio;
+      reg.memberStatus = matchedCredit.isSocio ? 'aprovado' : 'nao_solicitado';
+      reg.authorizedPrice = matchedCredit.paidAmount;
+      reg.paidAmount = matchedCredit.paidAmount;
+      reg.paymentStatus = 'pago';
+      reg.paymentMethod = 'pix';
+      reg.mpPaymentId = matchedCredit.externalRef;
+      reg.paidAtIso = nowIso;
+      reg.qrValidationToken = `INTRAMED-IX-${regId.toUpperCase()}-VERIFIED`;
+      reg.revision = Number(reg.revision || 1) + 1;
+      reg.updatedAtIso = nowIso;
+      store.registrations[regId] = reg;
+      mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', regId, reg));
+
+      const athObj: Record<string, unknown> = {
+        ...(store.athletes[linkedAthId] || {}),
+        id: linkedAthId,
+        name: String(reg.athleteName || matchedCredit.athleteName),
+        email,
+        teamId: matchedCredit.teamId,
+        turma: matchedCredit.turma,
+        turmaLabel: matchedCredit.turmaLabel,
+        categoryName: reg.categoryName,
+        gender: reg.categoryName,
+        registrationId: regId,
+        paymentStatus: 'pago',
+        memberStatus: reg.memberStatus,
+        status: 'confirmado',
+        isTestOnly: false,
+        revision: Number(store.athletes[linkedAthId]?.revision || 0) + 1,
+        updatedAtIso: nowIso,
+      };
+      store.athletes[linkedAthId] = athObj;
+      mutationPromises.push(MirrorDocumentToFirestoreRest('athletes', linkedAthId, athObj));
+    }
+  }
+
   // 1. Deduplica registrations por athleteEmail (mantém a inscrição PAGA ou mais recente e mescla foto/camisa/insta da anterior)
   const regsByEmail = new Map<string, Array<Record<string, unknown>>>();
   for (const reg of Object.values(store.registrations)) {
@@ -1043,7 +1212,7 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
     if (!prof || isPurgedTestRecord(prof)) continue;
     const userObj = store.users[profId] || Object.values(store.users).find((u) => String(u?.id || '') === profId);
     const userEmail = String(userObj?.email || prof.email || '').trim().toLowerCase();
-    const matchingReg = userEmail
+    let matchingReg = userEmail
       ? Object.values(store.registrations).find(
           (r) => String(r?.athleteEmail || '').trim().toLowerCase() === userEmail
         )
@@ -1052,6 +1221,107 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
           (r) => r?.linkedAthleteId === prof.linkedAthleteId || `ath-${r?.id}` === prof.linkedAthleteId
         )
       : undefined;
+
+    // Se o usuário criou conta e consta na fila de pré-aprovados pagos por fora, converte automaticamente em atleta confirmado!
+    if (!matchingReg && userEmail) {
+      const candidateName = String(prof.displayName || userObj?.name || '').trim();
+      const matchedCredit = findUnclaimedPreApprovedCredit(store, candidateName, prof.turma);
+      if (matchedCredit) {
+        const autoRegId = `reg-paid-${matchedCredit.key}`;
+        const autoAthId = `ath-${autoRegId}`;
+        const allMods = [
+          'futsal',
+          'basquete',
+          'handebol',
+          'volei',
+          'volei-de-praia',
+          'truco',
+          'sinuca',
+          'natacao',
+          'poker',
+          'tenis-de-mesa',
+        ];
+        const newAutoReg: Record<string, unknown> = {
+          id: autoRegId,
+          eventId: 'intramed-ix-2026',
+          lotId: 'lote-1-cangaceira',
+          userId: profId,
+          linkedAthleteId: autoAthId,
+          athleteName: matchedCredit.athleteName,
+          athleteEmail: userEmail,
+          athletePhone: '',
+          athleteDocument: '',
+          turma: matchedCredit.turma,
+          turmaLabel: matchedCredit.turmaLabel,
+          teamId: matchedCredit.teamId,
+          teamName: matchedCredit.teamName,
+          modalityId: 'todas',
+          modalityName: 'Passaporte Geral (Todas as 16 Modalidades)',
+          selectedModalities: allMods,
+          categoryName: matchedCredit.categoryName,
+          requestedMemberDiscount: matchedCredit.isSocio,
+          isGuestAthlete: false,
+          memberStatus: matchedCredit.isSocio ? 'aprovado' : 'nao_solicitado',
+          memberNotes: matchedCredit.isSocio
+            ? 'Sócio validado e pagamento confirmado diretamente com a Atlética Cangaceira.'
+            : 'Pagamento confirmado diretamente com a Atlética Cangaceira.',
+          validatedByAdminId: 'usr_master_cangaceira',
+          validatedByAdminName: 'Atlética Cangaceira',
+          validatedAtIso: nowIso,
+          paymentStatus: 'pago',
+          paymentMethod: 'pix',
+          mpPaymentId: matchedCredit.externalRef,
+          authorizedPrice: matchedCredit.paidAmount,
+          paidAmount: matchedCredit.paidAmount,
+          qrValidationToken: `INTRAMED-IX-${autoRegId.toUpperCase()}-VERIFIED`,
+          avatarUrl: (prof.avatarUrl as string) || null,
+          jerseyNumber: null,
+          position: 'Atleta Confirmado',
+          bio: (prof.bio as string) || null,
+          instagramHandle: (prof.instagramHandle as string) || null,
+          createdAtIso: nowIso,
+          paidAtIso: nowIso,
+          updatedAtIso: nowIso,
+          revision: 1,
+        };
+        const newAutoAth: Record<string, unknown> = {
+          id: autoAthId,
+          name: matchedCredit.athleteName,
+          email: userEmail,
+          teamId: matchedCredit.teamId,
+          turma: matchedCredit.turma,
+          turmaLabel: matchedCredit.turmaLabel,
+          categoryName: matchedCredit.categoryName,
+          gender: matchedCredit.categoryName,
+          jerseyNumber: null,
+          position: 'Atleta Confirmado',
+          bio: (prof.bio as string) || null,
+          instagramHandle: (prof.instagramHandle as string) || null,
+          avatarUrl: (prof.avatarUrl as string) || null,
+          modalityIds: allMods,
+          registrationId: autoRegId,
+          paymentStatus: 'pago',
+          memberStatus: newAutoReg.memberStatus,
+          status: 'confirmado',
+          isTestOnly: false,
+          revision: 1,
+          updatedAtIso: nowIso,
+        };
+        store.registrations[autoRegId] = newAutoReg;
+        store.athletes[autoAthId] = newAutoAth;
+        mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', autoRegId, newAutoReg));
+        mutationPromises.push(MirrorDocumentToFirestoreRest('athletes', autoAthId, newAutoAth));
+
+        if (userObj) {
+          userObj.role = 'atleta';
+          userObj.linkedAthleteId = autoAthId;
+          userObj.registrationId = autoRegId;
+          userObj.updatedAtIso = nowIso;
+          mutationPromises.push(MirrorDocumentToFirestoreRest('users', String(userObj.id || profId), userObj));
+        }
+        matchingReg = newAutoReg;
+      }
+    }
 
     if (matchingReg) {
       const expectedAthId = String(matchingReg.linkedAthleteId || `ath-${matchingReg.id}`);
@@ -1914,6 +2184,18 @@ export async function markRegistrationPaidOnServer(params: {
   // Atualiza ou cria o atleta vinculado no store e no Firestore
   const linkedAthId =
     (existing.linkedAthleteId as string) || `ath-${params.registrationId}`;
+  const defaultAllModalities = [
+    'futsal',
+    'basquete',
+    'handebol',
+    'volei',
+    'volei-de-praia',
+    'truco',
+    'sinuca',
+    'natacao',
+    'poker',
+    'tenis-de-mesa',
+  ];
   const athleteRecord: Record<string, unknown> = {
     ...(store.athletes[linkedAthId] || {}),
     id: linkedAthId,
@@ -1922,6 +2204,15 @@ export async function markRegistrationPaidOnServer(params: {
     teamId: String(existing.teamId || ''),
     turma: String(existing.turma || ''),
     turmaLabel: String(existing.turmaLabel || ''),
+    categoryName: String(existing.categoryName || 'Geral'),
+    gender: String(existing.categoryName || 'Geral'),
+    modalityIds:
+      Array.isArray(existing.selectedModalities) && existing.selectedModalities.length > 0
+        ? existing.selectedModalities
+        : Array.isArray(store.athletes[linkedAthId]?.modalityIds) &&
+          (store.athletes[linkedAthId]?.modalityIds as unknown[]).length > 0
+        ? store.athletes[linkedAthId]?.modalityIds
+        : defaultAllModalities,
     jerseyNumber: existing.jerseyNumber ?? null,
     position: (existing.position as string) || 'Atleta Confirmado',
     avatarUrl: (existing.avatarUrl as string) || null,
@@ -1931,6 +2222,7 @@ export async function markRegistrationPaidOnServer(params: {
     paymentStatus: 'pago',
     memberStatus: (existing.memberStatus as string) || 'nao_solicitado',
     status: 'confirmado',
+    isTestOnly: false,
     updatedAtIso: nowIso,
     revision: Number(store.athletes[linkedAthId]?.revision || 0) + 1,
   };

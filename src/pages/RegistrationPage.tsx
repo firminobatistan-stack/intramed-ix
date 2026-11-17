@@ -374,7 +374,12 @@ export const RegistrationPage: React.FC = () => {
       });
 
       setActiveTab('minhas_inscricoes');
-      if (
+      if (created.paymentStatus === 'pago') {
+        setPayingRegistration(null);
+        alert(
+          'Seu pagamento já consta como confirmado pela Atlética Cangaceira! Seu Passaporte Oficial de Atleta foi ativado automaticamente.'
+        );
+      } else if (
         created.memberStatus === 'pendente' ||
         created.paymentStatus === 'aguardando_validacao' ||
         (created.requestedMemberDiscount && created.memberStatus !== 'aprovado')

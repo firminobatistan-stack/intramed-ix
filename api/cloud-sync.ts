@@ -13,6 +13,7 @@ import {
   encodeProfileMetadata,
   ensureCloudStoreHydrated,
   extractBearerOrHeaderToken,
+  findUnclaimedPreApprovedCredit,
   firebaseAuthSignIn,
   firebaseAuthSendPasswordReset,
   firebaseAuthSignUp,
@@ -27,6 +28,7 @@ import {
   markRegistrationPaidOnServer,
   MASTER_MODERATOR_EMAIL,
   MirrorDocumentToFirestoreRest,
+  namesMatchForPrepaidAthlete,
   OFFICIAL_SERVER_LOTS,
   parseJsonSafe,
   parseSafeBody,
@@ -210,26 +212,45 @@ function canClientWriteDocument(
         }
       }
 
-      // Criação de nova inscrição: calcula preço no servidor e impede que nasça como 'pago' ou 'aprovado' sem ser Admin
-      const requestedSocio = isGuestAthlete ? false : Boolean(incoming.requestedMemberDiscount);
-      const safeMemberStatus = isAdmin
+      // Criação de nova inscrição: verifica primeiro se há crédito pago por fora aguardando cadastro (ex: T24)
+      const store = getCloudStore();
+      const preApprovedCredit = findUnclaimedPreApprovedCredit(
+        store,
+        incoming.athleteName,
+        incoming.turma
+      );
+
+      const requestedSocio = preApprovedCredit
+        ? preApprovedCredit.isSocio
+        : isGuestAthlete
+        ? false
+        : Boolean(incoming.requestedMemberDiscount);
+      const safeMemberStatus = preApprovedCredit
+        ? preApprovedCredit.isSocio
+          ? 'aprovado'
+          : 'nao_solicitado'
+        : isAdmin
         ? String(incoming.memberStatus || (requestedSocio ? 'pendente' : 'nao_solicitado'))
         : requestedSocio
         ? 'pendente'
         : 'nao_solicitado';
 
-      const safePaymentStatus = isAdmin
+      const safePaymentStatus = preApprovedCredit
+        ? 'pago'
+        : isAdmin
         ? String(incoming.paymentStatus || (requestedSocio ? 'aguardando_validacao' : 'pendente'))
         : requestedSocio
         ? 'aguardando_validacao'
         : 'pendente';
 
-      const serverPrice = computeAuthorizedServerPrice(
-        String(incoming.lotId || 'lote-1-cangaceira'),
-        safeMemberStatus,
-        requestedSocio,
-        isGuestAthlete
-      );
+      const serverPrice = preApprovedCredit
+        ? preApprovedCredit.paidAmount
+        : computeAuthorizedServerPrice(
+            String(incoming.lotId || 'lote-1-cangaceira'),
+            safeMemberStatus,
+            requestedSocio,
+            isGuestAthlete
+          );
 
       const rawAccountPassword =
         typeof incoming.accountPassword === 'string' && incoming.accountPassword.trim()
@@ -258,6 +279,15 @@ function canClientWriteDocument(
           memberStatus: safeMemberStatus,
           paymentStatus: safePaymentStatus,
           authorizedPrice: serverPrice,
+          ...(preApprovedCredit
+            ? {
+                paidAmount: preApprovedCredit.paidAmount,
+                paymentMethod: 'pix',
+                mpPaymentId: preApprovedCredit.externalRef,
+                paidAtIso: nowIso,
+                qrValidationToken: `INTRAMED-IX-${docId.toUpperCase()}-VERIFIED`,
+              }
+            : {}),
           revision: 1,
           updatedAtIso: nowIso,
         },
@@ -290,12 +320,25 @@ function canClientWriteDocument(
     }
 
     // Cliente comum só pode atualizar seus campos de perfil social (foto, camisa, posição, bio, modalidades)
+    // Se a inscrição foi pré-confirmada por fora sem e-mail inicial, permite vincular os dados de contato/conta na primeira reivindicação
+    const wasUnclaimedPrepaid =
+      existing.paymentStatus === 'pago' && !String(existing.athleteEmail || '').trim();
+    const claimedEmail =
+      wasUnclaimedPrepaid && typeof incoming.athleteEmail === 'string' && incoming.athleteEmail.trim()
+        ? incoming.athleteEmail.trim().toLowerCase()
+        : existing.athleteEmail;
+
     // Nunca pode promover `paymentStatus` para `'pago'` nem `memberStatus` para `'aprovado'` nem reduzir `authorizedPrice`
     return {
       allowed: true,
       sanitizedData: {
         ...existing,
         athleteName: incoming.athleteName ?? existing.athleteName,
+        athleteEmail: claimedEmail,
+        ...(wasUnclaimedPrepaid && incoming.athletePhone ? { athletePhone: incoming.athletePhone } : {}),
+        ...(wasUnclaimedPrepaid && incoming.athleteDocument ? { athleteDocument: incoming.athleteDocument } : {}),
+        ...(wasUnclaimedPrepaid && incoming.accountUsername ? { accountUsername: String(incoming.accountUsername).trim().toLowerCase() } : {}),
+        ...(wasUnclaimedPrepaid && incoming.userId ? { userId: incoming.userId } : {}),
         avatarUrl: incoming.avatarUrl !== undefined ? incoming.avatarUrl : existing.avatarUrl,
         jerseyNumber: incoming.jerseyNumber !== undefined ? incoming.jerseyNumber : existing.jerseyNumber,
         position: incoming.position !== undefined ? incoming.position : existing.position,
@@ -312,8 +355,10 @@ function canClientWriteDocument(
         paymentStatus: existing.paymentStatus,
         memberStatus: existing.memberStatus,
         authorizedPrice: existing.authorizedPrice,
+        paidAmount: existing.paidAmount,
         mpPaymentId: existing.mpPaymentId,
         paidAtIso: existing.paidAtIso,
+        qrValidationToken: existing.qrValidationToken,
         revision: prevRevision + 1,
         updatedAtIso: nowIso,
       },
@@ -662,6 +707,131 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ ok: true, matchId });
     }
 
+    // AÇÃO 2A-EXT: Confirmar Pagamentos Externos / Por Fora (Restrito a Admin / Diretoria)
+    if (action === 'confirm_external_payments') {
+      if (!isAdminRequest) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Apenas administradores autenticados podem confirmar pagamentos externos.',
+        });
+      }
+      const items = Array.isArray(body.items) ? body.items : [];
+      const duplicateIdsToDelete = Array.isArray(body.deleteDuplicateRegistrationIds)
+        ? body.deleteDuplicateRegistrationIds.map((id: unknown) => String(id || '').trim()).filter(Boolean)
+        : [];
+
+      for (const dupRegId of duplicateIdsToDelete) {
+        const dupReg = store.registrations[dupRegId];
+        const dupAthId = String(dupReg?.linkedAthleteId || `ath-${dupRegId}`);
+        delete store.registrations[dupRegId];
+        await DeleteDocumentFromFirestoreRest('registrations', dupRegId);
+        if (store.athletes[dupAthId]) {
+          delete store.athletes[dupAthId];
+          await DeleteDocumentFromFirestoreRest('athletes', dupAthId);
+        }
+      }
+
+      const confirmedIds: string[] = [];
+      const nowIso = new Date().toISOString();
+
+      for (const rawItem of items) {
+        if (!rawItem || typeof rawItem !== 'object') continue;
+        const item = rawItem as Record<string, unknown>;
+        const athleteName = String(item.athleteName || '').trim();
+        if (!athleteName) continue;
+        const athleteEmail = String(item.athleteEmail || '').trim().toLowerCase();
+        const turma = String(item.turma || '24').trim();
+        const turmaLabel = String(item.turmaLabel || `Colossal • T${turma}`).trim();
+        const teamId = String(item.teamId || 'colossal').trim();
+        const teamName = String(item.teamName || 'Colossal').trim();
+        const categoryName = String(item.categoryName || 'Geral').trim();
+        const isSocio = Boolean(item.isSocio);
+        const paidAmount = Number(item.paidAmount) || (isSocio ? 50 : 60);
+        const externalRef = String(item.externalRef || `EXTERNO-T${turma}-${Date.now()}`).trim();
+
+        // Localiza inscrição existente por ID, por e-mail ou por nome equivalente na mesma turma
+        let targetRegId = String(item.registrationId || '').trim();
+        if (!targetRegId || !store.registrations[targetRegId]) {
+          const found = Object.values(store.registrations).find((r) => {
+            if (!r || !r.id) return false;
+            if (athleteEmail && String(r.athleteEmail || '').trim().toLowerCase() === athleteEmail) {
+              return true;
+            }
+            return (
+              String(r.turma || '').trim() === turma &&
+              namesMatchForPrepaidAthlete(athleteName, r.athleteName)
+            );
+          });
+          if (found?.id) {
+            targetRegId = String(found.id);
+          }
+        }
+
+        if (!targetRegId) {
+          const slug = athleteName
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 48);
+          targetRegId = `reg-ext-t${turma}-${slug}`;
+        }
+
+        const existingReg = store.registrations[targetRegId] || {};
+        const linkedAthId = String(existingReg.linkedAthleteId || `ath-${targetRegId}`);
+
+        store.registrations[targetRegId] = {
+          ...existingReg,
+          id: targetRegId,
+          eventId: existingReg.eventId || 'intramed-ix-2026',
+          lotId: existingReg.lotId || 'lote-1-cangaceira',
+          linkedAthleteId: linkedAthId,
+          athleteName: existingReg.athleteName && String(existingReg.athleteName).trim().length >= athleteName.length
+            ? existingReg.athleteName
+            : athleteName,
+          athleteEmail: athleteEmail || String(existingReg.athleteEmail || ''),
+          athletePhone: String(existingReg.athletePhone || ''),
+          athleteDocument: String(existingReg.athleteDocument || ''),
+          turma,
+          turmaLabel: String(existingReg.turmaLabel || turmaLabel),
+          teamId,
+          teamName,
+          modalityId: existingReg.modalityId || 'todas',
+          modalityName: existingReg.modalityName || 'Passaporte Geral (Todas as 16 Modalidades)',
+          categoryName: String(existingReg.categoryName && existingReg.categoryName !== 'Geral' ? existingReg.categoryName : categoryName),
+          requestedMemberDiscount: isSocio,
+          isGuestAthlete: false,
+          memberStatus: isSocio ? 'aprovado' : 'nao_solicitado',
+          memberNotes: isSocio
+            ? 'Sócio validado e pagamento confirmado diretamente com a Atlética Cangaceira.'
+            : 'Pagamento confirmado diretamente com a Atlética Cangaceira.',
+          validatedByAdminId: 'usr_master_cangaceira',
+          validatedByAdminName: 'Atlética Cangaceira',
+          validatedAtIso: nowIso,
+          authorizedPrice: paidAmount,
+          paidAmount,
+          createdAtIso: existingReg.createdAtIso || nowIso,
+          updatedAtIso: nowIso,
+        };
+
+        await markRegistrationPaidOnServer({
+          registrationId: targetRegId,
+          mpPaymentId: externalRef,
+          paymentMethod: 'pix',
+          paidAmount,
+        });
+        confirmedIds.push(targetRegId);
+      }
+
+      saveCloudStore(store);
+      return res.status(200).json({
+        ok: true,
+        confirmedCount: confirmedIds.length,
+        confirmedIds,
+      });
+    }
+
     // AÇÃO 2B: Login da Conta do Atleta (Usuário/E-mail + Senha criada no cadastro)
     if (action === 'athlete_login') {
       const identifierInput = String(body.identifier || '')
@@ -781,10 +951,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const userId = firebaseUid;
       const nowIso = new Date().toISOString();
 
-      // Procura se o usuário já possui inscrição no evento
-      const existingReg = Object.values(store.registrations).find(
+      // Procura se o usuário já possui inscrição no evento ou crédito pré-pago por fora
+      let existingReg = Object.values(store.registrations).find(
         (r) => String(r.athleteEmail || '').trim().toLowerCase() === emailInput
       );
+
+      if (!existingReg) {
+        const preCredit = findUnclaimedPreApprovedCredit(store, nameInput, turmaInput);
+        if (preCredit) {
+          const autoRegId = `reg-paid-${preCredit.key}`;
+          store.registrations[autoRegId] = {
+            id: autoRegId,
+            eventId: 'intramed-ix-2026',
+            lotId: 'lote-1-cangaceira',
+            userId,
+            linkedAthleteId: `ath-${autoRegId}`,
+            athleteName: preCredit.athleteName,
+            athleteEmail: emailInput,
+            turma: preCredit.turma,
+            turmaLabel: preCredit.turmaLabel,
+            teamId: preCredit.teamId,
+            teamName: preCredit.teamName,
+            modalityId: 'todas',
+            modalityName: 'Passaporte Geral (Todas as 16 Modalidades)',
+            categoryName: preCredit.categoryName,
+            requestedMemberDiscount: preCredit.isSocio,
+            isGuestAthlete: false,
+            memberStatus: preCredit.isSocio ? 'aprovado' : 'nao_solicitado',
+            authorizedPrice: preCredit.paidAmount,
+            avatarUrl: avatarUrlInput,
+            bio: bioInput || null,
+            instagramHandle: instagramInput || null,
+            createdAtIso: nowIso,
+            updatedAtIso: nowIso,
+          };
+          existingReg =
+            (await markRegistrationPaidOnServer({
+              registrationId: autoRegId,
+              mpPaymentId: preCredit.externalRef,
+              paymentMethod: 'pix',
+              paidAmount: preCredit.paidAmount,
+            })) || store.registrations[autoRegId];
+        }
+      }
 
       const role: UserRole = existingReg && existingReg.paymentStatus === 'pago' ? 'atleta' : 'visitante';
       const linkedAthleteId = existingReg ? (existingReg.linkedAthleteId as string) || `ath-${existingReg.id}` : null;
@@ -919,9 +1128,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         fbUser.photoUrl ||
         (typeof body.photoUrl === 'string' && body.photoUrl ? body.photoUrl : null);
 
-      const existingReg = Object.values(store.registrations).find(
+      let existingReg = Object.values(store.registrations).find(
         (r) => userEmail && String(r.athleteEmail || '').trim().toLowerCase() === userEmail
       );
+
+      if (!existingReg && userEmail) {
+        const preCredit = findUnclaimedPreApprovedCredit(
+          store,
+          (existingProfile?.displayName as string) || userName,
+          existingProfile?.turma || body.turma
+        );
+        if (preCredit) {
+          const autoRegId = `reg-paid-${preCredit.key}`;
+          store.registrations[autoRegId] = {
+            id: autoRegId,
+            eventId: 'intramed-ix-2026',
+            lotId: 'lote-1-cangaceira',
+            userId,
+            linkedAthleteId: `ath-${autoRegId}`,
+            athleteName: preCredit.athleteName,
+            athleteEmail: userEmail,
+            turma: preCredit.turma,
+            turmaLabel: preCredit.turmaLabel,
+            teamId: preCredit.teamId,
+            teamName: preCredit.teamName,
+            modalityId: 'todas',
+            modalityName: 'Passaporte Geral (Todas as 16 Modalidades)',
+            categoryName: preCredit.categoryName,
+            requestedMemberDiscount: preCredit.isSocio,
+            isGuestAthlete: false,
+            memberStatus: preCredit.isSocio ? 'aprovado' : 'nao_solicitado',
+            authorizedPrice: preCredit.paidAmount,
+            avatarUrl: googleAvatar,
+            createdAtIso: nowIso,
+            updatedAtIso: nowIso,
+          };
+          existingReg =
+            (await markRegistrationPaidOnServer({
+              registrationId: autoRegId,
+              mpPaymentId: preCredit.externalRef,
+              paymentMethod: 'pix',
+              paidAmount: preCredit.paidAmount,
+            })) || store.registrations[autoRegId];
+        }
+      }
 
       let userRole: UserRole = (existingUser?.role as UserRole) || 'visitante';
       if (isMasterAccount(userEmail)) {
@@ -1301,7 +1551,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
 
       const nowIso = new Date().toISOString();
-      const updatedProfile = {
+      const updatedProfile: Record<string, unknown> = {
         ...existingProfile,
         displayName: typeof body.displayName === 'string' && body.displayName.trim() ? body.displayName.trim() : existingProfile.displayName,
         avatarUrl: body.avatarUrl !== undefined ? body.avatarUrl : existingProfile.avatarUrl,
@@ -1315,6 +1565,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         favoriteModalityIds: Array.isArray(body.favoriteModalityIds) ? body.favoriteModalityIds : existingProfile.favoriteModalityIds || [],
         updatedAtIso: nowIso,
       };
+
+      // Se ao completar o perfil (nome + turma) bater com crédito pré-pago por fora, ativa automaticamente como Atleta!
+      if (targetUserEmail && !updatedProfile.isAthlete) {
+        const preCredit = findUnclaimedPreApprovedCredit(
+          store,
+          updatedProfile.displayName,
+          updatedProfile.turma
+        );
+        if (preCredit) {
+          const autoRegId = `reg-paid-${preCredit.key}`;
+          const autoAthId = `ath-${autoRegId}`;
+          store.registrations[autoRegId] = {
+            id: autoRegId,
+            eventId: 'intramed-ix-2026',
+            lotId: 'lote-1-cangaceira',
+            userId: targetUserId,
+            linkedAthleteId: autoAthId,
+            athleteName: preCredit.athleteName,
+            athleteEmail: targetUserEmail,
+            turma: preCredit.turma,
+            turmaLabel: preCredit.turmaLabel,
+            teamId: preCredit.teamId,
+            teamName: preCredit.teamName,
+            modalityId: 'todas',
+            modalityName: 'Passaporte Geral (Todas as 16 Modalidades)',
+            categoryName: preCredit.categoryName,
+            requestedMemberDiscount: preCredit.isSocio,
+            isGuestAthlete: false,
+            memberStatus: preCredit.isSocio ? 'aprovado' : 'nao_solicitado',
+            authorizedPrice: preCredit.paidAmount,
+            avatarUrl: (updatedProfile.avatarUrl as string) || null,
+            bio: (updatedProfile.bio as string) || null,
+            instagramHandle: (updatedProfile.instagramHandle as string) || null,
+            createdAtIso: nowIso,
+            updatedAtIso: nowIso,
+          };
+          await markRegistrationPaidOnServer({
+            registrationId: autoRegId,
+            mpPaymentId: preCredit.externalRef,
+            paymentMethod: 'pix',
+            paidAmount: preCredit.paidAmount,
+          });
+          updatedProfile.turma = preCredit.turma;
+          updatedProfile.turmaLabel = preCredit.turmaLabel;
+          updatedProfile.teamId = preCredit.teamId;
+          updatedProfile.teamName = preCredit.teamName;
+          updatedProfile.role = 'atleta';
+          updatedProfile.isAthlete = true;
+          updatedProfile.linkedAthleteId = autoAthId;
+        }
+      }
 
       store.profiles[targetUserId] = updatedProfile;
       store.updatedAtIso = nowIso;

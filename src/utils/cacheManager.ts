@@ -3,7 +3,7 @@
  * Garante que dados locais obsoletos não mascarem a base central (Firebase e Vercel Hub).
  */
 
-export const CURRENT_APP_CACHE_VERSION = '2.5.0-sumula-pdf-roster-fix';
+export const CURRENT_APP_CACHE_VERSION = '2.6.0-t24-preapproved-queue';
 const CACHE_VERSION_KEY = 'intramed_cache_version';
 const OFFLINE_QUEUE_KEY = 'intramed_offline_sync_queue_v2';
 
@@ -27,6 +27,8 @@ export function isPurgedTestEntity(item: unknown): boolean {
   if (
     id.startsWith('reg-cang-') ||
     id.startsWith('ath-reg-cang-') ||
+    id.startsWith('reg-ext-t24-') ||
+    id.startsWith('ath-reg-ext-t24-') ||
     id.startsWith('user-ath-') ||
     id.startsWith('ath-demo-') ||
     userId.startsWith('user-ath-')

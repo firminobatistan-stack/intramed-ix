@@ -134,3 +134,107 @@ export function resolveLotAuthorizedPrice(
 export const INITIAL_DEMO_REGISTRATIONS: Registration[] = [];
 
 export const INITIAL_FINANCIAL_AUDIT_LOGS: FinancialAuditLog[] = [];
+
+export interface PreApprovedExternalAthleteCredit {
+  key: string;
+  athleteName: string;
+  turma: '21' | '22' | '23' | '24' | '25';
+  turmaLabel: string;
+  teamId: string;
+  teamName: string;
+  categoryName: 'Masculino' | 'Feminino';
+  isSocio: boolean;
+  paidAmount: number;
+  externalRef: string;
+}
+
+/**
+ * Créditos de pagamento externo já recebidos pela Diretoria cujos participantes
+ * ainda não criaram conta no site. Não aparecem como atletas/usuários públicos antes
+ * do cadastro, entram no cálculo financeiro da turma e ativam automaticamente
+ * o perfil de atleta assim que o participante cria sua conta.
+ */
+export const PREPAID_EXTERNAL_ATHLETES_QUEUE: PreApprovedExternalAthleteCredit[] = [
+  {
+    key: 't24-lais-ferreira-aguiar',
+    athleteName: 'Laís Ferreira Aguiar',
+    turma: '24',
+    turmaLabel: 'Colossal • T24',
+    teamId: 'colossal',
+    teamName: 'Colossal',
+    categoryName: 'Feminino',
+    isSocio: true,
+    paidAmount: 50,
+    externalRef: 'EXTERNO-T24-SOCIO-02',
+  },
+  {
+    key: 't24-emily-da-fonseca-leal',
+    athleteName: 'Emily da Fonseca Leal',
+    turma: '24',
+    turmaLabel: 'Colossal • T24',
+    teamId: 'colossal',
+    teamName: 'Colossal',
+    categoryName: 'Feminino',
+    isSocio: false,
+    paidAmount: 60,
+    externalRef: 'EXTERNO-T24-NSOCIO-06',
+  },
+  {
+    key: 't24-david-arison-castro-e-silva',
+    athleteName: 'David Arison Castro e Silva',
+    turma: '24',
+    turmaLabel: 'Colossal • T24',
+    teamId: 'colossal',
+    teamName: 'Colossal',
+    categoryName: 'Masculino',
+    isSocio: false,
+    paidAmount: 60,
+    externalRef: 'EXTERNO-T24-NSOCIO-11',
+  },
+];
+
+export function normalizeAthleteNameForMatch(val?: string | null): string {
+  return String(val || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function namesMatchPreApprovedCredit(
+  creditName?: string | null,
+  candidateName?: string | null
+): boolean {
+  const normA = normalizeAthleteNameForMatch(creditName);
+  const normB = normalizeAthleteNameForMatch(candidateName);
+  if (!normA || !normB) return false;
+  if (normA === normB) return true;
+  const stopWords = new Set(['da', 'de', 'do', 'das', 'dos', 'e']);
+  const tokensA = normA.split(' ').filter((t) => t.length > 1 && !stopWords.has(t));
+  const tokensB = normB.split(' ').filter((t) => t.length > 1 && !stopWords.has(t));
+  if (tokensA.length < 2 || tokensB.length < 2) return false;
+  if (tokensA[0] !== tokensB[0]) return false;
+  const [shorter, longer] =
+    tokensA.length <= tokensB.length ? [tokensA, tokensB] : [tokensB, tokensA];
+  const longerSet = new Set(longer);
+  return shorter.every((t) => longerSet.has(t));
+}
+
+export function getUnclaimedPreApprovedCredits(
+  registrations: Registration[]
+): PreApprovedExternalAthleteCredit[] {
+  return PREPAID_EXTERNAL_ATHLETES_QUEUE.filter((credit) => {
+    const alreadyClaimed = registrations.some(
+      (r) =>
+        r &&
+        r.paymentStatus === 'pago' &&
+        Boolean((r.athleteEmail || '').trim()) &&
+        (r.mpPaymentId === credit.externalRef ||
+          (r.turma === credit.turma &&
+            namesMatchPreApprovedCredit(credit.athleteName, r.athleteName)))
+    );
+    return !alreadyClaimed;
+  });
+}

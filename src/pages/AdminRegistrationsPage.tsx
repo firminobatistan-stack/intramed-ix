@@ -27,7 +27,10 @@ import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { Registration, TurmaMedicina } from '../types/domain';
-import { TURMAS_MEDICINA } from '../data/registrationData';
+import {
+  TURMAS_MEDICINA,
+  getUnclaimedPreApprovedCredits,
+} from '../data/registrationData';
 import { exportRegistrationsToExcel } from '../utils/excelRegistrationsExporter';
 
 export const AdminRegistrationsPage: React.FC = () => {
@@ -205,18 +208,79 @@ export const AdminRegistrationsPage: React.FC = () => {
   const [selectedReceiptReg, setSelectedReceiptReg] = useState<Registration | null>(null);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
 
-  // Métricas
-  const totalRegistrations = registrations.length;
-  const pendingMemberCount = registrations.filter(
+  // Créditos pagos por fora que ainda aguardam criação de conta no site
+  const allUnclaimedCredits = React.useMemo(
+    () => getUnclaimedPreApprovedCredits(registrations),
+    [registrations]
+  );
+  const scopedUnclaimedCredits =
+    filterTurma === 'todas'
+      ? allUnclaimedCredits
+      : allUnclaimedCredits.filter((c) => c.turma === filterTurma);
+
+  // Métricas Gerais e Calculadora por Turma
+  const scopedRegistrations =
+    filterTurma === 'todas'
+      ? registrations
+      : registrations.filter((r) => r.turma === filterTurma);
+
+  const totalRegistrations = scopedRegistrations.length;
+  const pendingMemberCount = scopedRegistrations.filter(
     (r) => r.memberStatus === 'pendente'
   ).length;
-  const pendingPaymentCount = registrations.filter(
+  const pendingPaymentCount = scopedRegistrations.filter(
     (r) => r.paymentStatus === 'pendente'
   ).length;
-  const paidCount = registrations.filter((r) => r.paymentStatus === 'pago').length;
-  const totalRevenue = registrations
-    .filter((r) => r.paymentStatus === 'pago')
-    .reduce((acc, r) => acc + (Number(r.authorizedPrice ?? r.paidAmount) || 0), 0);
+  const paidCount =
+    scopedRegistrations.filter((r) => r.paymentStatus === 'pago').length +
+    scopedUnclaimedCredits.length;
+  const totalRevenue =
+    scopedRegistrations
+      .filter((r) => r.paymentStatus === 'pago')
+      .reduce((acc, r) => acc + (Number(r.authorizedPrice ?? r.paidAmount) || 0), 0) +
+    scopedUnclaimedCredits.reduce((acc, c) => acc + c.paidAmount, 0);
+
+  const globalRevenue =
+    registrations
+      .filter((r) => r.paymentStatus === 'pago')
+      .reduce((acc, r) => acc + (Number(r.authorizedPrice ?? r.paidAmount) || 0), 0) +
+    allUnclaimedCredits.reduce((acc, c) => acc + c.paidAmount, 0);
+
+  const turmaFinancialSummary = React.useMemo(() => {
+    return TURMAS_MEDICINA.map((t) => {
+      const paidInTurma = registrations.filter(
+        (r) => r.turma === t.turma && r.paymentStatus === 'pago'
+      );
+      const unclaimedInTurma = allUnclaimedCredits.filter((c) => c.turma === t.turma);
+      const socios = paidInTurma.filter(
+        (r) => r.memberStatus === 'aprovado' || (Number(r.authorizedPrice ?? r.paidAmount) === 50)
+      );
+      const naoSocios = paidInTurma.filter(
+        (r) => !(r.memberStatus === 'aprovado' || (Number(r.authorizedPrice ?? r.paidAmount) === 50))
+      );
+      const unclaimedSocios = unclaimedInTurma.filter((c) => c.isSocio);
+      const unclaimedNaoSocios = unclaimedInTurma.filter((c) => !c.isSocio);
+
+      const socioTotal =
+        socios.reduce((acc, r) => acc + (Number(r.authorizedPrice ?? r.paidAmount) || 0), 0) +
+        unclaimedSocios.reduce((acc, c) => acc + c.paidAmount, 0);
+      const naoSocioTotal =
+        naoSocios.reduce((acc, r) => acc + (Number(r.authorizedPrice ?? r.paidAmount) || 0), 0) +
+        unclaimedNaoSocios.reduce((acc, c) => acc + c.paidAmount, 0);
+      return {
+        turma: t.turma,
+        number: t.number,
+        name: t.name,
+        paidCount: paidInTurma.length + unclaimedInTurma.length,
+        unclaimedCount: unclaimedInTurma.length,
+        socioCount: socios.length + unclaimedSocios.length,
+        socioTotal,
+        naoSocioCount: naoSocios.length + unclaimedNaoSocios.length,
+        naoSocioTotal,
+        total: socioTotal + naoSocioTotal,
+      };
+    });
+  }, [registrations, allUnclaimedCredits]);
 
   // Filtragem
   const filteredRegistrations = registrations.filter((reg) => {
@@ -444,20 +508,99 @@ export const AdminRegistrationsPage: React.FC = () => {
             <span className="text-2xl font-display font-extrabold text-emerald-950 block">
               {paidCount}
             </span>
-            <span className="text-[10px] text-emerald-700 font-semibold">Pagos via Mercado Pago</span>
+            <span className="text-[10px] text-emerald-700 font-semibold">
+              Mercado Pago + Externo
+            </span>
           </div>
 
           <div className="bg-white p-4 sm:p-5 rounded-3xl border border-brand-surface-border shadow-card space-y-1 col-span-2 lg:col-span-1">
             <div className="flex items-center justify-between text-brand-text-muted">
-              <span className="text-xs font-bold uppercase tracking-wider">Arrecadação</span>
+              <span className="text-xs font-bold uppercase tracking-wider">
+                {filterTurma === 'todas' ? 'Arrecadação' : `Total T${filterTurma}`}
+              </span>
               <DollarSign className="w-4 h-4 text-emerald-600" />
             </div>
             <span className="text-2xl font-display font-extrabold text-emerald-700 block">
               R$ {totalRevenue.toFixed(2)}
             </span>
-            <span className="text-[10px] text-brand-text-secondary">Líquido na conta da Atlética</span>
+            <span className="text-[10px] text-brand-text-secondary">
+              {filterTurma === 'todas'
+                ? 'Total confirmado da Atlética'
+                : `Geral: R$ ${globalRevenue.toFixed(2)}`}
+            </span>
           </div>
         </section>
+
+        {/* Calculadora Financeira por Turma */}
+        <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+          {turmaFinancialSummary.map((item) => {
+            const isSelected = filterTurma === item.turma;
+            return (
+              <button
+                key={item.turma}
+                type="button"
+                onClick={() =>
+                  setFilterTurma((prev) => (prev === item.turma ? 'todas' : item.turma))
+                }
+                className={`text-left p-3 rounded-2xl border transition-all ${
+                  isSelected
+                    ? 'bg-brand-blue text-white border-brand-blue shadow-md'
+                    : 'bg-white hover:bg-slate-50 border-brand-surface-border text-slate-900 shadow-xs'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] font-display font-extrabold">
+                    T{item.number} {item.name}
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      isSelected ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700'
+                    }`}
+                  >
+                    {item.paidCount} pagos
+                  </span>
+                </div>
+                <div
+                  className={`mt-1 text-base font-display font-extrabold ${
+                    isSelected ? 'text-brand-yellow' : 'text-emerald-700'
+                  }`}
+                >
+                  R$ {item.total.toFixed(2)}
+                </div>
+                <div
+                  className={`text-[10px] leading-tight mt-0.5 ${
+                    isSelected ? 'text-white/80' : 'text-slate-500'
+                  }`}
+                >
+                  Sócios: {item.socioCount} (R$ {item.socioTotal}) • Não sócios: {item.naoSocioCount} (R$ {item.naoSocioTotal})
+                </div>
+              </button>
+            );
+          })}
+        </section>
+
+        {scopedUnclaimedCredits.length > 0 && (
+          <div className="rounded-2xl bg-emerald-50/80 border border-emerald-200 px-4 py-3 text-xs text-emerald-950 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <span className="font-display font-extrabold">
+                Pré-aprovados pagos por fora aguardando criar conta ({scopedUnclaimedCredits.length}):{' '}
+              </span>
+              <span>
+                {scopedUnclaimedCredits
+                  .map(
+                    (c) =>
+                      `${c.athleteName} (T${c.turma} • ${
+                        c.isSocio ? 'Sócio' : 'Não sócio'
+                      } R$ ${c.paidAmount})`
+                  )
+                  .join(', ')}
+              </span>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200/70 text-emerald-900">
+              Ativação automática ao se cadastrar
+            </span>
+          </div>
+        )}
 
         {/* Abas Principais: Inscrições de Atletas vs Todos os Usuários */}
         <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-brand-surface-border shadow-xs w-fit">
@@ -761,26 +904,33 @@ export const AdminRegistrationsPage: React.FC = () => {
                         </td>
 
                         <td className="py-3 px-3">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${
-                              isPaid
-                                ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                          <div className="space-y-0.5">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center gap-1 ${
+                                isPaid
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                  : reg.paymentStatus === 'pendente'
+                                  ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                  : reg.paymentStatus === 'cancelado'
+                                  ? 'bg-rose-100 text-rose-900 border border-rose-300'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
+                              {isPaid && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                              {reg.paymentStatus === 'pago'
+                                ? 'CONFIRMADO'
                                 : reg.paymentStatus === 'pendente'
-                                ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                ? 'AGUARDANDO PGTO'
                                 : reg.paymentStatus === 'cancelado'
-                                ? 'bg-rose-100 text-rose-900 border border-rose-300'
-                                : 'bg-slate-100 text-slate-700'
-                            }`}
-                          >
-                            {isPaid && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
-                            {reg.paymentStatus === 'pago'
-                              ? 'CONFIRMADO'
-                              : reg.paymentStatus === 'pendente'
-                              ? 'AGUARDANDO PGTO'
-                              : reg.paymentStatus === 'cancelado'
-                              ? 'CANCELADO'
-                              : 'BLOQUEADO'}
-                          </span>
+                                ? 'CANCELADO'
+                                : 'BLOQUEADO'}
+                            </span>
+                            {isPaid && String(reg.mpPaymentId || '').startsWith('EXTERNO-') && (
+                              <span className="block text-[9px] font-bold text-emerald-700 pl-1">
+                                Pago por fora (Diretoria)
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">

@@ -20,6 +20,8 @@ import {
   INITIAL_DEMO_REGISTRATIONS,
   INITIAL_FINANCIAL_AUDIT_LOGS,
   resolveLotAuthorizedPrice,
+  getUnclaimedPreApprovedCredits,
+  namesMatchPreApprovedCredit,
 } from '../data/registrationData';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import {
@@ -36,6 +38,32 @@ const REGISTRATIONS_STORAGE_KEY = 'intramed_registrations_store_v1';
 const MY_REGISTRATIONS_KEY = 'intramed_my_registered_ids_v1';
 const LOCAL_ATHLETE_CREDENTIALS_KEY = 'intramed_athlete_credentials_v2';
 const SYNC_CHANNEL_NAME = 'intramed_registration_channel';
+
+function normalizePersonNameClient(val?: string | null): string {
+  return String(val || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function namesMatchPrepaidClient(nameA?: string | null, nameB?: string | null): boolean {
+  const normA = normalizePersonNameClient(nameA);
+  const normB = normalizePersonNameClient(nameB);
+  if (!normA || !normB) return false;
+  if (normA === normB) return true;
+  const stopWords = new Set(['da', 'de', 'do', 'das', 'dos', 'e']);
+  const tokensA = normA.split(' ').filter((t) => t.length > 1 && !stopWords.has(t));
+  const tokensB = normB.split(' ').filter((t) => t.length > 1 && !stopWords.has(t));
+  if (tokensA.length < 2 || tokensB.length < 2) return false;
+  if (tokensA[0] !== tokensB[0]) return false;
+  const [shorter, longer] =
+    tokensA.length <= tokensB.length ? [tokensA, tokensB] : [tokensB, tokensA];
+  const longerSet = new Set(longer);
+  return shorter.every((t) => longerSet.has(t));
+}
 
 /**
  * Gera hash unidirecional para verificação offline sem armazenar senha em texto puro no localStorage.
@@ -558,17 +586,36 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         : lot.priceNonMember;
 
       const normalizedEmail = (payload.athleteEmail || '').trim().toLowerCase();
-      const existingUnpaidForSameEmail = registrations.find(
+      const matchedPreApprovedCredit = getUnclaimedPreApprovedCredits(registrations).find(
+        (c) =>
+          c.turma === payload.turma &&
+          namesMatchPreApprovedCredit(c.athleteName, payload.athleteName)
+      );
+
+      const existingPrepaidMatch = registrations.find(
         (r) =>
           r &&
-          r.paymentStatus !== 'pago' &&
-          r.paymentStatus !== 'cancelado' &&
+          r.paymentStatus === 'pago' &&
+          normalizedEmail &&
           (r.athleteEmail || '').trim().toLowerCase() === normalizedEmail
       );
 
-      const regId = existingUnpaidForSameEmail?.id || generateUniqueId('reg');
+      const existingUnpaidForSameEmail = existingPrepaidMatch
+        ? undefined
+        : registrations.find(
+            (r) =>
+              r &&
+              r.paymentStatus !== 'pago' &&
+              r.paymentStatus !== 'cancelado' &&
+              (r.athleteEmail || '').trim().toLowerCase() === normalizedEmail
+          );
+
+      const matchedBase = existingPrepaidMatch || existingUnpaidForSameEmail;
+      const regId =
+        matchedBase?.id ||
+        (matchedPreApprovedCredit ? `reg-paid-${matchedPreApprovedCredit.key}` : generateUniqueId('reg'));
       const linkedAthleteId =
-        existingUnpaidForSameEmail?.linkedAthleteId || `ath-${regId}`;
+        matchedBase?.linkedAthleteId || `ath-${regId}`;
       const chosenModalities =
         payload.selectedModalities && payload.selectedModalities.length > 0
           ? payload.selectedModalities
@@ -580,18 +627,32 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         payload.athleteEmail.trim().toLowerCase().split('@')[0] ||
         payload.athleteEmail.trim().toLowerCase();
 
+      const isPrePaidResolved = Boolean(existingPrepaidMatch || matchedPreApprovedCredit);
+      const prePaidAmountResolved = existingPrepaidMatch
+        ? existingPrepaidMatch.authorizedPrice
+        : matchedPreApprovedCredit
+        ? matchedPreApprovedCredit.paidAmount
+        : initialPrice;
+
       const newRegistration: Registration = {
         id: regId,
         eventId: payload.eventId,
         lotId: lot.id,
-        userId: existingUnpaidForSameEmail?.userId || `usr-${linkedAthleteId}`,
+        userId: matchedBase?.userId || `usr-${linkedAthleteId}`,
         linkedAthleteId,
         accountUsername: resolvedUsername,
-        hasAccountPassword: Boolean(payload.accountPassword?.trim() || existingUnpaidForSameEmail?.hasAccountPassword),
-        athleteName: payload.athleteName.trim(),
+        hasAccountPassword: Boolean(payload.accountPassword?.trim() || matchedBase?.hasAccountPassword),
+        athleteName:
+          matchedPreApprovedCredit &&
+          matchedPreApprovedCredit.athleteName.trim().length > payload.athleteName.trim().length
+            ? matchedPreApprovedCredit.athleteName.trim()
+            : existingPrepaidMatch &&
+              existingPrepaidMatch.athleteName.trim().length > payload.athleteName.trim().length
+            ? existingPrepaidMatch.athleteName.trim()
+            : payload.athleteName.trim(),
         athleteEmail: payload.athleteEmail.trim(),
-        athletePhone: payload.athletePhone.trim() || existingUnpaidForSameEmail?.athletePhone || '',
-        athleteDocument: payload.athleteDocument.trim() || existingUnpaidForSameEmail?.athleteDocument || '',
+        athletePhone: payload.athletePhone.trim() || matchedBase?.athletePhone || '',
+        athleteDocument: payload.athleteDocument.trim() || matchedBase?.athleteDocument || '',
         turma: payload.turma,
         turmaLabel: payload.turmaLabel,
         teamId: payload.teamId,
@@ -602,29 +663,66 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
           'Passaporte Geral (Todas as 16 Modalidades)',
         selectedModalities: chosenModalities,
         categoryName: payload.categoryName,
-        requestedMemberDiscount: isSocioRequested,
-        isGuestAthlete: isGuest,
-        memberStatus: isSocioRequested ? 'pendente' : 'nao_solicitado',
-        memberDocumentProofUrl: payload.memberDocumentProofUrl || null,
-        memberNotes: isGuest
+        requestedMemberDiscount: existingPrepaidMatch
+          ? existingPrepaidMatch.requestedMemberDiscount
+          : matchedPreApprovedCredit
+          ? matchedPreApprovedCredit.isSocio
+          : isSocioRequested,
+        isGuestAthlete: existingPrepaidMatch
+          ? Boolean(existingPrepaidMatch.isGuestAthlete)
+          : isGuest,
+        memberStatus: existingPrepaidMatch
+          ? existingPrepaidMatch.memberStatus
+          : matchedPreApprovedCredit
+          ? matchedPreApprovedCredit.isSocio
+            ? 'aprovado'
+            : 'nao_solicitado'
+          : isSocioRequested
+          ? 'pendente'
+          : 'nao_solicitado',
+        memberDocumentProofUrl: payload.memberDocumentProofUrl || matchedBase?.memberDocumentProofUrl || null,
+        memberNotes: existingPrepaidMatch
+          ? existingPrepaidMatch.memberNotes
+          : matchedPreApprovedCredit
+          ? matchedPreApprovedCredit.isSocio
+            ? 'Sócio validado e pagamento confirmado diretamente com a Atlética Cangaceira.'
+            : 'Pagamento confirmado diretamente com a Atlética Cangaceira.'
+          : isGuest
           ? `Atleta Convidado Oficial — Turma 21 (${payload.categoryName})`
           : isSocioRequested
           ? 'Aguardando validação da diretoria da Atlética Cangaceira.'
           : undefined,
-        paymentStatus: isSocioRequested
+        paymentStatus: isPrePaidResolved
+          ? 'pago'
+          : isSocioRequested
           ? 'aguardando_validacao'
           : 'pendente',
-        authorizedPrice: initialPrice,
-        avatarUrl: payload.avatarUrl || existingUnpaidForSameEmail?.avatarUrl || null,
-        jerseyNumber: payload.jerseyNumber ?? existingUnpaidForSameEmail?.jerseyNumber ?? null,
+        authorizedPrice: prePaidAmountResolved,
+        ...(isPrePaidResolved
+          ? {
+              paidAmount: existingPrepaidMatch?.paidAmount ?? prePaidAmountResolved,
+              paymentMethod: existingPrepaidMatch?.paymentMethod || 'pix',
+              mpPaymentId: existingPrepaidMatch?.mpPaymentId || matchedPreApprovedCredit?.externalRef,
+              paidAtIso: existingPrepaidMatch?.paidAtIso || nowIso,
+              qrValidationToken:
+                existingPrepaidMatch?.qrValidationToken ||
+                `INTRAMED-IX-${regId.toUpperCase()}-VERIFIED`,
+            }
+          : {}),
+        avatarUrl: payload.avatarUrl || matchedBase?.avatarUrl || null,
+        jerseyNumber: payload.jerseyNumber ?? matchedBase?.jerseyNumber ?? null,
         position:
           payload.position?.trim() ||
-          (isGuest ? 'Atleta Convidado T21' : 'Atleta Inscrito'),
-        bio: payload.bio?.trim() || existingUnpaidForSameEmail?.bio || null,
-        instagramHandle: payload.instagramHandle?.trim() || existingUnpaidForSameEmail?.instagramHandle || null,
-        createdAtIso: existingUnpaidForSameEmail?.createdAtIso || nowIso,
+          (existingPrepaidMatch
+            ? 'Atleta Confirmado'
+            : isGuest
+            ? 'Atleta Convidado T21'
+            : 'Atleta Inscrito'),
+        bio: payload.bio?.trim() || matchedBase?.bio || null,
+        instagramHandle: payload.instagramHandle?.trim() || matchedBase?.instagramHandle || null,
+        createdAtIso: matchedBase?.createdAtIso || nowIso,
         updatedAtIso: nowIso,
-        revision: (existingUnpaidForSameEmail?.revision ?? 0) + 1,
+        revision: (matchedBase?.revision ?? 0) + 1,
       };
 
       upsertParticipantAthlete({
@@ -663,7 +761,7 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
         timestampIso: nowIso,
       };
 
-      const nextRegs = existingUnpaidForSameEmail
+      const nextRegs = matchedBase
         ? registrations.map((r) => (r.id === regId ? newRegistration : r))
         : [newRegistration, ...registrations];
       const nextLogs = [auditEntry, ...auditLogs];
@@ -1024,6 +1122,15 @@ export const RegistrationProvider: React.FC<{ children: React.ReactNode }> = ({
       if (
         currentUser?.linkedAthleteId &&
         r.linkedAthleteId === currentUser.linkedAthleteId
+      ) {
+        return true;
+      }
+      if (
+        r.paymentStatus === 'pago' &&
+        !(r.athleteEmail || '').trim() &&
+        currentUser?.turma &&
+        String(r.turma || '').trim() === String(currentUser.turma || '').trim() &&
+        namesMatchPrepaidClient(r.athleteName, currentUser.name)
       ) {
         return true;
       }

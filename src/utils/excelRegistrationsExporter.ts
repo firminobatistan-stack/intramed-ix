@@ -1,10 +1,26 @@
 import ExcelJS from 'exceljs';
 import type { Registration } from '../types/domain';
+import { getUnclaimedPreApprovedCredits } from '../data/registrationData';
 
 interface TournamentMeta {
   title?: string;
   edition?: string;
   organization?: string;
+}
+
+function getCanonicalTurmaName(r: Registration): string {
+  const t = String(r.turma || '').trim();
+  const team = String(r.teamId || '').trim().toLowerCase();
+  if (t === '21' || team === 'sanguinaria') return 'T21 — Sanguinária';
+  if (t === '22' || team === 'predadora') return 'T22 — Predadora';
+  if (t === '23' || team === 'tormenta') return 'T23 — Tormenta';
+  if (t === '24' || team === 'colossal') return 'T24 — Colossal';
+  if (t === '25' || team === 'soberana') return 'T25 — Soberana';
+  return r.turmaLabel || r.teamName || (t ? `Turma ${t}` : 'Sem Turma');
+}
+
+function getEffectiveRegPrice(r: Registration): number {
+  return Number(r.authorizedPrice ?? r.paidAmount) || 0;
 }
 
 export async function exportRegistrationsToExcel(
@@ -39,8 +55,13 @@ export async function exportRegistrationsToExcel(
     right: { style: 'thin', color: { argb: COLOR_BORDER } },
   };
 
-  const totalRegs = registrations.length;
+  const unclaimedCredits = getUnclaimedPreApprovedCredits(registrations);
+  const unclaimedRevenue = unclaimedCredits.reduce((acc, c) => acc + c.paidAmount, 0);
+  const unclaimedSociosCount = unclaimedCredits.filter((c) => c.isSocio).length;
+
+  const totalRegs = registrations.length + unclaimedCredits.length;
   const paidRegs = registrations.filter((r) => r.paymentStatus === 'pago');
+  const paidCountTotal = paidRegs.length + unclaimedCredits.length;
   const pendingRegs = registrations.filter(
     (r) => r.paymentStatus === 'pendente' || r.paymentStatus === 'aguardando_validacao' || r.paymentStatus === 'processando'
   );
@@ -48,14 +69,16 @@ export async function exportRegistrationsToExcel(
     (r) => r.paymentStatus === 'cancelado' || r.paymentStatus === 'expirado'
   );
 
-  const totalPaidRevenue = paidRegs.reduce((acc, r) => acc + (Number(r.authorizedPrice) || 0), 0);
-  const totalExpectedRevenue = registrations.reduce((acc, r) => acc + (Number(r.authorizedPrice) || 0), 0);
-  const totalPendingRevenue = pendingRegs.reduce((acc, r) => acc + (Number(r.authorizedPrice) || 0), 0);
+  const totalPaidRevenue = paidRegs.reduce((acc, r) => acc + getEffectiveRegPrice(r), 0) + unclaimedRevenue;
+  const totalExpectedRevenue = registrations.reduce((acc, r) => acc + getEffectiveRegPrice(r), 0) + unclaimedRevenue;
+  const totalPendingRevenue = pendingRegs.reduce((acc, r) => acc + getEffectiveRegPrice(r), 0);
 
-  const membersCount = registrations.filter((r) => r.memberStatus === 'aprovado' || (r.requestedMemberDiscount && r.memberStatus !== 'rejeitado')).length;
+  const membersCount =
+    registrations.filter((r) => r.memberStatus === 'aprovado' || (r.requestedMemberDiscount && r.memberStatus !== 'rejeitado')).length +
+    unclaimedSociosCount;
   const nonMembersCount = totalRegs - membersCount;
   const pendingValidationCount = registrations.filter((r) => r.requestedMemberDiscount && r.memberStatus === 'pendente').length;
-  const conversionRate = totalRegs > 0 ? (paidRegs.length / totalRegs) * 100 : 0;
+  const conversionRate = totalRegs > 0 ? (paidCountTotal / totalRegs) * 100 : 0;
 
   // ==========================================
   // ABA 1: DASHBOARD GERAL
@@ -108,7 +131,7 @@ export async function exportRegistrationsToExcel(
 
   // Linha 1 de Cards
   renderKpiCard('B6', 'C7', 'TOTAL DE INSCRITOS', totalRegs, COLOR_WHITE, COLOR_NAVY);
-  renderKpiCard('D6', 'E7', 'INSCRIÇÕES CONFIRMADAS (PAGAS)', paidRegs.length, COLOR_PAID_FG, COLOR_PAID_BG);
+  renderKpiCard('D6', 'E7', 'INSCRIÇÕES CONFIRMADAS (PAGAS)', paidCountTotal, COLOR_PAID_FG, COLOR_PAID_BG);
   renderKpiCard('F6', 'G7', 'INSCRIÇÕES PENDENTES', pendingRegs.length, COLOR_PENDING_FG, COLOR_PENDING_BG);
   renderKpiCard('H6', 'H7', 'CANCELADAS', cancelledRegs.length, COLOR_CANCEL_FG, COLOR_CANCEL_BG);
 
@@ -254,7 +277,7 @@ export async function exportRegistrationsToExcel(
   >();
 
   registrations.forEach((r) => {
-    const turmaName = r.turmaLabel || r.teamName || (r.turma ? `Turma ${r.turma}` : 'Sem Turma');
+    const turmaName = getCanonicalTurmaName(r);
     const cur = turmaMap.get(turmaName) || {
       total: 0,
       paid: 0,
@@ -267,10 +290,10 @@ export async function exportRegistrationsToExcel(
     cur.total += 1;
     if (r.paymentStatus === 'pago') {
       cur.paid += 1;
-      cur.paidRev += Number(r.authorizedPrice) || 0;
-    } else if (r.paymentStatus === 'pendente') {
+      cur.paidRev += getEffectiveRegPrice(r);
+    } else if (r.paymentStatus === 'pendente' || r.paymentStatus === 'aguardando_validacao') {
       cur.pending += 1;
-      cur.pendingRev += Number(r.authorizedPrice) || 0;
+      cur.pendingRev += getEffectiveRegPrice(r);
     }
 
     if (r.memberStatus === 'aprovado' || (r.requestedMemberDiscount && r.memberStatus !== 'rejeitado')) {
@@ -278,6 +301,25 @@ export async function exportRegistrationsToExcel(
     } else {
       cur.nonMembers += 1;
     }
+    turmaMap.set(turmaName, cur);
+  });
+
+  unclaimedCredits.forEach((c) => {
+    const turmaName = `T${c.turma} — ${c.teamName}`;
+    const cur = turmaMap.get(turmaName) || {
+      total: 0,
+      paid: 0,
+      pending: 0,
+      members: 0,
+      nonMembers: 0,
+      paidRev: 0,
+      pendingRev: 0,
+    };
+    cur.total += 1;
+    cur.paid += 1;
+    cur.paidRev += c.paidAmount;
+    if (c.isSocio) cur.members += 1;
+    else cur.nonMembers += 1;
     turmaMap.set(turmaName, cur);
   });
 
@@ -328,7 +370,7 @@ export async function exportRegistrationsToExcel(
   const totRow2 = ws2.getRow(totalTurmaRowIdx);
   totRow2.getCell(1).value = 'TOTAL GERAL';
   totRow2.getCell(2).value = totalRegs;
-  totRow2.getCell(3).value = paidRegs.length;
+  totRow2.getCell(3).value = paidCountTotal;
   totRow2.getCell(4).value = pendingRegs.length;
   totRow2.getCell(5).value = membersCount;
   totRow2.getCell(6).value = nonMembersCount;
@@ -566,7 +608,7 @@ export async function exportRegistrationsToExcel(
   const sitData = [
     {
       status: 'PAGO / CONFIRMADO',
-      count: paidRegs.length,
+      count: paidCountTotal,
       paidRev: totalPaidRevenue,
       pendRev: 0,
       bg: COLOR_PAID_BG,
@@ -736,9 +778,10 @@ export async function exportRegistrationsToExcel(
     const isZebra = idx % 2 === 1;
     let bg = isZebra ? COLOR_ZEBRA : COLOR_WHITE;
 
-    const price = Number(r.authorizedPrice) || 0;
+    const price = getEffectiveRegPrice(r);
     const isPaid = r.paymentStatus === 'pago';
     const isPending = r.paymentStatus === 'pendente';
+    const isExternalPaid = String(r.mpPaymentId || '').startsWith('EXTERNO-');
 
     let dateFormatted = r.createdAtIso || '—';
     try {
@@ -751,16 +794,16 @@ export async function exportRegistrationsToExcel(
 
     row.getCell(1).value = r.id;
     row.getCell(2).value = r.athleteName;
-    row.getCell(3).value = r.athleteEmail;
+    row.getCell(3).value = r.athleteEmail || 'Aguardando vínculo no site';
     row.getCell(4).value = r.athletePhone || '—';
     row.getCell(5).value = r.athleteDocument || '—';
-    row.getCell(6).value = r.turmaLabel || r.teamName || (r.turma ? `Turma ${r.turma}` : '—');
+    row.getCell(6).value = getCanonicalTurmaName(r);
     row.getCell(7).value = r.categoryName || '—';
     row.getCell(8).value = r.requestedMemberDiscount ? 'SIM' : 'NÃO';
     row.getCell(9).value = (r.memberStatus || '—').toUpperCase();
     row.getCell(10).value = price;
     row.getCell(11).value = (r.paymentStatus || '—').toUpperCase();
-    row.getCell(12).value = r.paymentMethod || '—';
+    row.getCell(12).value = isExternalPaid ? 'EXTERNO (DIRETORIA)' : r.paymentMethod || '—';
     row.getCell(13).value = r.mpPaymentId || '—';
     row.getCell(14).value = dateFormatted;
     row.getCell(15).value = isPaid ? 'SIM (Apto)' : 'NÃO (Pendente)';
