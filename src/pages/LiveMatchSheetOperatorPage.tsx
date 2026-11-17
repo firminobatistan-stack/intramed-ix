@@ -21,10 +21,16 @@ import {
   FlaskConical,
   Volume2,
   VolumeX,
+  RefreshCw,
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
 import { matchSound } from '../utils/soundEffects';
+import {
+  computeLiveVolleyballRotation,
+  resolveSixStartingIds,
+  rotateVolleyballPositionsClockwise,
+} from '../utils/volleyballRotation';
 import {
   MODALITY_RULE_ENGINE,
   OFFICIAL_MODALITY_ROSTER_LIMITS,
@@ -77,7 +83,10 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     cancelActiveTimeout,
     toggleLineupRole,
     addAthleteToMatchLineup,
+    addMultipleAthletesToMatchLineup,
     removeAthleteFromMatchLineup,
+    configureVolleyballSetRotation,
+    adjustVolleyballManualRotation,
     finishCurrentSet,
     recordTableTennisPoint,
     finishTableTennisSet,
@@ -117,6 +126,30 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
   // Modais de Operação
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isLineupModalOpen, setIsLineupModalOpen] = useState(false);
+  const [lineupActiveTab, setLineupActiveTab] = useState<'home' | 'away'>('home');
+  const [isVolleyballRotationModalOpen, setIsVolleyballRotationModalOpen] =
+    useState(false);
+  const [vbSelectedSlot, setVbSelectedSlot] = useState<{
+    side: 'home' | 'away';
+    slotIdx: number;
+  } | null>(null);
+  const [vbDraftFirstServer, setVbDraftFirstServer] = useState<'home' | 'away'>('home');
+  const [vbDraftHomeOrder, setVbDraftHomeOrder] = useState<Array<string | null>>([
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+  ]);
+  const [vbDraftAwayOrder, setVbDraftAwayOrder] = useState<Array<string | null>>([
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+  ]);
   const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
   const [isOfficialsModalOpen, setIsOfficialsModalOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -417,6 +450,114 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     sheet.periodScores[0];
 
   const activeEvents = sheet.events.filter((ev) => !ev.isDeleted);
+
+  const liveVolleyballRotation =
+    match.modalityId === 'volei'
+      ? computeLiveVolleyballRotation(sheet, sheet.timer.currentPeriod || 1)
+      : null;
+
+  const openVolleyballRotationModal = () => {
+    if (!sheet || match.modalityId !== 'volei') return;
+    const setNum = sheet.timer.currentPeriod || 1;
+    const liveRot = computeLiveVolleyballRotation(sheet, setNum);
+    setVbDraftFirstServer(liveRot.initialServingSide);
+    setVbDraftHomeOrder(
+      resolveSixStartingIds(
+        sheet.volleyballSetConfigs?.[setNum]?.homeInitialOrder,
+        sheet.homeLineup
+      )
+    );
+    setVbDraftAwayOrder(
+      resolveSixStartingIds(
+        sheet.volleyballSetConfigs?.[setNum]?.awayInitialOrder,
+        sheet.awayLineup
+      )
+    );
+    setVbSelectedSlot(null);
+    setIsVolleyballRotationModalOpen(true);
+  };
+
+  const handleSaveVolleyballRotationModal = () => {
+    if (!matchId || !sheet) return;
+    const setNum = sheet.timer.currentPeriod || 1;
+    configureVolleyballSetRotation(matchId, setNum, {
+      initialServingSide: vbDraftFirstServer,
+      homeInitialOrder: vbDraftHomeOrder,
+      awayInitialOrder: vbDraftAwayOrder,
+      resetManualOffsets: true,
+    });
+    setVbSelectedSlot(null);
+    setIsVolleyballRotationModalOpen(false);
+  };
+
+  const handleTapDraftCourtSlot = (side: 'home' | 'away', slotIdx: number) => {
+    if (!vbSelectedSlot) {
+      setVbSelectedSlot({ side, slotIdx });
+      return;
+    }
+    if (vbSelectedSlot.side !== side) {
+      setVbSelectedSlot({ side, slotIdx });
+      return;
+    }
+    if (vbSelectedSlot.slotIdx === slotIdx) {
+      setVbSelectedSlot(null);
+      return;
+    }
+    if (side === 'home') {
+      const next = [...vbDraftHomeOrder];
+      const tmp = next[vbSelectedSlot.slotIdx];
+      next[vbSelectedSlot.slotIdx] = next[slotIdx];
+      next[slotIdx] = tmp;
+      setVbDraftHomeOrder(next);
+    } else {
+      const next = [...vbDraftAwayOrder];
+      const tmp = next[vbSelectedSlot.slotIdx];
+      next[vbSelectedSlot.slotIdx] = next[slotIdx];
+      next[slotIdx] = tmp;
+      setVbDraftAwayOrder(next);
+    }
+    setVbSelectedSlot(null);
+  };
+
+  const handleAssignPlayerToDraftSlot = (
+    side: 'home' | 'away',
+    athleteId: string
+  ) => {
+    if (side === 'home') {
+      const next = [...vbDraftHomeOrder];
+      const existingIdx = next.indexOf(athleteId);
+      const targetIdx =
+        vbSelectedSlot?.side === 'home'
+          ? vbSelectedSlot.slotIdx
+          : next.findIndex((id) => !id);
+      const resolvedTarget = targetIdx >= 0 ? targetIdx : 0;
+      if (existingIdx >= 0) {
+        const tmp = next[resolvedTarget];
+        next[resolvedTarget] = athleteId;
+        next[existingIdx] = tmp;
+      } else {
+        next[resolvedTarget] = athleteId;
+      }
+      setVbDraftHomeOrder(next);
+    } else {
+      const next = [...vbDraftAwayOrder];
+      const existingIdx = next.indexOf(athleteId);
+      const targetIdx =
+        vbSelectedSlot?.side === 'away'
+          ? vbSelectedSlot.slotIdx
+          : next.findIndex((id) => !id);
+      const resolvedTarget = targetIdx >= 0 ? targetIdx : 0;
+      if (existingIdx >= 0) {
+        const tmp = next[resolvedTarget];
+        next[resolvedTarget] = athleteId;
+        next[existingIdx] = tmp;
+      } else {
+        next[resolvedTarget] = athleteId;
+      }
+      setVbDraftAwayOrder(next);
+    }
+    setVbSelectedSlot(null);
+  };
 
   const openOfficialsModal = () => {
     if (!sheet) return;
@@ -1235,39 +1376,308 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
           )}
 
           {(match.modalityId === 'volei' || match.modalityId === 'volei-de-praia') && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                <span className="font-display font-extrabold uppercase text-brand-blue tracking-wider">
-                  Controle de Set ({sheet.timer.periodLabel || 'Set Atual'}):
-                </span>
-                <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-800">
-                  Tempos de Descanso: {match.homeTeam.teamName} ({sheet.homeTimeoutsUsed}/2) • {match.awayTeam.teamName} ({sheet.awayTimeoutsUsed}/2)
-                </span>
-                <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-800">
-                  Substituições no Set: {match.homeTeam.teamName} (
-                  {
-                    activeEvents.filter(
-                      (e) =>
-                        e.type === 'substitution' &&
-                        e.teamSide === 'home' &&
-                        e.periodNumber === sheet.timer.currentPeriod
-                    ).length
-                  }
-                  /6) • {match.awayTeam.teamName} (
-                  {
-                    activeEvents.filter(
-                      (e) =>
-                        e.type === 'substitution' &&
-                        e.teamSide === 'away' &&
-                        e.periodNumber === sheet.timer.currentPeriod
-                    ).length
-                  }
-                  /6)
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                  <span className="font-display font-extrabold uppercase text-brand-blue tracking-wider">
+                    Controle de Set ({sheet.timer.periodLabel || 'Set Atual'}):
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-800">
+                    Tempos de Descanso: {match.homeTeam.teamName} ({sheet.homeTimeoutsUsed}/2) • {match.awayTeam.teamName} ({sheet.awayTimeoutsUsed}/2)
+                  </span>
+                  <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-mono font-bold text-slate-800">
+                    Substituições no Set: {match.homeTeam.teamName} (
+                    {
+                      activeEvents.filter(
+                        (e) =>
+                          e.type === 'substitution' &&
+                          e.teamSide === 'home' &&
+                          e.periodNumber === sheet.timer.currentPeriod
+                      ).length
+                    }
+                    /6) • {match.awayTeam.teamName} (
+                    {
+                      activeEvents.filter(
+                        (e) =>
+                          e.type === 'substitution' &&
+                          e.teamSide === 'away' &&
+                          e.periodNumber === sheet.timer.currentPeriod
+                      ).length
+                    }
+                    /6)
+                  </span>
+                </div>
+                <span className="text-[11px] text-brand-text-secondary">
+                  Sets normais até 25 pontos (diferença mínima de 2). Set decisivo (Tie-break) até 15 pontos.
                 </span>
               </div>
-              <span className="text-[11px] text-brand-text-secondary">
-                Sets normais até 25 pontos (diferença mínima de 2). Set decisivo (Tie-break) até 15 pontos.
-              </span>
+
+              {/* QUADRA OFICIAL DE VÔLEI 6×6 & ROTAÇÃO AUTOMÁTICA FIVB / CBV */}
+              {match.modalityId === 'volei' && liveVolleyballRotation && (
+                <div className="pt-3 border-t border-slate-200 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0B218A] text-white text-xs font-display font-extrabold">
+                          <span>🏐 SAQUE ATUAL:</span>
+                          <span className="text-brand-yellow uppercase">
+                            {liveVolleyballRotation.currentServingSide === 'home'
+                              ? match.homeTeam.teamName
+                              : match.awayTeam.teamName}
+                          </span>
+                        </span>
+                        {liveVolleyballRotation.currentServer ? (
+                          <span className="text-xs font-display font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-lg">
+                            Posição I (P1):{' '}
+                            {liveVolleyballRotation.currentServer.jerseyNumber != null
+                              ? `#${liveVolleyballRotation.currentServer.jerseyNumber} `
+                              : ''}
+                            {liveVolleyballRotation.currentServer.athleteName}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                            Configure a escalação/rotação (P1–P6) para exibir o sacador
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Regra Oficial FIVB: só roda 1 posição no sentido horário (P2 → P1) a equipe que <strong>recupera o saque</strong> (side-out). Quem mantém o saque permanece na mesma rotação.
+                      </p>
+                    </div>
+
+                    {!sheet.isClosed && (
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        {liveVolleyballRotation.pointsPlayedInSet === 0 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              configureVolleyballSetRotation(
+                                match.id,
+                                liveVolleyballRotation.setNumber,
+                                {
+                                  initialServingSide:
+                                    liveVolleyballRotation.initialServingSide === 'home'
+                                      ? 'away'
+                                      : 'home',
+                                }
+                              )
+                            }
+                            className="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-xs font-display font-bold text-slate-800 transition-colors touch-manipulation"
+                          >
+                            Alternar 1º Saque
+                          </button>
+                        )}
+                        <Button
+                          variant="accent"
+                          size="sm"
+                          leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                          onClick={openVolleyballRotationModal}
+                        >
+                          Rotação {sheet.timer.periodLabel || `Set ${liveVolleyballRotation.setNumber}`} (P1–P6)
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Duas meias-quadras visuais (Rede no topo de cada card: P4 - P3 - P2 | Fundo: P5 - P6 - P1) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {(['home', 'away'] as const).map((side) => {
+                      const isServingTeam =
+                        liveVolleyballRotation.currentServingSide === side;
+                      const teamName =
+                        side === 'home'
+                          ? match.homeTeam.teamName
+                          : match.awayTeam.teamName;
+                      const court =
+                        side === 'home'
+                          ? liveVolleyballRotation.homeCourt
+                          : liveVolleyballRotation.awayCourt;
+                      const rotationsCount =
+                        side === 'home'
+                          ? liveVolleyballRotation.homeRotationsCount
+                          : liveVolleyballRotation.awayRotationsCount;
+
+                      // Layout oficial olhando para a rede:
+                      // Linha de Ataque (Rede): P4 (idx 3), P3 (idx 2), P2 (idx 1)
+                      // Linha de Defesa / Saque: P5 (idx 4), P6 (idx 5), P1 (idx 0 - Sacador)
+                      const frontRowIndices = [
+                        { idx: 3, zone: 'IV (P4)', role: 'Entrada / Rede Esq.' },
+                        { idx: 2, zone: 'III (P3)', role: 'Meio de Rede' },
+                        { idx: 1, zone: 'II (P2)', role: 'Saída / Rede Dir.' },
+                      ];
+                      const backRowIndices = [
+                        { idx: 4, zone: 'V (P5)', role: 'Defesa Esq.' },
+                        { idx: 5, zone: 'VI (P6)', role: 'Defesa Centro' },
+                        { idx: 0, zone: 'I (P1)', role: 'Zona de Saque' },
+                      ];
+
+                      return (
+                        <div
+                          key={side}
+                          className={`rounded-2xl border-2 p-3 space-y-2 transition-all ${
+                            isServingTeam
+                              ? 'border-emerald-500 bg-emerald-50/40'
+                              : 'border-slate-200 bg-slate-50/70'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-xs font-display font-extrabold uppercase text-brand-blue truncate">
+                                {teamName}
+                              </span>
+                              {isServingTeam && (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold uppercase shrink-0">
+                                  🏐 Sacando
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-[10px] font-mono font-bold text-slate-500 mr-1">
+                                Giros: {rotationsCount}
+                              </span>
+                              {!sheet.isClosed && (
+                                <>
+                                  <button
+                                    type="button"
+                                    title="Voltar 1 rotação (ajuste de arbitragem)"
+                                    onClick={() =>
+                                      adjustVolleyballManualRotation(match.id, side, -1)
+                                    }
+                                    className="px-2 py-1 rounded-lg bg-white border border-slate-300 hover:border-brand-blue text-[11px] font-bold text-slate-700 touch-manipulation"
+                                  >
+                                    ↺ -1
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Avançar 1 rotação horária (ajuste de arbitragem)"
+                                    onClick={() =>
+                                      adjustVolleyballManualRotation(match.id, side, 1)
+                                    }
+                                    className="px-2 py-1 rounded-lg bg-white border border-slate-300 hover:border-brand-blue text-[11px] font-bold text-slate-700 touch-manipulation"
+                                  >
+                                    ↻ +1
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Faixa da Rede */}
+                          <div className="rounded-lg bg-slate-800 text-white text-[9px] font-mono font-bold uppercase tracking-widest text-center py-0.5">
+                            ═══ REDE • ZONA DE ATAQUE (FRENTE) ═══
+                          </div>
+
+                          {/* Linha de Frente: P4 - P3 - P2 */}
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {frontRowIndices.map((slot) => {
+                              const player = court[slot.idx];
+                              return (
+                                <div
+                                  key={slot.zone}
+                                  className="rounded-xl bg-white border border-slate-200 p-2 text-center shadow-sm"
+                                >
+                                  <span className="block text-[9px] font-mono font-extrabold text-slate-400">
+                                    {slot.zone}
+                                  </span>
+                                  {player ? (
+                                    <>
+                                      <span className="block text-xs font-mono font-black text-[#0B218A] mt-0.5">
+                                        {player.jerseyNumber != null
+                                          ? `#${player.jerseyNumber}`
+                                          : '•'}
+                                      </span>
+                                      <span className="block text-[11px] font-bold text-slate-800 truncate">
+                                        {player.athleteName.split(' ')[0]}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="block text-[10px] text-slate-400 py-1.5">
+                                      Vazio
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Linha dos 3 metros */}
+                          <div className="border-t border-dashed border-slate-300 text-center">
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                              Linha de 3m • Zona de Defesa &amp; Saque
+                            </span>
+                          </div>
+
+                          {/* Linha de Fundo: P5 - P6 - P1 */}
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {backRowIndices.map((slot) => {
+                              const player = court[slot.idx];
+                              const isActiveServerSlot =
+                                slot.idx === 0 && isServingTeam;
+                              return (
+                                <div
+                                  key={slot.zone}
+                                  className={`rounded-xl border p-2 text-center shadow-sm ${
+                                    isActiveServerSlot
+                                      ? 'bg-emerald-600 border-emerald-700 text-white ring-2 ring-brand-yellow'
+                                      : slot.idx === 0
+                                      ? 'bg-amber-50/70 border-amber-200'
+                                      : 'bg-white border-slate-200'
+                                  }`}
+                                >
+                                  <span
+                                    className={`block text-[9px] font-mono font-extrabold ${
+                                      isActiveServerSlot
+                                        ? 'text-brand-yellow'
+                                        : 'text-slate-400'
+                                    }`}
+                                  >
+                                    {slot.zone} {isActiveServerSlot ? '🏐' : ''}
+                                  </span>
+                                  {player ? (
+                                    <>
+                                      <span
+                                        className={`block text-xs font-mono font-black mt-0.5 ${
+                                          isActiveServerSlot
+                                            ? 'text-white'
+                                            : 'text-[#0B218A]'
+                                        }`}
+                                      >
+                                        {player.jerseyNumber != null
+                                          ? `#${player.jerseyNumber}`
+                                          : '•'}
+                                      </span>
+                                      <span
+                                        className={`block text-[11px] font-bold truncate ${
+                                          isActiveServerSlot
+                                            ? 'text-white'
+                                            : 'text-slate-800'
+                                        }`}
+                                      >
+                                        {player.athleteName.split(' ')[0]}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span
+                                      className={`block text-[10px] py-1.5 ${
+                                        isActiveServerSlot
+                                          ? 'text-white/80'
+                                          : 'text-slate-400'
+                                      }`}
+                                    >
+                                      Vazio
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2156,242 +2566,634 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
       </Modal>
 
       {/* =====================================================================
-          MODAL 4: ESCALAÇÃO DA PARTIDA (Item 23: Titulares, Reservas, Capitão, Goleiro, Dupla)
+          MODAL 4: ESCALAÇÃO DA PARTIDA (Mobile-First, Toque Rápido e Escalar Todos)
          ===================================================================== */}
       <Modal
         isOpen={isLineupModalOpen}
         onClose={() => setIsLineupModalOpen(false)}
+        size="lg"
         title="Escalação Oficial da Partida"
         description={
           isTestMode
             ? 'Configure titulares, reservas, capitão (C) e goleiro (GK) para as equipes de teste.'
-            : 'Apenas atletas com inscrição e pagamento confirmados podem ser escalados na partida.'
+            : 'Toque nos atletas aptos abaixo para adicioná-los imediatamente à partida.'
+        }
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+            <span className="text-[11px] font-bold text-slate-600">
+              {match.homeTeam.teamName}: {sheet.homeLineup.length}/{rosterLimits.min} mín •{' '}
+              {match.awayTeam.teamName}: {sheet.awayLineup.length}/{rosterLimits.min} mín
+            </span>
+            <div className="flex items-center gap-2 ml-auto">
+              {match.modalityId === 'volei' && !sheet.isClosed && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                  onClick={() => {
+                    setIsLineupModalOpen(false);
+                    openVolleyballRotationModal();
+                  }}
+                >
+                  Rotação P1–P6
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setIsLineupModalOpen(false)}
+              >
+                Concluir Escalação
+              </Button>
+            </div>
+          </div>
         }
       >
-        <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
-          {(['home', 'away'] as const).map((side) => {
-            const teamObj = side === 'home' ? match.homeTeam : match.awayTeam;
-            const teamName = teamObj.teamName;
-            const lineup =
-              side === 'home' ? sheet.homeLineup : sheet.awayLineup;
-            const rosterLimits = OFFICIAL_MODALITY_ROSTER_LIMITS[match.modalityId] || { min: 1, max: 20 };
-            const canAddOtherGender = lineup.length < rosterLimits.min;
-            const allowOtherGender = Boolean(allowOtherGenderBySide[side]) && canAddOtherGender;
-            const matchIsFem = (match.categoryName || '').toLowerCase().includes('fem');
-            const eligibleTeamAthletes = teamObj.teamId ? getAthletesByTeam(teamObj.teamId) : [];
+        <div className="space-y-3.5">
+          {/* Seletor de Equipe em Abas Grandes (Facilita 100% no Celular sem rolar 2 listas longas) */}
+          <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-100 border border-slate-200">
+            {(['home', 'away'] as const).map((tabSide) => {
+              const tObj = tabSide === 'home' ? match.homeTeam : match.awayTeam;
+              const lList = tabSide === 'home' ? sheet.homeLineup : sheet.awayLineup;
+              const isTabActive = lineupActiveTab === tabSide;
+              const isReady = lList.length >= rosterLimits.min;
+              return (
+                <button
+                  key={tabSide}
+                  type="button"
+                  onClick={() => setLineupActiveTab(tabSide)}
+                  className={`px-3 py-2.5 rounded-xl text-xs font-display font-extrabold transition-all touch-manipulation flex flex-col items-center justify-center gap-0.5 ${
+                    isTabActive
+                      ? 'bg-[#0B218A] text-white shadow-sm'
+                      : 'text-slate-700 hover:bg-white/70'
+                  }`}
+                >
+                  <span className="truncate max-w-full">
+                    {tObj.teamName || (tabSide === 'home' ? 'Mandante' : 'Visitante')}
+                  </span>
+                  <span
+                    className={`text-[10px] font-mono ${
+                      isTabActive
+                        ? isReady
+                          ? 'text-emerald-300'
+                          : 'text-brand-yellow'
+                        : isReady
+                        ? 'text-emerald-700'
+                        : 'text-amber-700'
+                    }`}
+                  >
+                    {lList.length}/{rosterLimits.max} (mín {rosterLimits.min}) {isReady ? '✓' : ''}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-            const getAthleteGender = (ath: any): 'Masculino' | 'Feminino' => {
-              const reg = registrations.find((r) => r.linkedAthleteId === ath.id || r.id === ath.registrationId);
-              const cat = (reg?.categoryName || ath.categoryName || ath.gender || '').toLowerCase();
-              if (cat.includes('fem')) return 'Feminino';
-              if (cat.includes('masc')) return 'Masculino';
-              const text = `${ath.id} ${ath.name}`.toLowerCase();
-              if (text.includes('fem')) return 'Feminino';
-              if (text.includes('masc')) return 'Masculino';
-              return 'Masculino';
-            };
+          {(['home', 'away'] as const)
+            .filter((side) => side === lineupActiveTab)
+            .map((side) => {
+              const teamObj = side === 'home' ? match.homeTeam : match.awayTeam;
+              const teamName = teamObj.teamName;
+              const lineup =
+                side === 'home' ? sheet.homeLineup : sheet.awayLineup;
+              const canAddOtherGender = lineup.length < rosterLimits.min;
+              const allowOtherGender =
+                Boolean(allowOtherGenderBySide[side]) && canAddOtherGender;
+              const matchIsFem = (match.categoryName || '')
+                .toLowerCase()
+                .includes('fem');
+              const eligibleTeamAthletes = teamObj.teamId
+                ? getAthletesByTeam(teamObj.teamId)
+                : [];
 
-            const availableToAdd = eligibleTeamAthletes.filter((a) => {
-              if (lineup.some((l) => l.athleteId === a.id)) return false;
-              const athGender = getAthleteGender(a);
-              const sameGender = matchIsFem ? athGender === 'Feminino' : athGender === 'Masculino';
-              if (!sameGender && !allowOtherGender) return false;
-              return true;
-            });
-return (
-              <div
-                key={side}
-                className="rounded-2xl bg-brand-surface-muted p-3.5 border border-brand-surface-border space-y-2.5"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-xs font-display font-extrabold uppercase text-brand-blue">
-                    {teamName}
-                  </h4>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled={!canAddOtherGender}
-                      onClick={() => setAllowOtherGenderBySide((prev) => ({ ...prev, [side]: !prev[side] }))}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
-                        !canAddOtherGender
-                          ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                          : allowOtherGender
-                          ? 'bg-amber-500 text-white border-amber-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      {allowOtherGender ? 'Outro gênero liberado' : '+ Outro gênero'}
-                    </button>
-                    <span className="text-[11px] font-bold text-brand-text-secondary">
-                      {lineup.length}/{rosterLimits.max} (mín {rosterLimits.min})
-                    </span>
-                  </div>
-                </div>
+              const getAthleteGender = (
+                ath: any
+              ): 'Masculino' | 'Feminino' | 'Desconhecido' => {
+                const athEmail = String(ath.email || '')
+                  .trim()
+                  .toLowerCase();
+                const reg = registrations.find(
+                  (r) =>
+                    r.linkedAthleteId === ath.id ||
+                    r.id === ath.registrationId ||
+                    (athEmail &&
+                      String(r.athleteEmail || '')
+                        .trim()
+                        .toLowerCase() === athEmail)
+                );
+                const cat = String(
+                  reg?.categoryName || ath.categoryName || ath.gender || ''
+                )
+                  .trim()
+                  .toLowerCase();
+                if (cat === 'f' || cat.includes('fem')) return 'Feminino';
+                if (cat === 'm' || cat.includes('masc')) return 'Masculino';
+                const text = `${ath.id} ${ath.name}`.toLowerCase();
+                if (text.includes('fem')) return 'Feminino';
+                if (text.includes('masc')) return 'Masculino';
+                return 'Desconhecido';
+              };
 
-                {lineup.length === 0 ? (
-                  <div className="py-3 px-3 rounded-xl bg-white border border-brand-surface-border text-xs text-brand-text-secondary text-center">
-                    Nenhum atleta escalado nesta partida.
-                  </div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {lineup.map((ath) => (
-                      <div
-                        key={ath.athleteId}
-                        className="flex items-center justify-between gap-2 bg-white px-3 py-2 rounded-xl border border-brand-surface-border text-xs"
+              const availableToAdd = eligibleTeamAthletes.filter((a) => {
+                if (lineup.some((l) => l.athleteId === a.id)) return false;
+                const athGender = getAthleteGender(a);
+                if (athGender === 'Desconhecido') return true;
+                const sameGender = matchIsFem
+                  ? athGender === 'Feminino'
+                  : athGender === 'Masculino';
+                if (!sameGender && !allowOtherGender) return false;
+                return true;
+              });
+
+              const remainingCapacity = Math.max(
+                0,
+                rosterLimits.max - lineup.length
+              );
+
+              return (
+                <div
+                  key={side}
+                  className="rounded-2xl bg-brand-surface-muted p-3.5 border border-brand-surface-border space-y-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-xs font-display font-extrabold uppercase text-brand-blue">
+                      {teamName}
+                    </h4>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        disabled={!canAddOtherGender}
+                        onClick={() =>
+                          setAllowOtherGenderBySide((prev) => ({
+                            ...prev,
+                            [side]: !prev[side],
+                          }))
+                        }
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors touch-manipulation ${
+                          !canAddOtherGender
+                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                            : allowOtherGender
+                            ? 'bg-amber-500 text-white border-amber-600'
+                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                        }`}
                       >
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          {ath.jerseyNumber != null && (
-                            <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-brand-blue-light/60 text-brand-blue shrink-0">
-                              #{ath.jerseyNumber}
-                            </span>
-                          )}
-                          <span className="font-semibold text-brand-text-primary truncate">
-                            {ath.athleteName}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            disabled={sheet.isClosed}
-                            onClick={() =>
-                              toggleLineupRole(
-                                match.id,
-                                side,
-                                ath.athleteId,
-                                'isStarter'
-                              )
-                            }
-                            className={`px-2 py-1 rounded font-bold ${
-                              ath.isStarter
-                                ? 'bg-brand-blue text-white'
-                                : 'bg-brand-surface-muted text-brand-text-secondary'
-                            }`}
-                          >
-                            {ath.isStarter ? 'Titular' : 'Reserva'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={sheet.isClosed}
-                            onClick={() =>
-                              toggleLineupRole(
-                                match.id,
-                                side,
-                                ath.athleteId,
-                                'isCaptain'
-                              )
-                            }
-                            className={`px-2 py-1 rounded font-bold ${
-                              ath.isCaptain
-                                ? 'bg-brand-yellow text-brand-blue-dark'
-                                : 'bg-brand-surface-muted text-brand-text-muted'
-                            }`}
-                          >
-                            C
-                          </button>
-                          {engine.supportsGoalkeeper && (
-                            <button
-                              type="button"
-                              disabled={sheet.isClosed}
-                              onClick={() =>
-                                toggleLineupRole(
-                                  match.id,
-                                  side,
-                                  ath.athleteId,
-                                  'isGoalkeeper'
-                                )
-                              }
-                              className={`px-2 py-1 rounded font-bold ${
-                                ath.isGoalkeeper
-                                  ? 'bg-emerald-600 text-white'
-                                  : 'bg-brand-surface-muted text-brand-text-muted'
-                              }`}
-                            >
-                              GK
-                            </button>
-                          )}
-                          {engine.supportsPairs && (
-                            <button
-                              type="button"
-                              disabled={sheet.isClosed}
-                              onClick={() =>
-                                toggleLineupRole(
-                                  match.id,
-                                  side,
-                                  ath.athleteId,
-                                  'isPairMember'
-                                )
-                              }
-                              className={`px-2 py-1 rounded font-bold ${
-                                ath.isPairMember
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-brand-surface-muted text-brand-text-muted'
-                              }`}
-                            >
-                              Dupla
-                            </button>
-                          )}
-                          {!sheet.isClosed && (
-                            <button
-                              type="button"
-                              title="Remover atleta dos inscritos desta partida"
-                              onClick={() =>
-                                removeAthleteFromMatchLineup(
-                                  match.id,
-                                  side,
-                                  ath.athleteId
-                                )
-                              }
-                              className="p-1 rounded text-brand-text-muted hover:text-red-600 hover:bg-red-50 transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                        {allowOtherGender
+                          ? 'Outro gênero liberado'
+                          : '+ Liberar outro gênero'}
+                      </button>
+                    </div>
                   </div>
-                )}
 
-                {!sheet.isClosed && (
-                  <div className="pt-2 border-t border-brand-surface-border space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-brand-text-secondary block">
-                      Atletas aptos com pagamento confirmado ({availableToAdd.length}):
-                    </span>
-                    {availableToAdd.length === 0 ? (
-                      <p className="text-[11px] text-brand-text-muted">
-                        {eligibleTeamAthletes.length === 0
-                          ? 'Nenhum atleta com inscrição e pagamento confirmados nesta equipe.'
-                          : 'Todos os atletas aptos desta equipe já estão escalados na partida.'}
-                      </p>
-                    ) : (
-                      <div className="flex flex-wrap gap-1.5">
-                        {availableToAdd.map((ath) => (
+                  {/* BLOCO 1 (NO TOPO PARA ACESSO IMEDIATO NO CELULAR): ADICIONAR ATLETAS DISPONÍVEIS */}
+                  {!sheet.isClosed && (
+                    <div className="rounded-xl bg-white p-3 border border-brand-blue/20 space-y-2 shadow-sm">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-[11px] font-display font-extrabold uppercase tracking-wider text-brand-blue">
+                          Toque para escalar ({availableToAdd.length} disponíveis):
+                        </span>
+                        {availableToAdd.length > 0 && remainingCapacity > 0 && (
                           <button
-                            key={ath.id}
                             type="button"
                             onClick={() =>
-                              addAthleteToMatchLineup(match.id, side, ath.id)
+                              addMultipleAthletesToMatchLineup(
+                                match.id,
+                                side,
+                                availableToAdd
+                                  .slice(0, remainingCapacity)
+                                  .map((a) => a.id)
+                              )
                             }
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-brand-surface-border hover:border-brand-blue text-xs font-semibold text-brand-text-primary transition-colors"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[11px] font-display font-extrabold transition-all touch-manipulation"
                           >
-                            <Plus className="w-3.5 h-3.5 text-brand-blue" />
-                            {ath.jerseyNumber != null && (
-                              <span className="font-mono text-[10px] font-bold text-brand-blue">
-                                #{ath.jerseyNumber}
-                              </span>
-                            )}
-                            <span>{ath.name}</span>
+                            + Escalar Todos ({Math.min(availableToAdd.length, remainingCapacity)})
                           </button>
+                        )}
+                      </div>
+
+                      {availableToAdd.length === 0 ? (
+                        <p className="text-xs text-brand-text-muted py-1">
+                          {eligibleTeamAthletes.length === 0
+                            ? 'Nenhum atleta com inscrição e pagamento confirmados nesta equipe.'
+                            : 'Todos os atletas aptos desta categoria já estão escalados (ou ative "+ Liberar outro gênero" se a equipe tiver menos do mínimo).'}
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {availableToAdd.map((ath) => (
+                            <button
+                              key={ath.id}
+                              type="button"
+                              disabled={remainingCapacity <= 0}
+                              onClick={() =>
+                                addAthleteToMatchLineup(match.id, side, ath.id)
+                              }
+                              className="w-full min-h-[42px] flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50 hover:bg-brand-blue-light/50 active:scale-[0.99] border border-slate-200 hover:border-brand-blue text-left text-xs font-bold text-brand-text-primary transition-all touch-manipulation"
+                            >
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                {ath.jerseyNumber != null && (
+                                  <span className="font-mono text-[11px] font-extrabold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue shrink-0">
+                                    #{ath.jerseyNumber}
+                                  </span>
+                                )}
+                                <span className="truncate">{ath.name}</span>
+                              </span>
+                              <span className="inline-flex items-center gap-0.5 px-2 py-1 rounded-lg bg-brand-blue text-white text-[10px] font-extrabold shrink-0">
+                                <Plus className="w-3 h-3" />
+                                Escalar
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* BLOCO 2: ATLETAS JÁ ESCALADOS NA PARTIDA */}
+                  <div className="space-y-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-brand-text-secondary block">
+                      Escalados nesta partida ({lineup.length}):
+                    </span>
+
+                    {lineup.length === 0 ? (
+                      <div className="py-3 px-3 rounded-xl bg-white border border-brand-surface-border text-xs text-brand-text-secondary text-center">
+                        Nenhum atleta escalado ainda. Toque nos nomes acima para escalar.
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {lineup.map((ath) => (
+                          <div
+                            key={ath.athleteId}
+                            className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 bg-white px-3 py-2 rounded-xl border border-brand-surface-border text-xs"
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {ath.jerseyNumber != null && (
+                                <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-brand-blue-light/60 text-brand-blue shrink-0">
+                                  #{ath.jerseyNumber}
+                                </span>
+                              )}
+                              <span className="font-semibold text-brand-text-primary truncate">
+                                {ath.athleteName}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                              <button
+                                type="button"
+                                disabled={sheet.isClosed}
+                                onClick={() =>
+                                  toggleLineupRole(
+                                    match.id,
+                                    side,
+                                    ath.athleteId,
+                                    'isStarter'
+                                  )
+                                }
+                                className={`px-2.5 py-1.5 rounded-lg font-bold touch-manipulation ${
+                                  ath.isStarter
+                                    ? 'bg-brand-blue text-white'
+                                    : 'bg-brand-surface-muted text-brand-text-secondary'
+                                }`}
+                              >
+                                {ath.isStarter ? 'Titular' : 'Reserva'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={sheet.isClosed}
+                                onClick={() =>
+                                  toggleLineupRole(
+                                    match.id,
+                                    side,
+                                    ath.athleteId,
+                                    'isCaptain'
+                                  )
+                                }
+                                className={`px-2.5 py-1.5 rounded-lg font-bold touch-manipulation ${
+                                  ath.isCaptain
+                                    ? 'bg-brand-yellow text-brand-blue-dark'
+                                    : 'bg-brand-surface-muted text-brand-text-muted'
+                                }`}
+                              >
+                                C
+                              </button>
+                              {engine.supportsGoalkeeper && (
+                                <button
+                                  type="button"
+                                  disabled={sheet.isClosed}
+                                  onClick={() =>
+                                    toggleLineupRole(
+                                      match.id,
+                                      side,
+                                      ath.athleteId,
+                                      'isGoalkeeper'
+                                    )
+                                  }
+                                  className={`px-2.5 py-1.5 rounded-lg font-bold touch-manipulation ${
+                                    ath.isGoalkeeper
+                                      ? 'bg-emerald-600 text-white'
+                                      : 'bg-brand-surface-muted text-brand-text-muted'
+                                  }`}
+                                >
+                                  GK
+                                </button>
+                              )}
+                              {engine.supportsPairs && (
+                                <button
+                                  type="button"
+                                  disabled={sheet.isClosed}
+                                  onClick={() =>
+                                    toggleLineupRole(
+                                      match.id,
+                                      side,
+                                      ath.athleteId,
+                                      'isPairMember'
+                                    )
+                                  }
+                                  className={`px-2.5 py-1.5 rounded-lg font-bold touch-manipulation ${
+                                    ath.isPairMember
+                                      ? 'bg-indigo-600 text-white'
+                                      : 'bg-brand-surface-muted text-brand-text-muted'
+                                  }`}
+                                >
+                                  Dupla
+                                </button>
+                              )}
+                              {!sheet.isClosed && (
+                                <button
+                                  type="button"
+                                  title="Remover atleta dos inscritos desta partida"
+                                  onClick={() =>
+                                    removeAthleteFromMatchLineup(
+                                      match.id,
+                                      side,
+                                      ath.athleteId
+                                    )
+                                  }
+                                  className="p-1.5 rounded-lg text-brand-text-muted hover:text-red-600 hover:bg-red-50 transition-colors touch-manipulation"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         ))}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
         </div>
       </Modal>
+
+      {/* =====================================================================
+          MODAL 4B: CONFIGURAR ROTAÇÃO INICIAL DE VÔLEI (POSIÇÕES I A VI / P1–P6 & 1º SAQUE)
+         ===================================================================== */}
+      {match.modalityId === 'volei' && (
+        <Modal
+          isOpen={isVolleyballRotationModalOpen}
+          onClose={() => {
+            setVbSelectedSlot(null);
+            setIsVolleyballRotationModalOpen(false);
+          }}
+          size="xl"
+          title={`Rotação Inicial — ${sheet.timer.periodLabel || `Set ${sheet.timer.currentPeriod || 1}`}`}
+          description="Defina quem tem o 1º saque do set e a posição inicial (P1 a P6) de cada equipe. Toque em duas posições na quadra para trocá-las, ou selecione uma posição e toque em um atleta abaixo."
+          footer={
+            <div className="flex items-center justify-between gap-2 w-full">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setVbSelectedSlot(null);
+                  setIsVolleyballRotationModalOpen(false);
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<CheckCircle2 className="w-4 h-4" />}
+                onClick={handleSaveVolleyballRotationModal}
+              >
+                Salvar Rotação Inicial do Set
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            {/* Escolha da Equipe com o 1º Saque do Set */}
+            <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3 space-y-2">
+              <span className="text-xs font-display font-extrabold uppercase text-brand-blue block">
+                1. Qual equipe inicia sacando neste Set (0 × 0)?
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {(['home', 'away'] as const).map((side) => {
+                  const tName =
+                    side === 'home'
+                      ? match.homeTeam.teamName
+                      : match.awayTeam.teamName;
+                  const active = vbDraftFirstServer === side;
+                  return (
+                    <button
+                      key={side}
+                      type="button"
+                      onClick={() => setVbDraftFirstServer(side)}
+                      className={`px-3 py-2.5 rounded-xl border-2 text-xs font-display font-extrabold transition-all touch-manipulation ${
+                        active
+                          ? 'bg-emerald-600 border-emerald-700 text-white shadow-sm'
+                          : 'bg-white border-slate-200 text-slate-700 hover:border-brand-blue'
+                      }`}
+                    >
+                      {active ? '🏐 1º Saque: ' : ''}
+                      {tName}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Formação P1 a P6 das duas equipes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(['home', 'away'] as const).map((side) => {
+                const tName =
+                  side === 'home'
+                    ? match.homeTeam.teamName
+                    : match.awayTeam.teamName;
+                const lineup =
+                  side === 'home' ? sheet.homeLineup : sheet.awayLineup;
+                const draftOrder =
+                  side === 'home' ? vbDraftHomeOrder : vbDraftAwayOrder;
+                const setDraftOrder =
+                  side === 'home' ? setVbDraftHomeOrder : setVbDraftAwayOrder;
+
+                const frontSlots = [
+                  { idx: 3, label: 'IV (P4)', sub: 'Rede Esq.' },
+                  { idx: 2, label: 'III (P3)', sub: 'Rede Meio' },
+                  { idx: 1, label: 'II (P2)', sub: 'Rede Dir.' },
+                ];
+                const backSlots = [
+                  { idx: 4, label: 'V (P5)', sub: 'Defesa Esq.' },
+                  { idx: 5, label: 'VI (P6)', sub: 'Defesa Centro' },
+                  { idx: 0, label: 'I (P1) 🏐', sub: '1º Sacador' },
+                ];
+
+                return (
+                  <div
+                    key={side}
+                    className="rounded-2xl bg-slate-50 border border-slate-200 p-3 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-display font-extrabold uppercase text-brand-blue truncate">
+                        {tName}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraftOrder((prev) =>
+                            rotateVolleyballPositionsClockwise(prev)
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 hover:border-brand-blue text-[11px] font-bold text-slate-700 touch-manipulation"
+                      >
+                        ↻ Girar Quadra
+                      </button>
+                    </div>
+
+                    <div className="rounded-lg bg-slate-800 text-white text-[9px] font-mono font-bold uppercase tracking-widest text-center py-0.5">
+                      ═══ REDE (ATAQUE: P4 - P3 - P2) ═══
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {frontSlots.map((slot) => {
+                        const athId = draftOrder[slot.idx];
+                        const player = lineup.find((a) => a.athleteId === athId);
+                        const isSelected =
+                          vbSelectedSlot?.side === side &&
+                          vbSelectedSlot?.slotIdx === slot.idx;
+                        return (
+                          <button
+                            key={slot.idx}
+                            type="button"
+                            onClick={() => handleTapDraftCourtSlot(side, slot.idx)}
+                            className={`rounded-xl border-2 p-2 text-center transition-all touch-manipulation ${
+                              isSelected
+                                ? 'bg-brand-yellow-light border-brand-blue ring-2 ring-brand-blue'
+                                : 'bg-white border-slate-200 hover:border-brand-blue/50'
+                            }`}
+                          >
+                            <span className="block text-[9px] font-mono font-extrabold text-slate-500">
+                              {slot.label}
+                            </span>
+                            {player ? (
+                              <>
+                                <span className="block text-xs font-mono font-black text-[#0B218A] mt-0.5">
+                                  {player.jerseyNumber != null
+                                    ? `#${player.jerseyNumber}`
+                                    : '•'}
+                                </span>
+                                <span className="block text-[11px] font-bold text-slate-800 truncate">
+                                  {player.athleteName.split(' ')[0]}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="block text-[10px] text-slate-400 py-1">
+                                Selecionar
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-dashed border-slate-300">
+                      {backSlots.map((slot) => {
+                        const athId = draftOrder[slot.idx];
+                        const player = lineup.find((a) => a.athleteId === athId);
+                        const isSelected =
+                          vbSelectedSlot?.side === side &&
+                          vbSelectedSlot?.slotIdx === slot.idx;
+                        return (
+                          <button
+                            key={slot.idx}
+                            type="button"
+                            onClick={() => handleTapDraftCourtSlot(side, slot.idx)}
+                            className={`rounded-xl border-2 p-2 text-center transition-all touch-manipulation ${
+                              isSelected
+                                ? 'bg-brand-yellow-light border-brand-blue ring-2 ring-brand-blue'
+                                : slot.idx === 0
+                                ? 'bg-emerald-50 border-emerald-300'
+                                : 'bg-white border-slate-200 hover:border-brand-blue/50'
+                            }`}
+                          >
+                            <span className="block text-[9px] font-mono font-extrabold text-slate-600">
+                              {slot.label}
+                            </span>
+                            {player ? (
+                              <>
+                                <span className="block text-xs font-mono font-black text-[#0B218A] mt-0.5">
+                                  {player.jerseyNumber != null
+                                    ? `#${player.jerseyNumber}`
+                                    : '•'}
+                                </span>
+                                <span className="block text-[11px] font-bold text-slate-800 truncate">
+                                  {player.athleteName.split(' ')[0]}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="block text-[10px] text-slate-400 py-1">
+                                Selecionar
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Lista rápida de atletas escalados da equipe para alocar na posição selecionada */}
+                    <div className="pt-1.5 border-t border-slate-200 space-y-1">
+                      <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                        {vbSelectedSlot?.side === side
+                          ? `Escolha quem entra na Posição P${vbSelectedSlot.slotIdx + 1}:`
+                          : 'Atletas escalados (toque numa posição acima para trocar):'}
+                      </span>
+                      {lineup.length === 0 ? (
+                        <p className="text-[11px] text-amber-700">
+                          Nenhum atleta escalado nesta equipe. Abra "Escalação" primeiro.
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {lineup.map((ath) => {
+                            const inCourtIdx = draftOrder.indexOf(ath.athleteId);
+                            return (
+                              <button
+                                key={ath.athleteId}
+                                type="button"
+                                onClick={() =>
+                                  handleAssignPlayerToDraftSlot(side, ath.athleteId)
+                                }
+                                className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors touch-manipulation ${
+                                  inCourtIdx >= 0
+                                    ? 'bg-[#0B218A] text-white border-[#0B218A]'
+                                    : 'bg-white text-slate-700 border-slate-300 hover:border-brand-blue'
+                                }`}
+                              >
+                                {inCourtIdx >= 0 ? `P${inCourtIdx + 1}: ` : ''}
+                                {ath.jerseyNumber != null
+                                  ? `#${ath.jerseyNumber} `
+                                  : ''}
+                                {ath.athleteName.split(' ')[0]}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* =====================================================================
           MODAL 5: CONFIRMAR REINÍCIO DO CRONÔMETRO (Item 5)

@@ -1156,6 +1156,14 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         primaryAth.instagramHandle = matchingReg.instagramHandle;
         athChanged = true;
       }
+      if (matchingReg.categoryName && primaryAth.categoryName !== matchingReg.categoryName) {
+        primaryAth.categoryName = matchingReg.categoryName;
+        athChanged = true;
+      }
+      if (matchingReg.categoryName && primaryAth.gender !== matchingReg.categoryName) {
+        primaryAth.gender = matchingReg.categoryName;
+        athChanged = true;
+      }
     }
 
     for (let i = 1; i < group.length; i++) {

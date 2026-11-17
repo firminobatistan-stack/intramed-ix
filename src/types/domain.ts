@@ -317,7 +317,18 @@ export interface SwimmingLaneEntry {
   placement: number | null;
 }
 
-// 4. ESCALAÇÃO
+// 4. ESCALAÇÃO E ROTAÇÃO DE VÔLEI (FIVB / CBV)
+export interface VolleyballSetRotationConfig {
+  setNumber: number;
+  initialServingSide: 'home' | 'away';
+  // Array de 6 athleteIds nas posições [P1 (I - Saque), P2 (II), P3 (III), P4 (IV), P5 (V), P6 (VI)] no início do set
+  homeInitialOrder: Array<string | null>;
+  awayInitialOrder: Array<string | null>;
+  // Ajuste manual opcional de rotações horárias (caso a arbitragem determine correção em quadra)
+  homeManualRotationOffset?: number;
+  awayManualRotationOffset?: number;
+}
+
 export interface MatchLineupEntry {
   athleteId: string;
   athleteName: string;
@@ -422,6 +433,8 @@ export interface MatchSheet {
   swimmingStroke?: SwimmingStrokeType;
   swimmingDistanceLabel?: string;
   swimmingLanes?: SwimmingLaneEntry[];
+  // Específicos de Voleibol (Rotação Oficial FIVB / CBV Posições I a VI por Set)
+  volleyballSetConfigs?: Record<number, VolleyballSetRotationConfig>;
   // Arbitragem e Fechamento
   refereeNotes: string;
   refereeName?: string;

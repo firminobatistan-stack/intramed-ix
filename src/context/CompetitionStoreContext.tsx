@@ -34,7 +34,9 @@ import {
   UserFollow,
   SavedPost,
   SocialNotification,
+  VolleyballSetRotationConfig,
 } from '../types/domain';
+import { resolveSixStartingIds } from '../utils/volleyballRotation';
 import { db } from '../lib/firebase';
 import { collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
 import {
@@ -154,10 +156,30 @@ interface CompetitionStoreContextValue {
     teamSide: 'home' | 'away',
     athleteId: string
   ) => void;
+  addMultipleAthletesToMatchLineup: (
+    matchId: string,
+    teamSide: 'home' | 'away',
+    athleteIds: string[]
+  ) => void;
   removeAthleteFromMatchLineup: (
     matchId: string,
     teamSide: 'home' | 'away',
     athleteId: string
+  ) => void;
+  configureVolleyballSetRotation: (
+    matchId: string,
+    setNumber: number,
+    config: {
+      initialServingSide?: 'home' | 'away';
+      homeInitialOrder?: Array<string | null>;
+      awayInitialOrder?: Array<string | null>;
+      resetManualOffsets?: boolean;
+    }
+  ) => void;
+  adjustVolleyballManualRotation: (
+    matchId: string,
+    teamSide: 'home' | 'away',
+    delta: 1 | -1
   ) => void;
   finishCurrentSet: (matchId: string) => void;
   recordTableTennisPoint: (
@@ -651,8 +673,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   const [unlockedMatchIds, setUnlockedMatchIds] = useState<string[]>(() => {
     try {
-      const saved = sessionStorage.getItem('intramed_unlocked_match_ids');
-      return saved ? JSON.parse(saved) : [];
+      const savedSession = sessionStorage.getItem('intramed_unlocked_match_ids');
+      const savedLocal = localStorage.getItem('intramed_unlocked_match_ids');
+      const parsedSession = savedSession ? JSON.parse(savedSession) : [];
+      const parsedLocal = savedLocal ? JSON.parse(savedLocal) : [];
+      return Array.from(new Set([...(Array.isArray(parsedSession) ? parsedSession : []), ...(Array.isArray(parsedLocal) ? parsedLocal : [])]));
     } catch {
       return [];
     }
@@ -1546,7 +1571,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   const updateMatchAndSheet = useCallback(
     (
       matchId: string,
-      updater: (match: Match, sheet: MatchSheet) => { match: Match; sheet: MatchSheet }
+      updater: (
+        match: Match,
+        sheet: MatchSheet,
+        prevState: PersistedEngineState
+      ) => { match: Match; sheet: MatchSheet }
     ) => {
       setState((prev) => {
         const hasMatchUnlock = unlockedMatchIdsRef.current.includes(matchId);
@@ -1569,7 +1598,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
         const { match: nextMatch, sheet: nextSheet } = updater(
           matchesList[matchIdx],
-          currentSheet
+          currentSheet,
+          prev
         );
 
         const nextRevision = (currentSheet.revision ?? 0) + 1;
@@ -2575,10 +2605,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   const addAthleteToMatchLineup = useCallback(
     (matchId: string, teamSide: 'home' | 'away', athleteId: string) => {
-      updateMatchAndSheet(matchId, (match, sheet) => {
+      updateMatchAndSheet(matchId, (match, sheet, prevState) => {
         if (sheet.isClosed) return { match, sheet };
-        const isTest = matchId.startsWith('test-');
-        const pool = isTest ? state.testAthletes : state.officialAthletes;
+        const pool = [
+          ...(prevState.officialAthletes || []),
+          ...(prevState.testAthletes || []),
+        ];
         const athlete = pool.find((a) => a.id === athleteId);
         if (!athlete || !isEligiblePaidAthlete(athlete)) return { match, sheet };
 
@@ -2589,7 +2621,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         }
 
         const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
-        const starterLimit = engine?.supportsPairs ? 2 : 5;
+        const starterLimit =
+          sheet.modalityId === 'volei'
+            ? 6
+            : engine?.supportsPairs
+            ? 2
+            : 5;
         const currentStartersCount = currentList.filter((i) => i.isStarter).length;
 
         const newEntry: MatchLineupEntry = {
@@ -2602,18 +2639,122 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         };
 
         const updated = [...currentList, newEntry];
+        const nextHomeLineup = teamSide === 'home' ? updated : sheet.homeLineup;
+        const nextAwayLineup = teamSide === 'away' ? updated : sheet.awayLineup;
+
+        let nextVolleyballConfigs = sheet.volleyballSetConfigs;
+        if (sheet.modalityId === 'volei' && nextVolleyballConfigs) {
+          const curPeriod = sheet.timer.currentPeriod || 1;
+          const existingCfg = nextVolleyballConfigs[curPeriod];
+          if (existingCfg) {
+            nextVolleyballConfigs = {
+              ...nextVolleyballConfigs,
+              [curPeriod]: {
+                ...existingCfg,
+                homeInitialOrder: resolveSixStartingIds(
+                  existingCfg.homeInitialOrder,
+                  nextHomeLineup
+                ),
+                awayInitialOrder: resolveSixStartingIds(
+                  existingCfg.awayInitialOrder,
+                  nextAwayLineup
+                ),
+              },
+            };
+          }
+        }
+
         return {
           match,
           sheet: {
             ...sheet,
-            ...(teamSide === 'home'
-              ? { homeLineup: updated }
-              : { awayLineup: updated }),
+            homeLineup: nextHomeLineup,
+            awayLineup: nextAwayLineup,
+            ...(nextVolleyballConfigs
+              ? { volleyballSetConfigs: nextVolleyballConfigs }
+              : {}),
           },
         };
       });
     },
-    [updateMatchAndSheet, state.testAthletes, state.officialAthletes]
+    [updateMatchAndSheet]
+  );
+
+  const addMultipleAthletesToMatchLineup = useCallback(
+    (matchId: string, teamSide: 'home' | 'away', athleteIds: string[]) => {
+      if (!athleteIds || athleteIds.length === 0) return;
+      updateMatchAndSheet(matchId, (match, sheet, prevState) => {
+        if (sheet.isClosed) return { match, sheet };
+        const pool = [
+          ...(prevState.officialAthletes || []),
+          ...(prevState.testAthletes || []),
+        ];
+        const engine = MODALITY_RULE_ENGINE[sheet.modalityId];
+        const starterLimit =
+          sheet.modalityId === 'volei'
+            ? 6
+            : engine?.supportsPairs
+            ? 2
+            : 5;
+
+        const updated =
+          teamSide === 'home' ? [...sheet.homeLineup] : [...sheet.awayLineup];
+
+        for (const athId of athleteIds) {
+          if (updated.some((item) => item.athleteId === athId)) continue;
+          const athlete = pool.find((a) => a.id === athId);
+          if (!athlete || !isEligiblePaidAthlete(athlete)) continue;
+
+          const currentStartersCount = updated.filter((i) => i.isStarter).length;
+          updated.push({
+            athleteId: athlete.id,
+            athleteName: athlete.name,
+            jerseyNumber: athlete.jerseyNumber ?? null,
+            isStarter: currentStartersCount < starterLimit,
+            isCaptain: updated.length === 0,
+            isPairMember: engine?.supportsPairs ? currentStartersCount < 2 : undefined,
+          });
+        }
+
+        const nextHomeLineup = teamSide === 'home' ? updated : sheet.homeLineup;
+        const nextAwayLineup = teamSide === 'away' ? updated : sheet.awayLineup;
+
+        let nextVolleyballConfigs = sheet.volleyballSetConfigs;
+        if (sheet.modalityId === 'volei' && nextVolleyballConfigs) {
+          const curPeriod = sheet.timer.currentPeriod || 1;
+          const existingCfg = nextVolleyballConfigs[curPeriod];
+          if (existingCfg) {
+            nextVolleyballConfigs = {
+              ...nextVolleyballConfigs,
+              [curPeriod]: {
+                ...existingCfg,
+                homeInitialOrder: resolveSixStartingIds(
+                  existingCfg.homeInitialOrder,
+                  nextHomeLineup
+                ),
+                awayInitialOrder: resolveSixStartingIds(
+                  existingCfg.awayInitialOrder,
+                  nextAwayLineup
+                ),
+              },
+            };
+          }
+        }
+
+        return {
+          match,
+          sheet: {
+            ...sheet,
+            homeLineup: nextHomeLineup,
+            awayLineup: nextAwayLineup,
+            ...(nextVolleyballConfigs
+              ? { volleyballSetConfigs: nextVolleyballConfigs }
+              : {}),
+          },
+        };
+      });
+    },
+    [updateMatchAndSheet]
   );
 
   const removeAthleteFromMatchLineup = useCallback(
@@ -2623,13 +2764,155 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         const currentList =
           teamSide === 'home' ? [...sheet.homeLineup] : [...sheet.awayLineup];
         const updated = currentList.filter((item) => item.athleteId !== athleteId);
+        const nextHomeLineup = teamSide === 'home' ? updated : sheet.homeLineup;
+        const nextAwayLineup = teamSide === 'away' ? updated : sheet.awayLineup;
+
+        let nextVolleyballConfigs = sheet.volleyballSetConfigs;
+        if (sheet.modalityId === 'volei' && nextVolleyballConfigs) {
+          const curPeriod = sheet.timer.currentPeriod || 1;
+          const existingCfg = nextVolleyballConfigs[curPeriod];
+          if (existingCfg) {
+            nextVolleyballConfigs = {
+              ...nextVolleyballConfigs,
+              [curPeriod]: {
+                ...existingCfg,
+                homeInitialOrder: resolveSixStartingIds(
+                  existingCfg.homeInitialOrder.map((id) =>
+                    id === athleteId ? null : id
+                  ),
+                  nextHomeLineup
+                ),
+                awayInitialOrder: resolveSixStartingIds(
+                  existingCfg.awayInitialOrder.map((id) =>
+                    id === athleteId ? null : id
+                  ),
+                  nextAwayLineup
+                ),
+              },
+            };
+          }
+        }
+
         return {
           match,
           sheet: {
             ...sheet,
-            ...(teamSide === 'home'
-              ? { homeLineup: updated }
-              : { awayLineup: updated }),
+            homeLineup: nextHomeLineup,
+            awayLineup: nextAwayLineup,
+            ...(nextVolleyballConfigs
+              ? { volleyballSetConfigs: nextVolleyballConfigs }
+              : {}),
+          },
+        };
+      });
+    },
+    [updateMatchAndSheet]
+  );
+
+  const configureVolleyballSetRotation = useCallback(
+    (
+      matchId: string,
+      setNumber: number,
+      config: {
+        initialServingSide?: 'home' | 'away';
+        homeInitialOrder?: Array<string | null>;
+        awayInitialOrder?: Array<string | null>;
+        resetManualOffsets?: boolean;
+      }
+    ) => {
+      updateMatchAndSheet(matchId, (match, sheet) => {
+        if (sheet.isClosed) return { match, sheet };
+        const existingConfigs = sheet.volleyballSetConfigs || {};
+        const prevCfg = existingConfigs[setNumber];
+        const set1Server = existingConfigs[1]?.initialServingSide || 'home';
+        const fallbackServer: 'home' | 'away' =
+          setNumber % 2 === 0
+            ? set1Server === 'home'
+              ? 'away'
+              : 'home'
+            : set1Server;
+
+        const nextCfg: VolleyballSetRotationConfig = {
+          setNumber,
+          initialServingSide:
+            config.initialServingSide ??
+            prevCfg?.initialServingSide ??
+            fallbackServer,
+          homeInitialOrder: resolveSixStartingIds(
+            config.homeInitialOrder ?? prevCfg?.homeInitialOrder,
+            sheet.homeLineup
+          ),
+          awayInitialOrder: resolveSixStartingIds(
+            config.awayInitialOrder ?? prevCfg?.awayInitialOrder,
+            sheet.awayLineup
+          ),
+          homeManualRotationOffset: config.resetManualOffsets
+            ? 0
+            : prevCfg?.homeManualRotationOffset ?? 0,
+          awayManualRotationOffset: config.resetManualOffsets
+            ? 0
+            : prevCfg?.awayManualRotationOffset ?? 0,
+        };
+
+        return {
+          match,
+          sheet: {
+            ...sheet,
+            volleyballSetConfigs: {
+              ...existingConfigs,
+              [setNumber]: nextCfg,
+            },
+          },
+        };
+      });
+    },
+    [updateMatchAndSheet]
+  );
+
+  const adjustVolleyballManualRotation = useCallback(
+    (matchId: string, teamSide: 'home' | 'away', delta: 1 | -1) => {
+      updateMatchAndSheet(matchId, (match, sheet) => {
+        if (sheet.isClosed) return { match, sheet };
+        const setNumber = sheet.timer.currentPeriod || 1;
+        const existingConfigs = sheet.volleyballSetConfigs || {};
+        const prevCfg = existingConfigs[setNumber];
+        const set1Server = existingConfigs[1]?.initialServingSide || 'home';
+        const fallbackServer: 'home' | 'away' =
+          setNumber % 2 === 0
+            ? set1Server === 'home'
+              ? 'away'
+              : 'home'
+            : set1Server;
+
+        const nextCfg: VolleyballSetRotationConfig = {
+          setNumber,
+          initialServingSide: prevCfg?.initialServingSide ?? fallbackServer,
+          homeInitialOrder: resolveSixStartingIds(
+            prevCfg?.homeInitialOrder,
+            sheet.homeLineup
+          ),
+          awayInitialOrder: resolveSixStartingIds(
+            prevCfg?.awayInitialOrder,
+            sheet.awayLineup
+          ),
+          homeManualRotationOffset:
+            teamSide === 'home'
+              ? (((prevCfg?.homeManualRotationOffset ?? 0) + delta) % 6 + 6) % 6
+              : prevCfg?.homeManualRotationOffset ?? 0,
+          awayManualRotationOffset:
+            teamSide === 'away'
+              ? (((prevCfg?.awayManualRotationOffset ?? 0) + delta) % 6 + 6) % 6
+              : prevCfg?.awayManualRotationOffset ?? 0,
+        };
+
+        return {
+          match,
+          sheet: {
+            ...sheet,
+            volleyballSetConfigs: {
+              ...existingConfigs,
+              [setNumber]: nextCfg,
+            },
           },
         };
       });
@@ -2708,6 +2991,34 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
         matchSound.playBuzzer();
 
+        let nextVolleyballConfigs = sheet.volleyballSetConfigs;
+        if (sheet.modalityId === 'volei' && hasMoreSets) {
+          const existingConfigs = sheet.volleyballSetConfigs || {};
+          if (!existingConfigs[nextSetNumber]) {
+            const curSetCfg = existingConfigs[sheet.timer.currentPeriod];
+            const prevFirstServer = curSetCfg?.initialServingSide || 'home';
+            const nextFirstServer: 'home' | 'away' =
+              prevFirstServer === 'home' ? 'away' : 'home';
+            nextVolleyballConfigs = {
+              ...existingConfigs,
+              [nextSetNumber]: {
+                setNumber: nextSetNumber,
+                initialServingSide: nextFirstServer,
+                homeInitialOrder: resolveSixStartingIds(
+                  curSetCfg?.homeInitialOrder,
+                  sheet.homeLineup
+                ),
+                awayInitialOrder: resolveSixStartingIds(
+                  curSetCfg?.awayInitialOrder,
+                  sheet.awayLineup
+                ),
+                homeManualRotationOffset: 0,
+                awayManualRotationOffset: 0,
+              },
+            };
+          }
+        }
+
         return {
           match: {
             ...match,
@@ -2731,6 +3042,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             events: [setEndEvent, ...sheet.events],
             homeTimeoutsUsed: 0,
             awayTimeoutsUsed: 0,
+            ...(nextVolleyballConfigs
+              ? { volleyballSetConfigs: nextVolleyballConfigs }
+              : {}),
             isClosed: matchDecided ? true : sheet.isClosed,
             closedAtIso: matchDecided ? new Date().toISOString() : sheet.closedAtIso,
             timer: {
@@ -3429,8 +3743,13 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       setUnlockedMatchIds((prev) => {
         const next = prev.includes(matchId) ? prev : [...prev, matchId];
+        unlockedMatchIdsRef.current = next;
         if (typeof window !== 'undefined') {
           sessionStorage.setItem(
+            'intramed_unlocked_match_ids',
+            JSON.stringify(next)
+          );
+          localStorage.setItem(
             'intramed_unlocked_match_ids',
             JSON.stringify(next)
           );
@@ -4911,7 +5230,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       cancelActiveTimeout,
       toggleLineupRole,
       addAthleteToMatchLineup,
+      addMultipleAthletesToMatchLineup,
       removeAthleteFromMatchLineup,
+      configureVolleyballSetRotation,
+      adjustVolleyballManualRotation,
       finishCurrentSet,
       recordTableTennisPoint,
       finishTableTennisSet,
@@ -5029,7 +5351,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       cancelActiveTimeout,
       toggleLineupRole,
       addAthleteToMatchLineup,
+      addMultipleAthletesToMatchLineup,
       removeAthleteFromMatchLineup,
+      configureVolleyballSetRotation,
+      adjustVolleyballManualRotation,
       finishCurrentSet,
       recordTableTennisPoint,
       finishTableTennisSet,

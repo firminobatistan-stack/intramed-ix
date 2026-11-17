@@ -19,6 +19,7 @@ import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { TestModeBanner } from '../components/layout/TestModeBanner';
 import { MatchEvent, MatchLineupEntry } from '../types/domain';
+import { computeLiveVolleyballRotation } from '../utils/volleyballRotation';
 
 type SheetDocumentViewMode = 'official_federation' | 'digital_summary';
 
@@ -901,11 +902,27 @@ export const GeneratedMatchSheetPage: React.FC = () => {
         const setScoreObj = sheet.periodScores[setNum - 1];
         const sHome = setScoreObj ? setScoreObj.homeScore : 0;
         const sAway = setScoreObj ? setScoreObj.awayScore : 0;
+        const setRot =
+          match.modalityId === 'volei'
+            ? computeLiveVolleyballRotation(sheet, setNum)
+            : null;
+        const homeInit = setRot ? setRot.homeInitialCourt : [];
+        const awayInit = setRot ? setRot.awayInitialCourt : [];
+        const firstServerSide = setRot?.initialServingSide || 'home';
 
         return (
           <div key={setNum} className="border-2 border-black">
             <div className="bg-slate-100 p-1 font-extrabold border-b border-black flex items-center justify-between text-xs">
-              <span>SET {setNum} — CONFRONTO E ROTAÇÃO DE SAQUE</span>
+              <span>
+                SET {setNum} — CONFRONTO E ROTAÇÃO INICIAL DE SAQUE
+                {setRot
+                  ? ` (1º Saque: ${
+                      firstServerSide === 'home'
+                        ? match.homeTeam.teamName
+                        : match.awayTeam.teamName
+                    })`
+                  : ''}
+              </span>
               <span className="font-mono text-sm bg-white px-2 border border-black">
                 {match.homeTeam.teamName} {sHome} × {sAway} {match.awayTeam.teamName}
               </span>
@@ -915,17 +932,29 @@ export const GeneratedMatchSheetPage: React.FC = () => {
               {/* Lado Equipe A no Set */}
               <div className="p-1 space-y-1">
                 <div className="flex justify-between font-bold text-[9px]">
-                  <span>EQUIPE: {match.homeTeam.teamName}</span>
+                  <span>
+                    EQUIPE: {match.homeTeam.teamName}{' '}
+                    {setRot && firstServerSide === 'home' ? '(S - 1º Saque)' : '(R - Recepção)'}
+                  </span>
                   <span>PONTOS: <strong className="font-mono text-xs">{sHome}</strong></span>
                 </div>
-                {/* Rotação I a VI */}
+                {/* Rotação Inicial I a VI */}
                 <div className="grid grid-cols-6 divide-x divide-black border border-black text-center font-extrabold text-[8px]">
-                  {['I', 'II', 'III', 'IV', 'V', 'VI'].map((pos, idx) => (
-                    <div key={pos} className="divide-y divide-black">
-                      <div className="bg-slate-50">{pos}</div>
-                      <div className="py-1 font-mono">{homeRows[idx]?.jerseyNumber || '•'}</div>
-                    </div>
-                  ))}
+                  {['I', 'II', 'III', 'IV', 'V', 'VI'].map((pos, idx) => {
+                    const rotPlayer = homeInit[idx];
+                    const fallbackRow = homeRows[idx];
+                    const displayLabel = rotPlayer
+                      ? rotPlayer.jerseyNumber != null
+                        ? `#${rotPlayer.jerseyNumber}`
+                        : rotPlayer.athleteName.split(' ')[0].slice(0, 6)
+                      : fallbackRow?.jerseyNumber || '•';
+                    return (
+                      <div key={pos} className="divide-y divide-black">
+                        <div className="bg-slate-50">{pos}</div>
+                        <div className="py-1 font-mono truncate px-0.5">{displayLabel}</div>
+                      </div>
+                    );
+                  })}
                 </div>
                 {/* Grade de Pontos 1 a 36 do Set */}
                 <div className="grid grid-cols-9 divide-x divide-y border border-black text-center text-[7px] font-mono">
@@ -944,17 +973,29 @@ export const GeneratedMatchSheetPage: React.FC = () => {
               {/* Lado Equipe B no Set */}
               <div className="p-1 space-y-1">
                 <div className="flex justify-between font-bold text-[9px]">
-                  <span>EQUIPE: {match.awayTeam.teamName}</span>
+                  <span>
+                    EQUIPE: {match.awayTeam.teamName}{' '}
+                    {setRot && firstServerSide === 'away' ? '(S - 1º Saque)' : '(R - Recepção)'}
+                  </span>
                   <span>PONTOS: <strong className="font-mono text-xs">{sAway}</strong></span>
                 </div>
-                {/* Rotação I a VI */}
+                {/* Rotação Inicial I a VI */}
                 <div className="grid grid-cols-6 divide-x divide-black border border-black text-center font-extrabold text-[8px]">
-                  {['I', 'II', 'III', 'IV', 'V', 'VI'].map((pos, idx) => (
-                    <div key={pos} className="divide-y divide-black">
-                      <div className="bg-slate-50">{pos}</div>
-                      <div className="py-1 font-mono">{awayRows[idx]?.jerseyNumber || '•'}</div>
-                    </div>
-                  ))}
+                  {['I', 'II', 'III', 'IV', 'V', 'VI'].map((pos, idx) => {
+                    const rotPlayer = awayInit[idx];
+                    const fallbackRow = awayRows[idx];
+                    const displayLabel = rotPlayer
+                      ? rotPlayer.jerseyNumber != null
+                        ? `#${rotPlayer.jerseyNumber}`
+                        : rotPlayer.athleteName.split(' ')[0].slice(0, 6)
+                      : fallbackRow?.jerseyNumber || '•';
+                    return (
+                      <div key={pos} className="divide-y divide-black">
+                        <div className="bg-slate-50">{pos}</div>
+                        <div className="py-1 font-mono truncate px-0.5">{displayLabel}</div>
+                      </div>
+                    );
+                  })}
                 </div>
                 {/* Grade de Pontos 1 a 36 do Set */}
                 <div className="grid grid-cols-9 divide-x divide-y border border-black text-center text-[7px] font-mono">

@@ -23,6 +23,7 @@ import { TestModeBanner } from '../components/layout/TestModeBanner';
 import { StandingsTable } from '../components/sports/StandingsTable';
 import { StoryShareButton } from '../components/social/StoryShareModal';
 import { MatchEventType } from '../types/domain';
+import { computeLiveVolleyballRotation } from '../utils/volleyballRotation';
 
 type MatchInfoTab = 'details' | 'lineups' | 'standings' | 'statistics';
 
@@ -96,6 +97,10 @@ export const PublicLiveScoreboardPage: React.FC = () => {
     visibleMatches[0];
 
   const sheet = resolvedMatch ? getSheetByMatchId(resolvedMatch.id) : undefined;
+  const liveVolleyballRotation =
+    resolvedMatch?.modalityId === 'volei' && sheet
+      ? computeLiveVolleyballRotation(sheet, sheet.timer.currentPeriod || 1)
+      : null;
 
   const totalVotes = votes.home + votes.away + votes.draw;
   const homePct = totalVotes > 0 ? Math.round((votes.home / totalVotes) * 100) : 45;
@@ -396,6 +401,27 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                           {p.label}: {p.homeScore}-{p.awayScore}
                         </span>
                       ))}
+                  </div>
+                )}
+              {liveVolleyballRotation &&
+                (resolvedMatch?.status === 'live' ||
+                  resolvedMatch?.status === 'halftime') && (
+                  <div className="mt-2 flex justify-center">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-[10px] font-display font-extrabold text-emerald-800">
+                      <span>🏐 Sacando:</span>
+                      <span>
+                        {liveVolleyballRotation.currentServer
+                          ? `${
+                              liveVolleyballRotation.currentServer.jerseyNumber !=
+                              null
+                                ? `#${liveVolleyballRotation.currentServer.jerseyNumber} `
+                                : ''
+                            }${liveVolleyballRotation.currentServer.athleteName.split(' ')[0]}`
+                          : liveVolleyballRotation.currentServingSide === 'home'
+                          ? homeName
+                          : awayName}
+                      </span>
+                    </span>
                   </div>
                 )}
             </div>
@@ -897,6 +923,100 @@ export const PublicLiveScoreboardPage: React.FC = () => {
 
               {sheet &&
               (sheet.homeLineup.length > 0 || sheet.awayLineup.length > 0) ? (
+                liveVolleyballRotation ? (
+                  <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+                    {(['home', 'away'] as const).map((side) => {
+                      const court =
+                        side === 'home'
+                          ? liveVolleyballRotation.homeCourt
+                          : liveVolleyballRotation.awayCourt;
+                      const isServing =
+                        liveVolleyballRotation.currentServingSide === side;
+                      const tName = side === 'home' ? homeName : awayName;
+                      const frontRow = [
+                        { idx: 3, label: 'P4' },
+                        { idx: 2, label: 'P3' },
+                        { idx: 1, label: 'P2' },
+                      ];
+                      const backRow = [
+                        { idx: 4, label: 'P5' },
+                        { idx: 5, label: 'P6' },
+                        { idx: 0, label: 'P1 🏐' },
+                      ];
+                      return (
+                        <div
+                          key={side}
+                          className="rounded-2xl bg-black/25 border border-white/25 p-3 space-y-2"
+                        >
+                          <div className="flex items-center justify-between text-[11px] font-display font-extrabold">
+                            <span className="truncate">{tName}</span>
+                            {isServing && (
+                              <span className="px-2 py-0.5 rounded-full bg-brand-yellow text-[#0B218A] text-[10px]">
+                                🏐 No Saque
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[9px] font-mono text-center text-white/75 uppercase tracking-wider bg-black/30 rounded py-0.5">
+                            Rede (Zona de Ataque)
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {frontRow.map((slot) => {
+                              const p = court[slot.idx];
+                              return (
+                                <div
+                                  key={slot.label}
+                                  onClick={() => p && navigate(`/atleta/${p.athleteId}`)}
+                                  className="cursor-pointer rounded-xl bg-white/15 hover:bg-white/25 p-1.5 text-center border border-white/20"
+                                >
+                                  <span className="block text-[9px] font-mono text-brand-yellow font-bold">
+                                    {slot.label}
+                                  </span>
+                                  <span className="block text-xs font-mono font-extrabold text-white">
+                                    {p?.jerseyNumber != null ? `#${p.jerseyNumber}` : '•'}
+                                  </span>
+                                  <span className="block text-[10px] font-semibold truncate">
+                                    {p ? p.athleteName.split(' ')[0] : '—'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-dashed border-white/25">
+                            {backRow.map((slot) => {
+                              const p = court[slot.idx];
+                              const activeServer = slot.idx === 0 && isServing;
+                              return (
+                                <div
+                                  key={slot.label}
+                                  onClick={() => p && navigate(`/atleta/${p.athleteId}`)}
+                                  className={`cursor-pointer rounded-xl p-1.5 text-center border ${
+                                    activeServer
+                                      ? 'bg-brand-yellow text-[#0B218A] border-white shadow-md'
+                                      : 'bg-white/15 hover:bg-white/25 border-white/20'
+                                  }`}
+                                >
+                                  <span
+                                    className={`block text-[9px] font-mono font-bold ${
+                                      activeServer ? 'text-[#0B218A]' : 'text-brand-yellow'
+                                    }`}
+                                  >
+                                    {slot.label}
+                                  </span>
+                                  <span className="block text-xs font-mono font-extrabold">
+                                    {p?.jerseyNumber != null ? `#${p.jerseyNumber}` : '•'}
+                                  </span>
+                                  <span className="block text-[10px] font-semibold truncate">
+                                    {p ? p.athleteName.split(' ')[0] : '—'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
                 <div className="relative z-10 grid grid-cols-2 gap-6 py-4">
                   <div className="flex flex-wrap items-center justify-center gap-4">
                     {sheet.homeLineup.map((p) => (
@@ -931,6 +1051,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                     ))}
                   </div>
                 </div>
+                )
               ) : (
                 <div className="relative z-10 py-12 text-center space-y-2">
                   <p className="text-sm font-display font-extrabold text-white">
