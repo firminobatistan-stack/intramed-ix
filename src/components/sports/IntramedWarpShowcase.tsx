@@ -262,7 +262,6 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
     getSheetByMatchId,
     getTeamById,
     getModalityStandings,
-    fetchPublicProfiles,
     fetchFeedPosts,
   } = useCompetitionStore();
 
@@ -270,10 +269,15 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
 
   useEffect(() => {
     let active = true;
-    fetchPublicProfiles({ limit: 80 })
-      .then((profiles) => {
-        if (active && Array.isArray(profiles) && profiles.length > 0) {
-          setCommunityProfiles(profiles);
+    fetch('/api/cloud-sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'list_public_profiles', limit: 80 }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (active && data?.ok && Array.isArray(data.profiles) && data.profiles.length > 0) {
+          setCommunityProfiles(data.profiles as PublicUserProfile[]);
         }
       })
       .catch(() => {});
@@ -283,7 +287,7 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
     return () => {
       active = false;
     };
-  }, [fetchPublicProfiles, fetchFeedPosts, socialPosts.length]);
+  }, [fetchFeedPosts, socialPosts.length]);
 
   const masterDeck = useMemo<ShowcaseCardEntry[]>(() => {
     // 1. Gols / Cestas / Pontos Marcados ao Vivo ou nas Partidas Recentes (com foto do atleta!)
@@ -537,7 +541,7 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
           title: `Delegação Oficial\n${team.name}`,
           value: hasPoints ? String(standingRow.points) : String(Math.max(1, teamAthCount)),
           unit: hasPoints ? 'PTS' : 'ATLETAS',
-          footer: `${team.CourseOrPeriod || getTurmaShortLabel(team.id)} • Medicina UEMA`,
+          footer: `${team.courseOrPeriod || getTurmaShortLabel(team.id)} • Medicina UEMA`,
           imageUrl: team.crestUrl || null,
           ...pal,
         },
