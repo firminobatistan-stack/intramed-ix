@@ -34,6 +34,8 @@ export interface WarpCard {
   imageUrl?: string | null;
   /** Optional second team crest URL for matchup cards (Home vs Away). */
   secondaryImageUrl?: string | null;
+  /** Optional real individual stats strip (2-3 numeric indicators) for athlete spotlight cards. */
+  stats?: Array<{ label: string; value: string }>;
 }
 
 export interface WarpCarouselProps {
@@ -584,6 +586,43 @@ function paintCard(
     });
     ctx.restore();
     ctx.textAlign = "left";
+
+    // Faixa de Estatísticas Individuais Reais (quando disponível para destaques de atletas)
+    if (Array.isArray(card.stats) && card.stats.length > 0) {
+      const statsSlice = card.stats.slice(0, 3);
+      const barX = 18;
+      const barY = 236;
+      const barW = CW - 36;
+      const barH = 42;
+      ctx.fillStyle = "rgba(7, 17, 38, 0.72)";
+      ctx.beginPath();
+      ctx.roundRect(barX, barY, barW, barH, 10);
+      ctx.fill();
+      ctx.strokeStyle = rgba(accent, 0.45);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      const colW = barW / statsSlice.length;
+      statsSlice.forEach((st, sIdx) => {
+        const colCx = barX + colW * sIdx + colW / 2;
+        if (sIdx > 0) {
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+          ctx.beginPath();
+          ctx.moveTo(barX + colW * sIdx, barY + 8);
+          ctx.lineTo(barX + colW * sIdx, barY + barH - 8);
+          ctx.stroke();
+        }
+        ctx.fillStyle = rgba(n1, 1);
+        ctx.font = fontStr(800, 14, family);
+        ctx.textAlign = "center";
+        ctx.fillText(String(st.value).toUpperCase(), colCx, barY + 21, colW - 8);
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.68)";
+        ctx.font = fontStr(700, 7.5, family);
+        ctx.fillText(String(st.label).toUpperCase(), colCx, barY + 33, colW - 8);
+      });
+      ctx.textAlign = "left";
+    }
   } else if (primaryImg && secondaryImg) {
     // =========================================================================
     // MODO B: Confronto com os 2 Escudos das Equipes + Horário / Placar no Centro

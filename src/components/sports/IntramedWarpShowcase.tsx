@@ -341,11 +341,18 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
 
           recentPlayItems.push({
             card: {
-              title: `${eventBadge} • ${m.modalityName}\n${shortName}`,
+              title: `Destaque do Jogo • ${m.modalityName}\n${shortName}`,
               value: `${m.homeTeam.score ?? 0}×${m.awayTeam.score ?? 0}`,
               unit: ev.matchClockDisplay || 'AO VIVO',
               footer: `${team?.name || 'Medicina UEMA'} • ${m.homeTeam.teamName} × ${m.awayTeam.teamName}`,
               imageUrl: photoUrl,
+              stats: [
+                { label: 'PLACAR', value: `${m.homeTeam.score ?? 0}-${m.awayTeam.score ?? 0}` },
+                { label: 'LANCE', value: ev.matchClockDisplay || 'LIVE' },
+                ...(ath?.jerseyNumber != null
+                  ? [{ label: 'CAMISA', value: `#${ath.jerseyNumber}` }]
+                  : []),
+              ],
               ...pal,
             },
             ctaPath: `/placar/${m.id}`,
@@ -382,6 +389,7 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
 
     const scorerItems: ShowcaseCardEntry[] = realLeaders.map((leader, idx) => {
       const team = leader.teamId ? getTeamById(leader.teamId) : undefined;
+      const athObj = visibleAthletes.find((a) => a.id === leader.athleteId);
       const pal = getPaletteForTeam(leader.teamId);
       const shortName = leader.name.split(' ').slice(0, 2).join(' ');
       return {
@@ -391,6 +399,13 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
           unit: leader.unitLabel,
           footer: `${team?.name || 'Medicina UEMA'} • Ranking Oficial`,
           imageUrl: leader.avatarUrl || team?.crestUrl || null,
+          stats: [
+            { label: leader.unitLabel, value: String(leader.points) },
+            { label: 'RANKING', value: `${idx + 1}º` },
+            ...(athObj?.jerseyNumber != null
+              ? [{ label: 'CAMISA', value: `#${athObj.jerseyNumber}` }]
+              : [{ label: 'TURMA', value: getTurmaShortLabel(leader.teamId).replace('Turma ', 'T') }]),
+          ],
           ...pal,
         },
         ctaPath: `/atleta/${leader.athleteId}`,
@@ -416,11 +431,21 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
 
       return {
         card: {
-          title: `Presença Confirmada\n${shortName}`,
+          title: `Atleta Confirmado\n${shortName}`,
           value: badgeVal,
           unit: '',
           footer: `${team?.name || 'Atleta Oficial'} • ${turmaLabel}`,
           imageUrl: ath.avatarUrl || team?.crestUrl || null,
+          stats: [
+            { label: 'TURMA', value: turmaLabel.replace('Turma ', 'T') },
+            ...(ath.jerseyNumber != null && String(ath.jerseyNumber).trim() !== ''
+              ? [{ label: 'CAMISA', value: `#${ath.jerseyNumber}` }]
+              : []),
+            {
+              label: 'MODS',
+              value: String(Array.isArray(ath.modalityIds) ? ath.modalityIds.length : 1),
+            },
+          ],
           ...pal,
         },
         ctaPath: `/atleta/${ath.id}`,
