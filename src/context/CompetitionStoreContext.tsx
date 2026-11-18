@@ -158,6 +158,12 @@ interface CompetitionStoreContextValue {
     courtX: number,
     courtY: number
   ) => void;
+  swapLineupPlayers: (
+    matchId: string,
+    teamSide: 'home' | 'away',
+    athleteIdA: string,
+    athleteIdB: string
+  ) => void;
   addAthleteToMatchLineup: (
     matchId: string,
     teamSide: 'home' | 'away',
@@ -2881,6 +2887,39 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             ...(teamSide === 'home'
               ? { homeLineup: updated }
               : { awayLineup: updated }),
+          },
+        };
+      });
+    },
+    [updateMatchAndSheet]
+  );
+
+  const swapLineupPlayers = useCallback(
+    (
+      matchId: string,
+      teamSide: 'home' | 'away',
+      athleteIdA: string,
+      athleteIdB: string
+    ) => {
+      if (!athleteIdA || !athleteIdB || athleteIdA === athleteIdB) return;
+      updateMatchAndSheet(matchId, (match, sheet) => {
+        const list =
+          teamSide === 'home' ? [...sheet.homeLineup] : [...sheet.awayLineup];
+        const idxA = list.findIndex((i) => i.athleteId === athleteIdA);
+        const idxB = list.findIndex((i) => i.athleteId === athleteIdB);
+        if (idxA === -1 || idxB === -1) return { match, sheet };
+
+        const temp = { ...list[idxA] };
+        list[idxA] = { ...list[idxB], courtX: undefined, courtY: undefined };
+        list[idxB] = { ...temp, courtX: undefined, courtY: undefined };
+
+        return {
+          match,
+          sheet: {
+            ...sheet,
+            ...(teamSide === 'home'
+              ? { homeLineup: list }
+              : { awayLineup: list }),
           },
         };
       });
@@ -5740,6 +5779,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       cancelActiveTimeout,
       toggleLineupRole,
       updateLineupPlayerPosition,
+      swapLineupPlayers,
       addAthleteToMatchLineup,
       addMultipleAthletesToMatchLineup,
       removeAthleteFromMatchLineup,
@@ -5864,6 +5904,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       cancelActiveTimeout,
       toggleLineupRole,
       updateLineupPlayerPosition,
+      swapLineupPlayers,
       addAthleteToMatchLineup,
       addMultipleAthletesToMatchLineup,
       removeAthleteFromMatchLineup,

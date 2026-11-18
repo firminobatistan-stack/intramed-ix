@@ -87,7 +87,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     dismissReleasedSuspension,
     cancelActiveTimeout,
     toggleLineupRole,
-    updateLineupPlayerPosition,
+    swapLineupPlayers,
     addAthleteToMatchLineup,
     addMultipleAthletesToMatchLineup,
     removeAthleteFromMatchLineup,
@@ -855,8 +855,8 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             scoringEvents={sheet.events.filter((e) => !e.isDeleted)}
             liveVolleyballRotation={liveVolleyballRotation}
             editable={!sheet.isClosed}
-            onMovePlayer={(side, athleteId, xPct, yPct) =>
-              updateLineupPlayerPosition(match.id, side, athleteId, xPct, yPct)
+            onSwapPlayers={(side, athleteIdA, athleteIdB) =>
+              swapLineupPlayers(match.id, side, athleteIdA, athleteIdB)
             }
           />
         )}

@@ -27,6 +27,11 @@ interface ModalityCourtVisualizerProps {
     xPct: number,
     yPct: number
   ) => void;
+  onSwapPlayers?: (
+    side: 'home' | 'away',
+    athleteIdA: string,
+    athleteIdB: string
+  ) => void;
 }
 
 interface TurmaCourtTheme {
@@ -274,16 +279,14 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
   liveVolleyballRotation,
   compact = false,
   editable = false,
-  onMovePlayer,
+  onSwapPlayers,
 }) => {
   const navigate = useNavigate();
   const modalityId = String(match.modalityId || 'futsal').toLowerCase();
-  const courtSurfaceRef = useRef<HTMLDivElement>(null);
-  const [dragState, setDragState] = useState<{
+  const [selectedSwapNode, setSelectedSwapNode] = useState<{
     athleteId: string;
     side: 'home' | 'away';
-    xPct: number;
-    yPct: number;
+    name: string;
   } | null>(null);
 
   // Verifica se o mesário realmente registrou escalação oficial na súmula desta partida
@@ -539,35 +542,7 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
           />
 
           {/* SVG + Camada de Superfície Oficial da Modalidade */}
-          <div
-            ref={courtSurfaceRef}
-            onPointerMove={(e) => {
-              if (!editable || !dragState || !courtSurfaceRef.current) return;
-              const rect = courtSurfaceRef.current.getBoundingClientRect();
-              const xPct = Math.max(
-                8,
-                Math.min(92, ((e.clientX - rect.left) / rect.width) * 100)
-              );
-              const yPct = Math.max(
-                10,
-                Math.min(90, ((e.clientY - rect.top) / rect.height) * 100)
-              );
-              setDragState((prev) => (prev ? { ...prev, xPct, yPct } : null));
-            }}
-            onPointerUp={() => {
-              if (editable && dragState && onMovePlayer) {
-                onMovePlayer(
-                  dragState.side,
-                  dragState.athleteId,
-                  dragState.xPct,
-                  dragState.yPct
-                );
-              }
-              setDragState(null);
-            }}
-            onPointerCancel={() => setDragState(null)}
-            className="relative w-full h-full rounded-[14px] overflow-hidden shadow-inner border-2 border-white/90 touch-none"
-          >
+          <div className="relative w-full h-full rounded-[14px] overflow-hidden shadow-inner border-2 border-white/90">
             {/* 1. SUPERFÍCIE ESPECÍFICA POR MODALIDADE */}
             {modalityId === 'futsal' && (
               <div
@@ -947,53 +922,61 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
                 {officialLineupNodes.map((node, idx) => {
                   const isHome = node.side === 'home';
                   const theme = isHome ? homeTheme : awayTheme;
-                  const isDraggingThis =
-                    dragState?.athleteId === node.id && dragState?.side === node.side;
-                  const xPct = isDraggingThis ? dragState.xPct : node.xPct;
-                  const yPct = isDraggingThis ? dragState.yPct : node.yPct;
+                  const isSelectedForSwap =
+                    selectedSwapNode?.athleteId === node.id &&
+                    selectedSwapNode?.side === node.side;
 
                   return (
                     <button
                       key={`${node.id}_${idx}`}
                       type="button"
-                      onPointerDown={(e) => {
-                        if (!editable) return;
-                        e.stopPropagation();
-                        e.preventDefault();
-                        setDragState({
-                          athleteId: node.id,
-                          side: node.side,
-                          xPct: node.xPct,
-                          yPct: node.yPct,
-                        });
-                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (!editable) {
                           navigate(`/atleta/${node.id}`);
+                          return;
                         }
+                        if (!selectedSwapNode || selectedSwapNode.side !== node.side) {
+                          setSelectedSwapNode({
+                            athleteId: node.id,
+                            side: node.side,
+                            name: node.shortName,
+                          });
+                          return;
+                        }
+                        if (selectedSwapNode.athleteId === node.id) {
+                          setSelectedSwapNode(null);
+                          return;
+                        }
+                        onSwapPlayers?.(
+                          node.side,
+                          selectedSwapNode.athleteId,
+                          node.id
+                        );
+                        setSelectedSwapNode(null);
                       }}
                       style={{
-                        left: `${xPct}%`,
-                        top: `${yPct}%`,
+                        left: `${node.xPct}%`,
+                        top: `${node.yPct}%`,
                         transform: `translate3d(-50%, -50%, 0) scale(${
-                          isDraggingThis ? 1.15 : 1
+                          isSelectedForSwap ? 1.18 : 1
                         })`,
-                        transition: isDraggingThis
-                          ? 'none'
-                          : 'all 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-                        transitionDelay: isDraggingThis ? '0ms' : `${(idx % 6) * 20}ms`,
+                        transition: 'all 280ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        transitionDelay: `${(idx % 6) * 20}ms`,
                       }}
-                      className={`group absolute z-20 flex flex-col items-center focus:outline-none ${
-                        editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
-                      }`}
+                      className="group absolute z-20 flex flex-col items-center focus:outline-none cursor-pointer touch-manipulation"
                     >
                       <div
                         style={{
                           backgroundColor: node.isServer ? '#FACC15' : theme.primary,
-                          borderColor: node.isServer ? '#FFFFFF' : theme.accent,
-                          boxShadow:
-                            '0 6px 14px rgba(0,0,0,0.45), 0 0 0 2px rgba(255,255,255,0.9)',
+                          borderColor: isSelectedForSwap
+                            ? '#FACC15'
+                            : node.isServer
+                            ? '#FFFFFF'
+                            : theme.accent,
+                          boxShadow: isSelectedForSwap
+                            ? '0 0 0 4px rgba(250,204,21,0.55), 0 8px 18px rgba(0,0,0,0.5)'
+                            : '0 6px 14px rgba(0,0,0,0.45), 0 0 0 2px rgba(255,255,255,0.9)',
                         }}
                         className="relative w-7 h-7 sm:w-9 sm:h-9 rounded-full border-2 flex items-center justify-center overflow-hidden transition-transform group-hover:scale-110"
                       >
@@ -1029,13 +1012,15 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
       {(lastScoringEvent || editable) && (
         <div className="relative z-10 mt-3 pt-2.5 border-t border-white/10 space-y-2">
           {editable && (
-            <div className="px-3 py-1.5 rounded-xl bg-brand-yellow/15 border border-brand-yellow/35 flex items-center justify-between gap-2 text-[11px]">
+            <div className="px-3 py-1.5 rounded-xl bg-brand-yellow/15 border border-brand-yellow/35 flex flex-wrap items-center justify-between gap-2 text-[11px]">
               <span className="font-display font-extrabold text-brand-yellow">
-                Prévia ao vivo do usuário • Modo Mesário
+                Prévia ao vivo • Modo Mesário
               </span>
-              <span className="font-semibold text-white/85">
-                {hasOfficialSheetLineup
-                  ? 'Arraste os atletas na quadra para ajustar a posição'
+              <span className="font-semibold text-white/90">
+                {selectedSwapNode
+                  ? `Selecionado: ${selectedSwapNode.name} — toque em outro atleta da mesma equipe para trocar`
+                  : hasOfficialSheetLineup
+                  ? 'Toque em 2 atletas da mesma equipe para trocar de posição'
                   : 'Escale os atletas para posicioná-los na quadra'}
               </span>
             </div>
