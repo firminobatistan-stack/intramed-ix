@@ -599,8 +599,8 @@ function paintCard(
       sx = (primaryImg.width - sw) / 2;
     } else {
       sh = primaryImg.width / boxRatio;
-      // Enquadramento superior (15% do topo) para nunca cortar a cabeça
-      sy = Math.max(0, (primaryImg.height - sh) * 0.15);
+      // Centraliza verticalmente assim como nos cards da aba de equipes
+      sy = Math.max(0, (primaryImg.height - sh) / 2);
     }
     ctx.drawImage(primaryImg, sx, sy, sw, sh, photoX, photoY, photoW, photoH);
     ctx.restore();
