@@ -4,6 +4,7 @@ import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import { TestModeBanner } from './TestModeBanner';
 import { MobileNavDrawer } from './MobileNavDrawer';
+import { SportsTabTransition } from './SportsTabTransition';
 
 interface AppShellProps {
   title?: string;
@@ -37,7 +38,7 @@ export const AppShell: React.FC<AppShellProps> = ({ title, showBack, children })
       />
 
       <main className="flex-1 w-full max-w-6xl mx-auto px-3.5 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-28 lg:pb-12">
-        {children}
+        <SportsTabTransition>{children}</SportsTabTransition>
       </main>
 
       <BottomNav onOpenMenu={handleOpenMobileNav} />
