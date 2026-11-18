@@ -30,6 +30,10 @@ export interface WarpCard {
   accent?: string;
   /** Labels for the detail: slider ends, or the crosshair pill and its two badges. */
   labels?: string[];
+  /** Primary portrait or team crest URL rendered inside the 3D card texture. */
+  imageUrl?: string | null;
+  /** Optional second team crest URL for matchup cards (Home vs Away). */
+  secondaryImageUrl?: string | null;
 }
 
 export interface WarpCarouselProps {
@@ -415,7 +419,52 @@ function wrapCanvasLines(
   return lines.slice(0, maxLines);
 }
 
-function paintCard(cv: HTMLCanvasElement, card: WarpCard, family: string) {
+function drawCircularImage(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  cx: number,
+  cy: number,
+  radius: number,
+  ringColor: string,
+  bgColor = "rgba(9, 24, 52, 0.85)"
+) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = bgColor;
+  ctx.fill();
+  ctx.clip();
+
+  const iw = img.naturalWidth || img.width || 1;
+  const ih = img.naturalHeight || img.height || 1;
+  const scale = Math.max((radius * 2) / iw, (radius * 2) / ih);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh);
+  ctx.restore();
+
+  // Anel externo colorido + anel interno branco de definição óptica
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 1.5, 0, Math.PI * 2);
+  ctx.strokeStyle = ringColor;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius - 1, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function paintCard(
+  cv: HTMLCanvasElement,
+  card: WarpCard,
+  family: string,
+  imgMap?: Map<string, HTMLImageElement>
+) {
   const w = cv.width;
   const h = cv.height;
   const ctx = cv.getContext("2d");
@@ -434,16 +483,16 @@ function paintCard(cv: HTMLCanvasElement, card: WarpCard, family: string) {
 
   // 1. Vinheta escura suave no topo e na base para garantir leitura perfeita em qualquer cor de card
   const topVig = ctx.createLinearGradient(0, 0, 0, 115);
-  topVig.addColorStop(0, "rgba(4, 9, 26, 0.52)");
+  topVig.addColorStop(0, "rgba(4, 9, 26, 0.56)");
   topVig.addColorStop(1, "rgba(4, 9, 26, 0)");
   ctx.fillStyle = topVig;
   ctx.fillRect(0, 0, CW, 115);
 
-  const botVig = ctx.createLinearGradient(0, 215, 0, CH);
+  const botVig = ctx.createLinearGradient(0, 200, 0, CH);
   botVig.addColorStop(0, "rgba(4, 9, 26, 0)");
-  botVig.addColorStop(1, "rgba(4, 9, 26, 0.72)");
+  botVig.addColorStop(1, "rgba(4, 9, 26, 0.78)");
   ctx.fillStyle = botVig;
-  ctx.fillRect(0, 215, CW, CH - 215);
+  ctx.fillRect(0, 200, CW, CH - 200);
 
   // Moldura interna sutil para acabamento óptico
   ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
@@ -452,101 +501,223 @@ function paintCard(cv: HTMLCanvasElement, card: WarpCard, family: string) {
   ctx.roundRect(1, 1, CW - 2, CH - 2, CR);
   ctx.stroke();
 
-  // 2. Topo: Tag/Categoria em pílula + Título Principal forte e legível
   const rawLines = (card.title || "").split("\n").map((s) => s.trim()).filter(Boolean);
   const categoryTag = (rawLines[0] || "INTRAMED IX").toUpperCase();
   const mainHeadline = rawLines.slice(1).join(" ") || categoryTag;
 
+  const primaryImg = card.imageUrl && imgMap ? imgMap.get(card.imageUrl) : undefined;
+  const secondaryImg =
+    card.secondaryImageUrl && imgMap ? imgMap.get(card.secondaryImageUrl) : undefined;
+
+  // Pílula Superior de Categoria
   ctx.font = fontStr(800, 9.5, family);
   const tagTextW = Math.min(196, ctx.measureText(categoryTag).width);
   const pillW = tagTextW + 18;
   ctx.fillStyle = "rgba(255, 255, 255, 0.16)";
   ctx.beginPath();
-  ctx.roundRect(18, 20, pillW, 20, 10);
+  ctx.roundRect(18, 18, pillW, 20, 10);
   ctx.fill();
-  ctx.strokeStyle = rgba(accent, 0.55);
+  ctx.strokeStyle = rgba(accent, 0.6);
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // Ponto de acento dentro da pílula
   ctx.fillStyle = rgba(accent, 1);
   ctx.beginPath();
-  ctx.arc(27, 30, 3, 0, Math.PI * 2);
+  ctx.arc(27, 28, 3, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(categoryTag, 34, 33.5, 184);
+  ctx.fillText(categoryTag, 34, 31.5, 184);
 
-  // Título Principal (até 2 linhas, peso 800, alto contraste)
-  ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
-  ctx.shadowBlur = 6 * k;
-  ctx.font = fontStr(800, 16.5, family);
-  ctx.fillStyle = "#FFFFFF";
-  const wrappedTitle = wrapCanvasLines(ctx, mainHeadline, CW - 36, 2);
-  wrappedTitle.forEach((ln, idx) => {
-    ctx.fillText(ln, 18, 62 + idx * 20, CW - 36);
-  });
-  ctx.restore();
+  // =========================================================================
+  // MODO A: Card de Retrato de Atleta (Presença Confirmada / Autor de Gol / Artilheiro)
+  // =========================================================================
+  if (primaryImg && !secondaryImg) {
+    const cx = CW / 2;
+    const cy = 114;
+    const radius = 48;
 
-  // 3. Centro: Número / Horário / Placar em destaque absoluto e super legível
-  const value = card.value || "";
-  let big = sizeForCap(ctx, 800, family, value.length >= 5 ? 42 : 52);
-  ctx.font = fontStr(800, big, family);
-  let vw = ctx.measureText(value).width;
-  if (vw > CW - 40) {
-    big *= (CW - 40) / vw;
-    ctx.font = fontStr(800, big, family);
-    vw = ctx.measureText(value).width;
-  }
-
-  const xVal = (CW - vw) / 2;
-  const yVal = card.unit ? 178 : 188;
-  const grad = ctx.createLinearGradient(xVal, yVal - 50, xVal + Math.max(1, vw), yVal);
-  grad.addColorStop(0, rgba(n0, 1));
-  grad.addColorStop(1, rgba(n1, 1));
-
-  ctx.save();
-  ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-  ctx.shadowBlur = 12 * k;
-  ctx.shadowOffsetY = 2 * k;
-  ctx.font = fontStr(800, big, family);
-  ctx.fillStyle = grad;
-  ctx.fillText(value, xVal, yVal);
-  ctx.restore();
-
-  // Unidade / Data em pílula centralizada logo abaixo do número principal
-  if (card.unit) {
-    const unitText = card.unit.toUpperCase();
-    ctx.font = fontStr(800, 11, family);
-    const uw = ctx.measureText(unitText).width;
-    const uPillW = uw + 22;
-    const uPillX = (CW - uPillW) / 2;
-    const uPillY = 194;
-
-    ctx.fillStyle = "rgba(9, 24, 52, 0.58)";
+    // Halo luminoso atrás da foto do atleta
+    const halo = ctx.createRadialGradient(cx, cy, radius * 0.4, cx, cy, radius * 1.55);
+    halo.addColorStop(0, rgba(accent, 0.42));
+    halo.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.roundRect(uPillX, uPillY, uPillW, 22, 11);
+    ctx.arc(cx, cy, radius * 1.55, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = rgba(accent, 0.65);
-    ctx.lineWidth = 1;
-    ctx.stroke();
 
-    ctx.fillStyle = rgba(n0, 1);
+    drawCircularImage(ctx, primaryImg, cx, cy, radius, rgba(accent, 0.95));
+
+    // Pílula de destaque sobreposta na base da foto (ex: "2 GOLS", "CAMISA #11", "CONFIRMADO")
+    const badgeText = [card.value, card.unit].filter(Boolean).join(" ").trim().toUpperCase();
+    if (badgeText) {
+      ctx.font = fontStr(800, 10, family);
+      const bw = Math.min(180, ctx.measureText(badgeText).width);
+      const bPillW = bw + 20;
+      const bPillX = (CW - bPillW) / 2;
+      const bPillY = cy + radius - 10;
+
+      ctx.fillStyle = rgba(accent, 1);
+      ctx.beginPath();
+      ctx.roundRect(bPillX, bPillY, bPillW, 21, 10.5);
+      ctx.fill();
+      ctx.strokeStyle = "#091834";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = "#091834";
+      ctx.textAlign = "center";
+      ctx.fillText(badgeText, CW / 2, bPillY + 14, 176);
+      ctx.textAlign = "left";
+    }
+
+    // Nome do Atleta grande e centralizado abaixo da foto
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+    ctx.shadowBlur = 6 * k;
+    ctx.font = fontStr(800, 16.5, family);
+    ctx.fillStyle = "#FFFFFF";
     ctx.textAlign = "center";
-    ctx.fillText(unitText, CW / 2, uPillY + 15);
+    const nameLines = wrapCanvasLines(ctx, mainHeadline, CW - 28, 2);
+    nameLines.forEach((ln, idx) => {
+      ctx.fillText(ln, CW / 2, 204 + idx * 19, CW - 28);
+    });
+    ctx.restore();
     ctx.textAlign = "left";
+  } else if (primaryImg && secondaryImg) {
+    // =========================================================================
+    // MODO B: Confronto com os 2 Escudos das Equipes + Horário / Placar no Centro
+    // =========================================================================
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+    ctx.shadowBlur = 6 * k;
+    ctx.font = fontStr(800, 15.5, family);
+    ctx.fillStyle = "#FFFFFF";
+    const wrappedTitle = wrapCanvasLines(ctx, mainHeadline, CW - 36, 2);
+    wrappedTitle.forEach((ln, idx) => {
+      ctx.fillText(ln, 18, 58 + idx * 19, CW - 36);
+    });
+    ctx.restore();
+
+    // Escudo Mandante (Esquerda) e Visitante (Direita)
+    const crestY = 142;
+    const crestR = 26;
+    drawCircularImage(ctx, primaryImg, 48, crestY, crestR, rgba(accent, 0.9));
+    drawCircularImage(ctx, secondaryImg, CW - 48, crestY, crestR, rgba(accent, 0.9));
+
+    // Horário ou Placar no Centro entre os escudos
+    const value = card.value || "";
+    let big = sizeForCap(ctx, 800, family, value.length >= 5 ? 24 : 32);
+    ctx.font = fontStr(800, big, family);
+    let vw = ctx.measureText(value).width;
+    if (vw > 96) {
+      big *= 96 / vw;
+      ctx.font = fontStr(800, big, family);
+      vw = ctx.measureText(value).width;
+    }
+
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+    ctx.shadowBlur = 8 * k;
+    ctx.fillStyle = "#FFFFFF";
+    ctx.textAlign = "center";
+    ctx.fillText(value, CW / 2, crestY + big * 0.34);
+    ctx.restore();
+    ctx.textAlign = "left";
+
+    if (card.unit) {
+      const unitText = card.unit.toUpperCase();
+      ctx.font = fontStr(800, 10.5, family);
+      const uw = ctx.measureText(unitText).width;
+      const uPillW = uw + 22;
+      const uPillX = (CW - uPillW) / 2;
+      const uPillY = 196;
+
+      ctx.fillStyle = "rgba(9, 24, 52, 0.62)";
+      ctx.beginPath();
+      ctx.roundRect(uPillX, uPillY, uPillW, 22, 11);
+      ctx.fill();
+      ctx.strokeStyle = rgba(accent, 0.7);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = rgba(n1, 1);
+      ctx.textAlign = "center";
+      ctx.fillText(unitText, CW / 2, uPillY + 15);
+      ctx.textAlign = "left";
+    }
+  } else {
+    // =========================================================================
+    // MODO C: Card Estatístico ou Confronto Padrão de Alto Contraste
+    // =========================================================================
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+    ctx.shadowBlur = 6 * k;
+    ctx.font = fontStr(800, 16.5, family);
+    ctx.fillStyle = "#FFFFFF";
+    const wrappedTitle = wrapCanvasLines(ctx, mainHeadline, CW - 36, 2);
+    wrappedTitle.forEach((ln, idx) => {
+      ctx.fillText(ln, 18, 60 + idx * 20, CW - 36);
+    });
+    ctx.restore();
+
+    const value = card.value || "";
+    let big = sizeForCap(ctx, 800, family, value.length >= 5 ? 42 : 52);
+    ctx.font = fontStr(800, big, family);
+    let vw = ctx.measureText(value).width;
+    if (vw > CW - 40) {
+      big *= (CW - 40) / vw;
+      ctx.font = fontStr(800, big, family);
+      vw = ctx.measureText(value).width;
+    }
+
+    const xVal = (CW - vw) / 2;
+    const yVal = card.unit ? 178 : 188;
+    const grad = ctx.createLinearGradient(xVal, yVal - 50, xVal + Math.max(1, vw), yVal);
+    grad.addColorStop(0, rgba(n0, 1));
+    grad.addColorStop(1, rgba(n1, 1));
+
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    ctx.shadowBlur = 12 * k;
+    ctx.shadowOffsetY = 2 * k;
+    ctx.font = fontStr(800, big, family);
+    ctx.fillStyle = grad;
+    ctx.fillText(value, xVal, yVal);
+    ctx.restore();
+
+    if (card.unit) {
+      const unitText = card.unit.toUpperCase();
+      ctx.font = fontStr(800, 11, family);
+      const uw = ctx.measureText(unitText).width;
+      const uPillW = uw + 22;
+      const uPillX = (CW - uPillW) / 2;
+      const uPillY = 194;
+
+      ctx.fillStyle = "rgba(9, 24, 52, 0.58)";
+      ctx.beginPath();
+      ctx.roundRect(uPillX, uPillY, uPillW, 22, 11);
+      ctx.fill();
+      ctx.strokeStyle = rgba(accent, 0.65);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = rgba(n0, 1);
+      ctx.textAlign = "center";
+      ctx.fillText(unitText, CW / 2, uPillY + 15);
+      ctx.textAlign = "left";
+    }
   }
 
-  // 4. Linha luminosa sutil separadora acima do rodapé
+  // Linha luminosa separadora acima do rodapé
   const lineGrad = ctx.createLinearGradient(18, 0, CW - 18, 0);
   lineGrad.addColorStop(0, rgba(accent, 0.85));
   lineGrad.addColorStop(0.6, rgba(white, 0.35));
   lineGrad.addColorStop(1, "rgba(255, 255, 255, 0.05)");
   ctx.fillStyle = lineGrad;
-  ctx.fillRect(18, 258, CW - 36, 2);
+  ctx.fillRect(18, 256, CW - 36, 2);
 
-  // 5. Rodapé claro e legível na base do card
+  // Rodapé claro e legível na base do card
   if (card.footer) {
     ctx.save();
     ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
@@ -555,10 +726,10 @@ function paintCard(cv: HTMLCanvasElement, card: WarpCard, family: string) {
     ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
     const footerLines = wrapCanvasLines(ctx, card.footer, CW - 36, 2);
     if (footerLines.length === 1) {
-      ctx.fillText(footerLines[0], 18, 286, CW - 36);
+      ctx.fillText(footerLines[0], 18, 284, CW - 36);
     } else {
       footerLines.forEach((fl, idx) => {
-        ctx.fillText(fl, 18, 278 + idx * 15, CW - 36);
+        ctx.fillText(fl, 18, 276 + idx * 15, CW - 36);
       });
     }
     ctx.restore();
@@ -1067,17 +1238,40 @@ export function WarpCarousel({
     const glowOverride = glow ? parseColor(glow) : null;
     const glowCols = list.map((c) => (glowOverride ? glowOverride : parseColor(c.glow || "#7fd0f0")));
 
+    const imgMap = new Map<string, HTMLImageElement>();
+
     const paintAll = (w: number) => {
       cardCanvases = list.map((card) => {
         const cv = document.createElement("canvas");
         cv.width = w;
         cv.height = Math.round((w * CH) / CW);
-        paintCard(cv, card, font);
+        paintCard(cv, card, font, imgMap);
         return cv;
       });
       texW = w;
       if (gls) uploadCards(gls, cardCanvases);
     };
+
+    const urlsToLoad = new Set<string>();
+    list.forEach((c) => {
+      if (c.imageUrl) urlsToLoad.add(c.imageUrl);
+      if (c.secondaryImageUrl) urlsToLoad.add(c.secondaryImageUrl);
+    });
+    urlsToLoad.forEach((url) => {
+      const img = new Image();
+      if (!url.startsWith("data:")) {
+        img.crossOrigin = "anonymous";
+      }
+      img.onload = () => {
+        if (disposed) return;
+        imgMap.set(url, img);
+        if (texW > 0) {
+          paintAll(texW);
+          draw(performance.now() / 1000);
+        }
+      };
+      img.src = url;
+    });
 
     let W = 0;
     let H = 0;

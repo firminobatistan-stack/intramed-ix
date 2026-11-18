@@ -502,6 +502,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    const isDeltaPoll = Boolean(sinceParam) && !isForce && !isAdminRequest;
+    const launchConfig: PublicLaunchConfig = store.launch_config || DEFAULT_LAUNCH_CONFIG;
+
+    // Em chamadas incrementais (?since=...) quando algo mudou (ex: ponto ao vivo na súmula),
+    // retorna APENAS partidas, súmulas e configurações (~100 KB em vez de 3.040 KB de fotos base64 repetidas),
+    // reduzindo o Fast Origin Transfer da Vercel em ~97% mesmo durante jogos ao vivo!
+    if (isDeltaPoll) {
+      const deltaMatches = Object.values(store.matches).map((m) =>
+        sanitizeMatchForPublic(m, false)
+      );
+      return res.status(200).json({
+        success: true,
+        isDelta: true,
+        updatedAtIso: store.updatedAtIso,
+        launchConfig,
+        teams: Object.values(store.teams),
+        matches: deltaMatches,
+        match_sheets: Object.values(store.match_sheets),
+      });
+    }
+
     const normalizeRegServerPrice = (reg: Record<string, unknown>) => {
       const expected = computeAuthorizedServerPrice(
         String(reg.lotId || 'lote-1-cangaceira'),
@@ -545,21 +566,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (r) => !isPurgedTestRecord(r)
     );
 
+    // Atletas e elencos do torneio oficial são informações esportivas públicas da competição
+    const publicAthletes = Object.values(store.athletes).filter(
+      (a) => !isPurgedTestRecord(a)
+    );
+    const athleteAvatarEmails = new Set(
+      publicAthletes
+        .filter((a) => typeof a.avatarUrl === 'string' && a.avatarUrl.length > 200)
+        .map((a) => String(a.email || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    // Evita enviar a mesma foto base64 (~35 KB cada) duplicada em registrations quando já está em athletes
+    const stripDuplicateRegAvatar = (reg: Record<string, unknown>) => {
+      const em = String(reg.athleteEmail || '').trim().toLowerCase();
+      if (
+        !isAdminRequest &&
+        em &&
+        athleteAvatarEmails.has(em) &&
+        typeof reg.avatarUrl === 'string' &&
+        reg.avatarUrl.startsWith('data:image/')
+      ) {
+        return { ...reg, avatarUrl: null };
+      }
+      return reg;
+    };
+
     const publicRegistrations = isPublicProfilesVisible
       ? (isAdminRequest
           ? rawRegistrations.map((r) => normalizeRegServerPrice(r))
           : rawRegistrations.map((r) =>
-              sanitizeRegistrationForPublic(normalizeRegServerPrice(r))
+              stripDuplicateRegAvatar(sanitizeRegistrationForPublic(normalizeRegServerPrice(r)))
             ))
       : (isAdminRequest
           ? rawRegistrations.map((r) => normalizeRegServerPrice(r))
           : []);
-
-    // Atletas e elencos do torneio oficial são informações esportivas públicas da competição
-    // e devem ser entregues a todos os dispositivos (celular e desktop) para evitar silos locais
-    const publicAthletes = Object.values(store.athletes).filter(
-      (a) => !isPurgedTestRecord(a)
-    );
 
     // Perfis públicos sanitizados (sem senhas, CPF ou telefone) para descoberta da comunidade e dados do usuário
     const publicProfiles = Object.values(store.profiles || {})

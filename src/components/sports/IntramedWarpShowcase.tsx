@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WarpCard, WarpCarousel } from '@/components/ui/warp-carousel';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
-import { Match, MatchEventType } from '../../types/domain';
+import { Athlete, Match, MatchEventType } from '../../types/domain';
 
 export type ShowcaseMode = 'upcoming' | 'scorers' | 'stats';
 
@@ -139,6 +139,16 @@ function getPaletteForTeam(teamId?: string | null) {
   return BRAND_MESHES.intramed;
 }
 
+function getTurmaShortLabel(teamId?: string | null, turma?: string | null): string {
+  const clean = (teamId || turma || '').toLowerCase();
+  if (clean.includes('sanguinaria') || clean.includes('21')) return 'Turma 21';
+  if (clean.includes('predadora') || clean.includes('22')) return 'Turma 22';
+  if (clean.includes('tormenta') || clean.includes('23')) return 'Turma 23';
+  if (clean.includes('colossal') || clean.includes('24')) return 'Turma 24';
+  if (clean.includes('soberana') || clean.includes('25')) return 'Turma 25';
+  return 'Medicina UEMA';
+}
+
 function shortDateBadge(dateStr?: string | null): string {
   if (!dateStr) return 'IX EDIÇÃO';
   const m = /(\d{2}\/\d{2})/.exec(dateStr);
@@ -166,18 +176,187 @@ function sortUpcomingMatches(matches: Match[]): Match[] {
   });
 }
 
+/**
+ * Seleciona atletas confirmados com foto real (`avatarUrl`), intercalando as 5 Turmas
+ * para que todas as atléticas apareçam representadas nos cards 3D.
+ */
+function pickDiversifiedAthletesWithPhoto(athletes: Athlete[], limit = 6): Athlete[] {
+  const withPhoto = athletes.filter(
+    (a) => typeof a.avatarUrl === 'string' && a.avatarUrl.trim().length > 10
+  );
+  if (withPhoto.length === 0) return [];
+
+  const buckets = new Map<string, Athlete[]>();
+  for (const ath of withPhoto) {
+    const key = (ath.teamId || ath.turma || 'other').toLowerCase();
+    const list = buckets.get(key) || [];
+    list.push(ath);
+    buckets.set(key, list);
+  }
+
+  const picked: Athlete[] = [];
+  const keys = Array.from(buckets.keys());
+  let round = 0;
+  while (picked.length < limit) {
+    let addedInRound = false;
+    for (const k of keys) {
+      const arr = buckets.get(k)!;
+      if (round < arr.length) {
+        picked.push(arr[round]);
+        addedInRound = true;
+        if (picked.length >= limit) break;
+      }
+    }
+    if (!addedInRound) break;
+    round++;
+  }
+  return picked;
+}
+
 export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
   initialMode = 'upcoming',
   compact = false,
 }) => {
   const navigate = useNavigate();
-  const { visibleMatches, visibleAthletes, visibleTeams, getSheetByMatchId, getTeamById } =
+  const { visibleMatches, visibleAthletes, getSheetByMatchId, getTeamById } =
     useCompetitionStore();
 
   const entries = useMemo<ShowcaseCardEntry[]>(() => {
     const list: ShowcaseCardEntry[] = [];
 
-    // 1. Próximos Jogos / Partidas Ao Vivo
+    // 1. Gols / Cestas / Pontos Marcados ao Vivo ou nas Partidas Recentes (com foto do atleta!)
+    const recentPlayItems: ShowcaseCardEntry[] = [];
+    const scoreMap = new Map<
+      string,
+      {
+        athleteId: string;
+        name: string;
+        avatarUrl?: string | null;
+        teamId?: string;
+        modalityName: string;
+        unitLabel: string;
+        points: number;
+      }
+    >();
+
+    for (const m of visibleMatches) {
+      if (m.status !== 'live' && m.status !== 'halftime' && m.status !== 'finished') continue;
+      const sheet = getSheetByMatchId(m.id);
+      if (!sheet) continue;
+
+      for (const ev of sheet.events || []) {
+        if (ev.isDeleted || !ev.athleteId || !SCORING_EVENT_TYPES.includes(ev.type)) continue;
+        const ath = visibleAthletes.find((a) => a.id === ev.athleteId);
+        const resolvedTeamId =
+          ath?.teamId ||
+          (ev.teamSide === 'home' ? m.homeTeam.teamId : m.awayTeam.teamId) ||
+          undefined;
+        const team = resolvedTeamId ? getTeamById(resolvedTeamId) : undefined;
+        const pal = getPaletteForTeam(resolvedTeamId);
+        const photoUrl = ath?.avatarUrl || team?.crestUrl || null;
+        const shortName = (ev.athleteName || ath?.name || 'Atleta')
+          .split(' ')
+          .slice(0, 2)
+          .join(' ');
+
+        if (recentPlayItems.length < 3 && photoUrl) {
+          const eventBadge =
+            m.modalityId === 'basquete'
+              ? ev.type === 'point_3'
+                ? 'CESTA DE 3 PTS'
+                : 'CESTA MARCADA'
+              : m.modalityId === 'volei' || m.modalityId === 'volei-de-praia'
+              ? ev.type === 'volleyball_ace'
+                ? 'PONTO DE ACE'
+                : ev.type === 'volleyball_block'
+                ? 'BLOQUEIO'
+                : 'PONTO MARCADO'
+              : 'GOL MARCADO';
+
+          recentPlayItems.push({
+            card: {
+              title: `${eventBadge} • ${m.modalityName}\n${shortName}`,
+              value: `${m.homeTeam.score ?? 0}×${m.awayTeam.score ?? 0}`,
+              unit: ev.matchClockDisplay || 'AO VIVO',
+              footer: `${team?.name || 'Medicina UEMA'} • ${m.homeTeam.teamName} × ${m.awayTeam.teamName}`,
+              imageUrl: photoUrl,
+              ...pal,
+            },
+            ctaPath: `/placar/${m.id}`,
+          });
+        }
+
+        const delta = ev.type === 'point_3' ? 3 : ev.type === 'point_2' ? 2 : 1;
+        const unitLabel =
+          m.modalityId === 'basquete' || m.modalityId === 'volei' || m.modalityId === 'volei-de-praia'
+            ? 'PTS'
+            : 'GOLS';
+        const key = `${ev.athleteId}_${m.modalityId}`;
+        const prev = scoreMap.get(key);
+        if (prev) {
+          prev.points += delta;
+        } else {
+          scoreMap.set(key, {
+            athleteId: ev.athleteId,
+            name: ev.athleteName || ath?.name || 'Atleta',
+            avatarUrl: photoUrl,
+            teamId: resolvedTeamId,
+            modalityName: m.modalityName,
+            unitLabel,
+            points: delta,
+          });
+        }
+      }
+    }
+
+    const realLeaders = Array.from(scoreMap.values())
+      .filter((x) => x.points > 0)
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 3);
+
+    const scorerItems: ShowcaseCardEntry[] = realLeaders.map((leader, idx) => {
+      const team = leader.teamId ? getTeamById(leader.teamId) : undefined;
+      const pal = getPaletteForTeam(leader.teamId);
+      const shortName = leader.name.split(' ').slice(0, 2).join(' ');
+      return {
+        card: {
+          title: `${idx + 1}º Artilheiro • ${leader.modalityName}\n${shortName}`,
+          value: String(leader.points),
+          unit: leader.unitLabel,
+          footer: `${team?.name || 'Medicina UEMA'} • Ranking Oficial`,
+          imageUrl: leader.avatarUrl || team?.crestUrl || null,
+          ...pal,
+        },
+        ctaPath: `/atleta/${leader.athleteId}`,
+      };
+    });
+
+    // 2. Atletas com Presença Confirmada (Fotos Reais das 5 Turmas!)
+    const featuredAthletes = pickDiversifiedAthletesWithPhoto(visibleAthletes, 6);
+    const confirmedAthleteItems: ShowcaseCardEntry[] = featuredAthletes.map((ath) => {
+      const team = ath.teamId ? getTeamById(ath.teamId) : undefined;
+      const pal = getPaletteForTeam(ath.teamId);
+      const turmaLabel = getTurmaShortLabel(ath.teamId, ath.turma);
+      const shortName = ath.name.split(' ').slice(0, 2).join(' ');
+      const badgeVal =
+        ath.jerseyNumber != null && String(ath.jerseyNumber).trim() !== ''
+          ? `CAMISA #${ath.jerseyNumber}`
+          : 'CONFIRMADO';
+
+      return {
+        card: {
+          title: `Presença Confirmada\n${shortName}`,
+          value: badgeVal,
+          unit: '',
+          footer: `${team?.name || 'Atleta Oficial'} • ${turmaLabel}`,
+          imageUrl: ath.avatarUrl,
+          ...pal,
+        },
+        ctaPath: `/atleta/${ath.id}`,
+      };
+    });
+
+    // 3. Próximos Jogos / Partidas Ao Vivo (com os 2 Escudos das Equipes!)
     const upcoming = sortUpcomingMatches(
       visibleMatches.filter(
         (m) =>
@@ -218,108 +397,15 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
           value: valStr,
           unit: isLive ? 'AO VIVO' : shortDateBadge(m.scheduledDate),
           footer: `${m.phaseLabel || 'Confronto'} • ${m.venue || 'Quadra Oficial'}`,
+          imageUrl: m.homeTeam.crestUrl || null,
+          secondaryImageUrl: m.awayTeam.crestUrl || null,
           ...pal,
         },
         ctaPath: `/placar/${m.id}`,
       };
     });
 
-    // 2. Artilheiros Reais (quando houver gols/pontos marcados)
-    const scoreMap = new Map<
-      string,
-      {
-        athleteId: string;
-        name: string;
-        teamId?: string;
-        modalityName: string;
-        unitLabel: string;
-        points: number;
-      }
-    >();
-
-    for (const m of visibleMatches) {
-      if (m.status !== 'live' && m.status !== 'halftime' && m.status !== 'finished') continue;
-      const sheet = getSheetByMatchId(m.id);
-      if (!sheet) continue;
-
-      for (const ev of sheet.events || []) {
-        if (ev.isDeleted || !ev.athleteId || !SCORING_EVENT_TYPES.includes(ev.type)) continue;
-        const delta = ev.type === 'point_3' ? 3 : ev.type === 'point_2' ? 2 : 1;
-        const unitLabel =
-          m.modalityId === 'basquete' || m.modalityId === 'volei' || m.modalityId === 'volei-de-praia'
-            ? 'PONTOS'
-            : 'GOLS';
-        const key = `${ev.athleteId}_${m.modalityId}`;
-        const prev = scoreMap.get(key);
-        const ath = visibleAthletes.find((a) => a.id === ev.athleteId);
-        const resolvedTeamId =
-          ath?.teamId ||
-          (ev.teamSide === 'home' ? m.homeTeam.teamId : m.awayTeam.teamId) ||
-          undefined;
-
-        if (prev) {
-          prev.points += delta;
-        } else {
-          scoreMap.set(key, {
-            athleteId: ev.athleteId,
-            name: ev.athleteName || ath?.name || 'Atleta',
-            teamId: resolvedTeamId,
-            modalityName: m.modalityName,
-            unitLabel,
-            points: delta,
-          });
-        }
-      }
-    }
-
-    const realLeaders = Array.from(scoreMap.values())
-      .filter((x) => x.points > 0)
-      .sort((a, b) => b.points - a.points)
-      .slice(0, 3);
-
-    const scorerItems: ShowcaseCardEntry[] =
-      realLeaders.length > 0
-        ? realLeaders.map((leader, idx) => {
-            const team = leader.teamId ? getTeamById(leader.teamId) : undefined;
-            const pal = getPaletteForTeam(leader.teamId);
-            const shortName = leader.name.split(' ').slice(0, 2).join(' ');
-            return {
-              card: {
-                title: `${idx + 1}º Artilheiro • ${leader.modalityName}\n${shortName}`,
-                value: String(leader.points),
-                unit: leader.unitLabel,
-                footer: `${team?.name || 'Medicina UEMA'} • Ranking Oficial`,
-                ...pal,
-              },
-              ctaPath: `/atleta/${leader.athleteId}`,
-            };
-          })
-        : visibleTeams.slice(0, 3).map((team) => {
-            const count = visibleAthletes.filter((a) => a.teamId === team.id).length;
-            const pal = getPaletteForTeam(team.id);
-            const cleanTurma =
-              team.id === 'sanguinaria'
-                ? 'Turma 21'
-                : team.id === 'predadora'
-                ? 'Turma 22'
-                : team.id === 'tormenta'
-                ? 'Turma 23'
-                : team.id === 'colossal'
-                ? 'Turma 24'
-                : 'Turma 25';
-            return {
-              card: {
-                title: `Elenco • ${cleanTurma}\n${team.name}`,
-                value: String(count),
-                unit: count === 1 ? 'ATLETA' : 'ATLETAS',
-                footer: 'Confirmados no IX IntraMed',
-                ...pal,
-              },
-              ctaPath: `/equipe/${team.id}`,
-            };
-          });
-
-    // 3. Estatísticas Oficiais do Torneio
+    // 4. Estatísticas Oficiais do Torneio
     const nonSwimming = visibleMatches.filter(
       (m) => m.modalityId !== 'natacao' && m.id !== 'match_natacao_geral_final'
     );
@@ -344,39 +430,37 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
         },
         ctaPath: '/jogos',
       },
-      {
-        card: {
-          title: 'Troféu Geral\nModalidades em Disputa',
-          value: '16',
-          unit: 'ESPORTES',
-          footer: '8 Coletivas (20 pts) • 8 Individuais',
-          ...BRAND_MESHES.soberana,
-        },
-        ctaPath: '/chaveamento',
-      },
     ];
 
     if (initialMode === 'scorers') {
-      list.push(...scorerItems, ...statItems.slice(0, 2), ...matchItems.slice(0, 2));
-    } else if (initialMode === 'stats') {
-      list.push(...statItems, ...matchItems.slice(0, 2), ...scorerItems.slice(0, 2));
-    } else {
-      // Intercala próximos jogos, estatísticas e destaques em uma rotação única e fluida
       list.push(
-        ...matchItems.slice(0, 2),
-        statItems[0],
-        ...scorerItems.slice(0, 1),
-        ...matchItems.slice(2, 4),
-        statItems[1],
-        statItems[2]
+        ...scorerItems,
+        ...recentPlayItems,
+        ...confirmedAthleteItems.slice(0, 4),
+        ...statItems.slice(0, 1)
       );
+    } else {
+      // Intercala: Atletas Confirmados (com foto), Gols/Artilheiros (quando houver), Próximos Jogos (com escudos) e Estatísticas!
+      if (recentPlayItems.length > 0 || scorerItems.length > 0) {
+        list.push(...recentPlayItems.slice(0, 2), ...scorerItems.slice(0, 2));
+      }
+      if (confirmedAthleteItems[0]) list.push(confirmedAthleteItems[0]);
+      if (matchItems[0]) list.push(matchItems[0]);
+      if (confirmedAthleteItems[1]) list.push(confirmedAthleteItems[1]);
+      if (statItems[0]) list.push(statItems[0]);
+      if (confirmedAthleteItems[2]) list.push(confirmedAthleteItems[2]);
+      if (matchItems[1]) list.push(matchItems[1]);
+      if (confirmedAthleteItems[3]) list.push(confirmedAthleteItems[3]);
+      if (matchItems[2]) list.push(matchItems[2]);
+      if (confirmedAthleteItems[4]) list.push(confirmedAthleteItems[4]);
+      if (statItems[1]) list.push(statItems[1]);
+      if (confirmedAthleteItems[5]) list.push(confirmedAthleteItems[5]);
     }
 
-    return list.filter(Boolean);
+    return list.length >= 4 ? list : [...list, ...matchItems, ...statItems];
   }, [
     visibleMatches,
     visibleAthletes,
-    visibleTeams,
     getSheetByMatchId,
     getTeamById,
     initialMode,
