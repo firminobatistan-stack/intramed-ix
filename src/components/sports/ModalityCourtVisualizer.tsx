@@ -125,22 +125,69 @@ function resolveTurmaTheme(
   teamName?: string | null,
   crestUrl?: string | null
 ): TurmaCourtTheme {
-  const raw = `${teamId || ''} ${teamName || ''}`.toLowerCase();
+  const cleanName = (teamName || '').trim().toLowerCase();
+  const cleanId = (teamId || '').trim().toLowerCase();
+
+  // Se o adversário ainda não foi definido (ex: "Venc. Quartas", "A definir", sem teamId), mantém neutro!
+  if (
+    !cleanId ||
+    cleanId === 'tbd' ||
+    cleanId === 'a-definir' ||
+    cleanName.startsWith('venc.') ||
+    cleanName.startsWith('vencedor') ||
+    cleanName.startsWith('perd.') ||
+    cleanName.includes('a definir') ||
+    cleanName.includes('aguardando')
+  ) {
+    return {
+      ...TURMA_COURT_THEMES.default,
+      shortName: 'A DEFINIR',
+      turmaTag: 'AGUARDANDO',
+      primary: '#1E293B',
+      secondary: '#0F172A',
+      accent: '#94A3B8',
+      glow: 'rgba(148, 163, 184, 0.25)',
+      crestUrl: '/assets/atletica/escudo-evento.png',
+    };
+  }
+
+  const raw = `${cleanId} ${cleanName}`;
   let base = TURMA_COURT_THEMES.default;
   if (
     raw.includes('sanguinaria') ||
     raw.includes('sanguinária') ||
-    raw.includes('21') ||
+    raw.includes('t21') ||
+    raw.includes('turma 21') ||
     raw.includes('xxi')
   ) {
     base = TURMA_COURT_THEMES.sanguinaria;
-  } else if (raw.includes('predadora') || raw.includes('22') || raw.includes('xxii')) {
+  } else if (
+    raw.includes('predadora') ||
+    raw.includes('t22') ||
+    raw.includes('turma 22') ||
+    raw.includes('xxii')
+  ) {
     base = TURMA_COURT_THEMES.predadora;
-  } else if (raw.includes('tormenta') || raw.includes('23') || raw.includes('xxiii')) {
+  } else if (
+    raw.includes('tormenta') ||
+    raw.includes('t23') ||
+    raw.includes('turma 23') ||
+    raw.includes('xxiii')
+  ) {
     base = TURMA_COURT_THEMES.tormenta;
-  } else if (raw.includes('colossal') || raw.includes('24') || raw.includes('xxiv')) {
+  } else if (
+    raw.includes('colossal') ||
+    raw.includes('t24') ||
+    raw.includes('turma 24') ||
+    raw.includes('xxiv')
+  ) {
     base = TURMA_COURT_THEMES.colossal;
-  } else if (raw.includes('soberana') || raw.includes('25') || raw.includes('xxv')) {
+  } else if (
+    raw.includes('soberana') ||
+    raw.includes('t25') ||
+    raw.includes('turma 25') ||
+    raw.includes('xxv')
+  ) {
     base = TURMA_COURT_THEMES.soberana;
   }
   return {
