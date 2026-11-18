@@ -269,15 +269,35 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
 
   useEffect(() => {
     let active = true;
+    const CACHE_KEY = 'intramed_warp_profiles_cache_v1';
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { ts: number; profiles: PublicUserProfile[] };
+        if (Date.now() - parsed.ts < 5 * 60 * 1000 && Array.isArray(parsed.profiles)) {
+          setCommunityProfiles(parsed.profiles);
+          return () => {
+            active = false;
+          };
+        }
+      }
+    } catch {}
+
     fetch('/api/cloud-sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'list_public_profiles', limit: 80 }),
+      body: JSON.stringify({ action: 'list_public_profiles', limit: 30 }),
     })
       .then((r) => r.json())
       .then((data) => {
         if (active && data?.ok && Array.isArray(data.profiles) && data.profiles.length > 0) {
           setCommunityProfiles(data.profiles as PublicUserProfile[]);
+          try {
+            sessionStorage.setItem(
+              CACHE_KEY,
+              JSON.stringify({ ts: Date.now(), profiles: data.profiles })
+            );
+          } catch {}
         }
       })
       .catch(() => {});

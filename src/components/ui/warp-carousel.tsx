@@ -1375,7 +1375,7 @@ export function WarpCarousel({
       if (canvas.width !== W) canvas.width = W;
       if (canvas.height !== H) canvas.height = H;
       unit = Math.min(W / 720, H / 440);
-      const want = Math.min(1024, Math.max(256, Math.round(CW * unit * 1.25)));
+      const want = Math.min(1024, Math.max(512, Math.round(CW * unit * 2)));
       if (want !== texW) paintAll(want);
     };
 
