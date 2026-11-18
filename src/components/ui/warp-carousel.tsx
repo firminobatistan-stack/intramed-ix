@@ -41,6 +41,8 @@ export interface WarpCarouselProps {
   defaultIndex?: number;
   /** Called when the front card should change: autoplay, drag, click, or arrow keys. */
   onIndexChange?: (index: number) => void;
+  /** Called when the user clicks/taps the center front card. */
+  onFrontCardClick?: (index: number, card: WarpCard) => void;
   /** Spin to the next card on a timer. */
   autoplay?: boolean;
   /** Seconds between autoplay spins. Longer intervals only stretch the slow tail of the spin; shorter ones compress the whole curve. */
@@ -384,6 +386,35 @@ function sizeForCap(ctx: CanvasRenderingContext2D, weight: number, family: strin
   return (cap / asc) * 100;
 }
 
+function wrapCanvasLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number
+): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  const lines: string[] = [];
+  let current = words[0];
+  for (let i = 1; i < words.length; i++) {
+    const candidate = `${current} ${words[i]}`;
+    if (ctx.measureText(candidate).width <= maxWidth) {
+      current = candidate;
+    } else {
+      lines.push(current);
+      current = words[i];
+      if (lines.length === maxLines - 1) {
+        for (let j = i + 1; j < words.length; j++) {
+          current += ` ${words[j]}`;
+        }
+        break;
+      }
+    }
+  }
+  lines.push(current);
+  return lines.slice(0, maxLines);
+}
+
 function paintCard(cv: HTMLCanvasElement, card: WarpCard, family: string) {
   const w = cv.width;
   const h = cv.height;
@@ -395,176 +426,143 @@ function paintCard(cv: HTMLCanvasElement, card: WarpCard, family: string) {
   paintMesh(ctx, w, h, card.mesh);
   ctx.setTransform(k, 0, 0, k, 0, 0);
   ctx.textBaseline = "alphabetic";
+
   const white: [number, number, number] = [255, 255, 255];
-  const accent = parseColor(card.accent || "#ffffff");
+  const accent = parseColor(card.accent || "#FACC15");
+  const n0 = parseColor((card.numeral && card.numeral[0]) || "#FFFFFF");
+  const n1 = parseColor((card.numeral && card.numeral[1]) || "#FACC15");
 
-  // title and footer (auto-compressed within 222px max width so long team/athlete names never clip)
-  const small = sizeForCap(ctx, 400, family, 8.2, "H");
-  ctx.font = fontStr(500, small, family);
-  ctx.fillStyle = rgba(white, 0.92);
-  const lines = (card.title || "").split("\n");
-  lines.slice(0, 2).forEach((ln, i) => {
-    ctx.font = fontStr(i === 0 ? 500 : 700, small, family);
-    ctx.fillStyle = rgba(white, i === 0 ? 0.8 : 0.96);
-    ctx.fillText(ln, 17, 37 + i * 15, 222);
+  // 1. Vinheta escura suave no topo e na base para garantir leitura perfeita em qualquer cor de card
+  const topVig = ctx.createLinearGradient(0, 0, 0, 115);
+  topVig.addColorStop(0, "rgba(4, 9, 26, 0.52)");
+  topVig.addColorStop(1, "rgba(4, 9, 26, 0)");
+  ctx.fillStyle = topVig;
+  ctx.fillRect(0, 0, CW, 115);
+
+  const botVig = ctx.createLinearGradient(0, 215, 0, CH);
+  botVig.addColorStop(0, "rgba(4, 9, 26, 0)");
+  botVig.addColorStop(1, "rgba(4, 9, 26, 0.72)");
+  ctx.fillStyle = botVig;
+  ctx.fillRect(0, 215, CW, CH - 215);
+
+  // Moldura interna sutil para acabamento óptico
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.roundRect(1, 1, CW - 2, CH - 2, CR);
+  ctx.stroke();
+
+  // 2. Topo: Tag/Categoria em pílula + Título Principal forte e legível
+  const rawLines = (card.title || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  const categoryTag = (rawLines[0] || "INTRAMED IX").toUpperCase();
+  const mainHeadline = rawLines.slice(1).join(" ") || categoryTag;
+
+  ctx.font = fontStr(800, 9.5, family);
+  const tagTextW = Math.min(196, ctx.measureText(categoryTag).width);
+  const pillW = tagTextW + 18;
+  ctx.fillStyle = "rgba(255, 255, 255, 0.16)";
+  ctx.beginPath();
+  ctx.roundRect(18, 20, pillW, 20, 10);
+  ctx.fill();
+  ctx.strokeStyle = rgba(accent, 0.55);
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Ponto de acento dentro da pílula
+  ctx.fillStyle = rgba(accent, 1);
+  ctx.beginPath();
+  ctx.arc(27, 30, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(categoryTag, 34, 33.5, 184);
+
+  // Título Principal (até 2 linhas, peso 800, alto contraste)
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+  ctx.shadowBlur = 6 * k;
+  ctx.font = fontStr(800, 16.5, family);
+  ctx.fillStyle = "#FFFFFF";
+  const wrappedTitle = wrapCanvasLines(ctx, mainHeadline, CW - 36, 2);
+  wrappedTitle.forEach((ln, idx) => {
+    ctx.fillText(ln, 18, 62 + idx * 20, CW - 36);
   });
-  if (card.footer) {
-    ctx.font = fontStr(500, small * 0.94, family);
-    ctx.fillStyle = rgba(white, 0.88);
-    ctx.fillText(card.footer, 17, 295, 222);
+  ctx.restore();
+
+  // 3. Centro: Número / Horário / Placar em destaque absoluto e super legível
+  const value = card.value || "";
+  let big = sizeForCap(ctx, 800, family, value.length >= 5 ? 42 : 52);
+  ctx.font = fontStr(800, big, family);
+  let vw = ctx.measureText(value).width;
+  if (vw > CW - 40) {
+    big *= (CW - 40) / vw;
+    ctx.font = fontStr(800, big, family);
+    vw = ctx.measureText(value).width;
   }
 
-  // numeral (auto-fits longer values like "18:30" or "14×12" gracefully while keeping 2-digit stats at full 50 cap)
-  let big = sizeForCap(ctx, 300, family, 50);
-  let unitPx = big * 0.31;
-  ctx.font = fontStr(300, big, family);
-  const value = card.value || "";
-  let vw = ctx.measureText(value).width;
-  ctx.font = fontStr(400, unitPx, family);
-  let uw = card.unit ? ctx.measureText(card.unit).width + 5 : 0;
-  if (vw + uw > 210) {
-    const scale = 210 / (vw + uw);
-    big *= scale;
-    unitPx *= scale;
-    ctx.font = fontStr(300, big, family);
-    vw = ctx.measureText(value).width;
-    ctx.font = fontStr(400, unitPx, family);
-    uw = card.unit ? ctx.measureText(card.unit).width + 5 : 0;
-  }
-  const detail = card.detail || "none";
-  const centre = detail === "wave" && vw + uw < 165 ? 112 : detail === "cross" && vw + uw < 165 ? 106 : 127;
-  const x0 = Math.max(14, centre - (vw + uw) / 2 + (detail === "cross" && vw + uw < 165 ? uw / 2 : 0));
-  const n0 = parseColor((card.numeral && card.numeral[0]) || "#ffffff");
-  const n1 = parseColor((card.numeral && card.numeral[1]) || "#ffffff");
-  const grad = ctx.createLinearGradient(x0, 0, x0 + Math.max(1, vw), 0);
+  const xVal = (CW - vw) / 2;
+  const yVal = card.unit ? 178 : 188;
+  const grad = ctx.createLinearGradient(xVal, yVal - 50, xVal + Math.max(1, vw), yVal);
   grad.addColorStop(0, rgba(n0, 1));
   grad.addColorStop(1, rgba(n1, 1));
 
-  // detail under the numeral (drawn first so the numeral sits on top)
-  if (detail === "ring") {
-    const cx0 = 126;
-    const cy0 = 156;
-    for (let i = 0; i < 132; i++) {
-      const a = (i / 132) * Math.PI * 2 - Math.PI / 2;
-      const seedLen = 0.5 + 0.5 * Math.sin(i * 12.9898) * Math.sin(i * 4.1414 + 1.3);
-      const top = 0.5 + 0.5 * Math.cos(a + Math.PI / 2);
-      const len = 4 + 4.5 * Math.abs(seedLen) + 2 * top;
-      const fade = 0.22 + 0.5 * top * top;
-      ctx.strokeStyle = rgba(accent, fade);
-      ctx.lineWidth = 1.0 + 0.7 * top;
-      const r1 = 68;
-      ctx.beginPath();
-      ctx.moveTo(cx0 + Math.cos(a) * r1, cy0 + Math.sin(a) * r1);
-      ctx.lineTo(cx0 + Math.cos(a) * (r1 + len), cy0 + Math.sin(a) * (r1 + len));
-      ctx.stroke();
-    }
-  } else if (detail === "slider") {
-    const pct = Math.max(0, Math.min(100, parseFloat(value) || 50)) / 100;
-    const xa = 24;
-    const xb = 232;
-    const y = 197.5;
-    const kx = xa + 4 + (xb - xa - 8) * pct * 0.86;
-    const lg = ctx.createLinearGradient(xa, 0, xb, 0);
-    lg.addColorStop(0, rgba(accent, 0.15));
-    lg.addColorStop(Math.max(0.01, (kx - xa) / (xb - xa)), rgba(accent, 0.85));
-    lg.addColorStop(1, rgba(accent, 0.35));
-    ctx.fillStyle = lg;
-    ctx.fillRect(xa, y - 0.6, xb - xa, 1.2);
-    ctx.save();
-    ctx.shadowColor = rgba(accent, 0.95);
-    ctx.shadowBlur = 9 * k;
-    ctx.fillStyle = rgba(white, 1);
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+  ctx.shadowBlur = 12 * k;
+  ctx.shadowOffsetY = 2 * k;
+  ctx.font = fontStr(800, big, family);
+  ctx.fillStyle = grad;
+  ctx.fillText(value, xVal, yVal);
+  ctx.restore();
+
+  // Unidade / Data em pílula centralizada logo abaixo do número principal
+  if (card.unit) {
+    const unitText = card.unit.toUpperCase();
+    ctx.font = fontStr(800, 11, family);
+    const uw = ctx.measureText(unitText).width;
+    const uPillW = uw + 22;
+    const uPillX = (CW - uPillW) / 2;
+    const uPillY = 194;
+
+    ctx.fillStyle = "rgba(9, 24, 52, 0.58)";
     ctx.beginPath();
-    ctx.arc(kx, y, 4.6, 0, Math.PI * 2);
+    ctx.roundRect(uPillX, uPillY, uPillW, 22, 11);
     ctx.fill();
-    ctx.restore();
-    const lab = card.labels || [];
-    const lpx = sizeForCap(ctx, 400, family, 5.2, "H");
-    ctx.font = fontStr(500, lpx, family);
-    ctx.fillStyle = rgba(white, 0.7);
-    if (lab[0]) ctx.fillText(lab[0], 14, 210);
-    if (lab[1]) {
-      ctx.textAlign = "right";
-      ctx.fillText(lab[1], 234, 210);
-      ctx.textAlign = "left";
-    }
-  } else if (detail === "wave") {
-    ctx.fillStyle = "rgba(10, 18, 42, 0.32)";
-    ctx.beginPath();
-    ctx.arc(27, 157, 18, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = rgba(white, 0.75);
-    ctx.lineWidth = 0.9;
-    const plus = (px: number, py: number, r: number) => {
-      ctx.beginPath();
-      ctx.moveTo(px - r, py);
-      ctx.lineTo(px + r, py);
-      ctx.moveTo(px, py - r);
-      ctx.lineTo(px, py + r);
-      ctx.stroke();
-    };
-    plus(27, 157, 3);
-    plus(199, 157, 3);
-    for (let i = 0; i < 56; i++) {
-      const x = 43 + i * 3;
-      const r1 = Math.abs(Math.sin(i * 1.7 + 0.4) * Math.cos(i * 0.53));
-      const hh = 1.5 + 6.5 * r1;
-      const mark = i === 23;
-      ctx.fillStyle = mark ? rgba(accent, 0.95) : rgba(white, 0.3);
-      ctx.fillRect(x, 204 - (mark ? 8 : hh), mark ? 1.4 : 0.9, mark ? 16 : hh * 2);
-    }
-  } else if (detail === "cross") {
-    ctx.fillStyle = rgba(white, 0.28);
-    ctx.fillRect(105.5, 66, 0.8, 182);
-    ctx.fillRect(12, 156.5, 186, 0.8);
-    const lab = card.labels || [];
-    ctx.font = fontStr(300, big * 0.72, family);
-    ctx.fillStyle = rgba(white, 0.07);
+    ctx.strokeStyle = rgba(accent, 0.65);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = rgba(n0, 1);
     ctx.textAlign = "center";
-    const parsedNum = parseFloat(value);
-    if (!Number.isNaN(parsedNum) && !value.includes(":")) {
-      ctx.fillText(String(Math.max(0, parsedNum - 1)), 106, 122);
-    }
+    ctx.fillText(unitText, CW / 2, uPillY + 15);
     ctx.textAlign = "left";
-    const badge = (x: number, y: number, t: string) => {
-      ctx.fillStyle = "rgba(9, 24, 52, 0.42)";
-      ctx.beginPath();
-      ctx.arc(x, y, 7.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = rgba(white, 0.8);
-      ctx.font = fontStr(600, 4.4, family);
-      ctx.textAlign = "center";
-      ctx.fillText(t, x, y + 1.5);
-      ctx.textAlign = "left";
-    };
-    if (lab[1]) badge(28, 137, lab[1]);
-    if (lab[2]) badge(181, 170, lab[2]);
-    if (lab[0]) {
-      ctx.font = fontStr(600, 5.4, family);
-      const tw = ctx.measureText(lab[0]).width;
-      const px = 238 - tw - 10;
-      ctx.fillStyle = rgba(white, 0.14);
-      ctx.beginPath();
-      ctx.roundRect(px, 25, tw + 10, 12, 4);
-      ctx.fill();
-      ctx.fillStyle = rgba(white, 0.8);
-      ctx.fillText(lab[0], px + 5, 33);
-    }
   }
 
-  ctx.save();
-  ctx.shadowColor = rgba(n1, 0.35);
-  ctx.shadowBlur = 10 * k;
-  ctx.font = fontStr(300, big, family);
-  ctx.fillStyle = grad;
-  ctx.fillText(value, x0, 184);
-  if (card.unit) {
-    ctx.font = fontStr(500, unitPx, family);
-    ctx.fillStyle = rgba(n1, 0.95);
-    const capApprox = big * 0.71;
-    ctx.fillText(card.unit, x0 + vw + 4, 184 - capApprox + unitPx * 0.78);
+  // 4. Linha luminosa sutil separadora acima do rodapé
+  const lineGrad = ctx.createLinearGradient(18, 0, CW - 18, 0);
+  lineGrad.addColorStop(0, rgba(accent, 0.85));
+  lineGrad.addColorStop(0.6, rgba(white, 0.35));
+  lineGrad.addColorStop(1, "rgba(255, 255, 255, 0.05)");
+  ctx.fillStyle = lineGrad;
+  ctx.fillRect(18, 258, CW - 36, 2);
+
+  // 5. Rodapé claro e legível na base do card
+  if (card.footer) {
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+    ctx.shadowBlur = 4 * k;
+    ctx.font = fontStr(700, 11.5, family);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.96)";
+    const footerLines = wrapCanvasLines(ctx, card.footer, CW - 36, 2);
+    if (footerLines.length === 1) {
+      ctx.fillText(footerLines[0], 18, 286, CW - 36);
+    } else {
+      footerLines.forEach((fl, idx) => {
+        ctx.fillText(fl, 18, 278 + idx * 15, CW - 36);
+      });
+    }
+    ctx.restore();
   }
-  ctx.restore();
 }
 
 function glowShape(pose: Pose): [number, number, number] {
@@ -720,11 +718,7 @@ vec4 glowAt(vec2 pu, float halfH, int base){
 }
 
 vec3 stage(vec2 pu, float halfH, int base){
-  vec4 g = glowAt(pu, halfH, base);
-  if (g.a <= 0.0) return uBg;
-  float I = clamp(g.a, 0.0, 1.0);
-  vec3 drop = uBg - g.rgb / g.a;
-  return uBg - drop * pow(vec3(I), vec3(0.8, 1.6, 1.0));
+  return uBg;
 }
 
 vec3 render(vec2 pu, float halfH, int base){
@@ -855,28 +849,6 @@ function drawFallback(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
-  const gH = Math.min(h / 2 / unit, 288);
-  for (const p of poses) {
-    if (p.layer < 0) continue;
-    const [mu, r, amp] = glowShape(p.pose);
-    const a = Math.min(1, amp) * 0.9;
-    if (a < 0.01) continue;
-    const rx = r * 1.35 * unit;
-    const col = glows[p.layer] || [127, 208, 240];
-    const rgb = `${col[0]}, ${col[1]}, ${col[2]}`;
-    for (const yy of [h / 2 - (gH - 11) * unit, h / 2 + (gH - 12) * unit]) {
-      ctx.save();
-      ctx.translate(w / 2 + mu * unit, yy);
-      ctx.scale(1, (20 * unit) / rx);
-      const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
-      rg.addColorStop(0, `rgba(${rgb}, ${a})`);
-      rg.addColorStop(0.55, `rgba(${rgb}, ${a * 0.55})`);
-      rg.addColorStop(1, `rgba(${rgb}, 0)`);
-      ctx.fillStyle = rg;
-      ctx.fillRect(-rx, -rx, rx * 2, rx * 2);
-      ctx.restore();
-    }
-  }
   const proj = (X: number, Zb: number, Y: number) => {
     const D = FOCAL + Zb;
     return [w / 2 + ((X * FOCAL) / D) * unit, h / 2 - ((Y * FOCAL) / D) * unit];
@@ -990,6 +962,7 @@ export function WarpCarousel({
   index,
   defaultIndex = 0,
   onIndexChange,
+  onFrontCardClick,
   autoplay = true,
   interval = 3.6667,
   step = 2,
@@ -1369,6 +1342,10 @@ export function WarpCarousel({
       const u = (e.clientX - r.left - r.width / 2) / Math.min(r.width / 720, r.height / 440);
       if (u > 168) request(lastIndex.current + 1);
       else if (u < -168) request(lastIndex.current - 1);
+      else if (onFrontCardClick) {
+        const realIdx = mod(lastIndex.current, realCount);
+        onFrontCardClick(realIdx, list[mod(lastIndex.current, N)]);
+      }
       return;
     }
     if (now - L.lastT > 0.08) L.v = 0;

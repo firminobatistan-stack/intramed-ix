@@ -1,15 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  ArrowRight,
-  BarChart3,
-  CalendarClock,
-  ChevronLeft,
-  ChevronRight,
-  Flame,
-  Trophy,
-} from 'lucide-react';
-import { WarpCard, WarpCardDetail, WarpCarousel } from '@/components/ui/warp-carousel';
+import { WarpCard, WarpCarousel } from '@/components/ui/warp-carousel';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 import { Match, MatchEventType } from '../../types/domain';
 
@@ -17,9 +8,7 @@ export type ShowcaseMode = 'upcoming' | 'scorers' | 'stats';
 
 interface ShowcaseCardEntry {
   card: WarpCard;
-  ctaLabel: string;
   ctaPath: string;
-  subtitle: string;
 }
 
 interface IntramedWarpShowcaseProps {
@@ -36,7 +25,7 @@ const BRAND_MESHES: Record<
   { mesh: string[]; numeral: [string, string]; accent: string; glow: string }
 > = {
   intramed: {
-    numeral: ['#FEF08A', '#FACC15'],
+    numeral: ['#FFFFFF', '#FACC15'],
     accent: '#FACC15',
     glow: '#1D4ED8',
     mesh: [
@@ -51,7 +40,7 @@ const BRAND_MESHES: Record<
   },
   colossal: {
     // Turma 24 — Verde Esmeralda & Dourado
-    numeral: ['#FEF08A', '#6EE7B7'],
+    numeral: ['#FFFFFF', '#FDE047'],
     accent: '#FACC15',
     glow: '#10B981',
     mesh: [
@@ -66,7 +55,7 @@ const BRAND_MESHES: Record<
   },
   soberana: {
     // Turma 25 — Vinho Grená & Ouro
-    numeral: ['#FEF3C7', '#FDE047'],
+    numeral: ['#FFFFFF', '#FDE047'],
     accent: '#FACC15',
     glow: '#BE123C',
     mesh: [
@@ -81,7 +70,7 @@ const BRAND_MESHES: Record<
   },
   sanguinaria: {
     // Turma 21 — Vermelho Vivo & Fogo
-    numeral: ['#FFF7ED', '#FDBA74'],
+    numeral: ['#FFFFFF', '#FDE047'],
     accent: '#FB923C',
     glow: '#EF4444',
     mesh: [
@@ -96,7 +85,7 @@ const BRAND_MESHES: Record<
   },
   predadora: {
     // Turma 22 — Preto Obsidiana & Amarelo Ouro
-    numeral: ['#FEF9C3', '#FACC15'],
+    numeral: ['#FFFFFF', '#FACC15'],
     accent: '#FACC15',
     glow: '#F59E0B',
     mesh: [
@@ -111,7 +100,7 @@ const BRAND_MESHES: Record<
   },
   tormenta: {
     // Turma 23 — Azul Tempestade & Celeste
-    numeral: ['#E0F2FE', '#7DD3FC'],
+    numeral: ['#FFFFFF', '#7DD3FC'],
     accent: '#38BDF8',
     glow: '#0284C7',
     mesh: [
@@ -151,9 +140,9 @@ function getPaletteForTeam(teamId?: string | null) {
 }
 
 function shortDateBadge(dateStr?: string | null): string {
-  if (!dateStr) return 'IX';
+  if (!dateStr) return 'IX EDIÇÃO';
   const m = /(\d{2}\/\d{2})/.exec(dateStr);
-  return m ? m[1] : dateStr.slice(0, 5);
+  return m ? `DIA ${m[1]}` : dateStr.slice(0, 8);
 }
 
 function sortUpcomingMatches(matches: Match[]): Match[] {
@@ -185,47 +174,20 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
   const { visibleMatches, visibleAthletes, visibleTeams, getSheetByMatchId, getTeamById } =
     useCompetitionStore();
 
-  const [mode, setMode] = useState<ShowcaseMode>(initialMode);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const entries = useMemo<ShowcaseCardEntry[]>(() => {
+    const list: ShowcaseCardEntry[] = [];
 
-  const detailsCycle: WarpCardDetail[] = ['ring', 'wave', 'cross', 'slider'];
-
-  // 1. MODO PRÓXIMOS JOGOS / AO VIVO
-  const upcomingEntries = useMemo<ShowcaseCardEntry[]>(() => {
-    const candidates = sortUpcomingMatches(
+    // 1. Próximos Jogos / Partidas Ao Vivo
+    const upcoming = sortUpcomingMatches(
       visibleMatches.filter(
         (m) =>
           m.modalityId !== 'natacao' &&
           m.id !== 'match_natacao_geral_final' &&
           (m.status === 'live' || m.status === 'halftime' || m.status === 'scheduled')
       )
-    ).slice(0, 6);
+    ).slice(0, 4);
 
-    if (candidates.length === 0) {
-      const finishedSample = visibleMatches
-        .filter((m) => m.modalityId !== 'natacao' && m.status === 'finished')
-        .slice(0, 4);
-      if (finishedSample.length > 0) {
-        return finishedSample.map((m, idx) => {
-          const pal = getPaletteForTeam(m.homeTeam.teamId || m.awayTeam.teamId);
-          return {
-            card: {
-              title: `${m.modalityName}\n${m.homeTeam.teamName || 'TBD'} × ${m.awayTeam.teamName || 'TBD'}`,
-              value: `${m.homeTeam.score ?? 0}-${m.awayTeam.score ?? 0}`,
-              unit: 'FIM',
-              footer: `${m.phaseLabel || 'Oficial'} • ${shortDateBadge(m.scheduledDate)}`,
-              detail: detailsCycle[idx % detailsCycle.length],
-              ...pal,
-            },
-            ctaLabel: 'Ver Placar',
-            ctaPath: `/placar/${m.id}`,
-            subtitle: `${m.modalityName} • ${m.homeTeam.teamName} × ${m.awayTeam.teamName}`,
-          };
-        });
-      }
-    }
-
-    return candidates.map((m, idx) => {
+    const matchItems: ShowcaseCardEntry[] = upcoming.map((m) => {
       const isLive = m.status === 'live' || m.status === 'halftime';
       const sheet = getSheetByMatchId(m.id);
       const isSets = sheet?.scoringModel === 'sets_points';
@@ -254,26 +216,15 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
         card: {
           title: `${m.modalityName}${catSuffix}\n${homeLabel} × ${awayLabel}`,
           value: valStr,
-          unit: isLive ? 'LIVE' : shortDateBadge(m.scheduledDate),
+          unit: isLive ? 'AO VIVO' : shortDateBadge(m.scheduledDate),
           footer: `${m.phaseLabel || 'Confronto'} • ${m.venue || 'Quadra Oficial'}`,
-          detail: detailsCycle[idx % detailsCycle.length],
-          labels:
-            detailsCycle[idx % detailsCycle.length] === 'cross'
-              ? [shortDateBadge(m.scheduledDate), 'M', 'V']
-              : detailsCycle[idx % detailsCycle.length] === 'slider'
-              ? [homeLabel.slice(0, 10), awayLabel.slice(0, 10)]
-              : undefined,
           ...pal,
         },
-        ctaLabel: isLive ? 'Acompanhar Ao Vivo' : 'Detalhes do Jogo',
         ctaPath: `/placar/${m.id}`,
-        subtitle: `${m.modalityName}${catSuffix} • ${homeLabel} × ${awayLabel}`,
       };
     });
-  }, [visibleMatches, getSheetByMatchId]);
 
-  // 2. MODO ARTILHEIROS & ELENCOS REAIS (Zero números fictícios)
-  const scorerEntries = useMemo<ShowcaseCardEntry[]>(() => {
+    // 2. Artilheiros Reais (quando houver gols/pontos marcados)
     const scoreMap = new Map<
       string,
       {
@@ -293,12 +244,11 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
 
       for (const ev of sheet.events || []) {
         if (ev.isDeleted || !ev.athleteId || !SCORING_EVENT_TYPES.includes(ev.type)) continue;
-        const delta =
-          ev.type === 'point_3' ? 3 : ev.type === 'point_2' ? 2 : 1;
+        const delta = ev.type === 'point_3' ? 3 : ev.type === 'point_2' ? 2 : 1;
         const unitLabel =
           m.modalityId === 'basquete' || m.modalityId === 'volei' || m.modalityId === 'volei-de-praia'
-            ? 'pts'
-            : 'gols';
+            ? 'PONTOS'
+            : 'GOLS';
         const key = `${ev.athleteId}_${m.modalityId}`;
         const prev = scoreMap.get(key);
         const ath = visibleAthletes.find((a) => a.id === ev.athleteId);
@@ -325,303 +275,137 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
     const realLeaders = Array.from(scoreMap.values())
       .filter((x) => x.points > 0)
       .sort((a, b) => b.points - a.points)
-      .slice(0, 6);
+      .slice(0, 3);
 
-    if (realLeaders.length > 0) {
-      return realLeaders.map((leader, idx) => {
-        const team = leader.teamId ? getTeamById(leader.teamId) : undefined;
-        const pal = getPaletteForTeam(leader.teamId);
-        const shortName = leader.name.split(' ').slice(0, 2).join(' ');
-        return {
-          card: {
-            title: `${idx + 1}º Artilheiro • ${leader.modalityName}\n${shortName}`,
-            value: String(leader.points),
-            unit: leader.unitLabel,
-            footer: `${team?.name || 'Medicina UEMA'} • Ranking Oficial`,
-            detail: detailsCycle[idx % detailsCycle.length],
-            labels:
-              detailsCycle[idx % detailsCycle.length] === 'cross'
-                ? [`#${idx + 1}`, 'PRO', 'IX']
-                : undefined,
-            ...pal,
-          },
-          ctaLabel: 'Ficha do Atleta',
-          ctaPath: `/atleta/${leader.athleteId}`,
-          subtitle: `${shortName} (${team?.name || 'IntraMed'}) • ${leader.points} ${leader.unitLabel}`,
-        };
-      });
-    }
+    const scorerItems: ShowcaseCardEntry[] =
+      realLeaders.length > 0
+        ? realLeaders.map((leader, idx) => {
+            const team = leader.teamId ? getTeamById(leader.teamId) : undefined;
+            const pal = getPaletteForTeam(leader.teamId);
+            const shortName = leader.name.split(' ').slice(0, 2).join(' ');
+            return {
+              card: {
+                title: `${idx + 1}º Artilheiro • ${leader.modalityName}\n${shortName}`,
+                value: String(leader.points),
+                unit: leader.unitLabel,
+                footer: `${team?.name || 'Medicina UEMA'} • Ranking Oficial`,
+                ...pal,
+              },
+              ctaPath: `/atleta/${leader.athleteId}`,
+            };
+          })
+        : visibleTeams.slice(0, 3).map((team) => {
+            const count = visibleAthletes.filter((a) => a.teamId === team.id).length;
+            const pal = getPaletteForTeam(team.id);
+            const cleanTurma =
+              team.id === 'sanguinaria'
+                ? 'Turma 21'
+                : team.id === 'predadora'
+                ? 'Turma 22'
+                : team.id === 'tormenta'
+                ? 'Turma 23'
+                : team.id === 'colossal'
+                ? 'Turma 24'
+                : 'Turma 25';
+            return {
+              card: {
+                title: `Elenco • ${cleanTurma}\n${team.name}`,
+                value: String(count),
+                unit: count === 1 ? 'ATLETA' : 'ATLETAS',
+                footer: 'Confirmados no IX IntraMed',
+                ...pal,
+              },
+              ctaPath: `/equipe/${team.id}`,
+            };
+          });
 
-    // Antes do 1º gol do torneio: mostra os elencos reais confirmados por Turma!
-    return visibleTeams.map((team, idx) => {
-      const count = visibleAthletes.filter((a) => a.teamId === team.id).length;
-      const pal = getPaletteForTeam(team.id);
-      const cleanTurma =
-        team.id === 'sanguinaria'
-          ? 'Turma 21'
-          : team.id === 'predadora'
-          ? 'Turma 22'
-          : team.id === 'tormenta'
-          ? 'Turma 23'
-          : team.id === 'colossal'
-          ? 'Turma 24'
-          : 'Turma 25';
-      return {
-        card: {
-          title: `Elenco Oficial • ${cleanTurma}\n${team.name}`,
-          value: String(count),
-          unit: count === 1 ? 'atleta' : 'atletas',
-          footer: 'Artilharia abre no 1º jogo (20/11)',
-          detail: detailsCycle[idx % detailsCycle.length],
-          labels:
-            detailsCycle[idx % detailsCycle.length] === 'slider'
-              ? ['Inscritos', 'Prontos']
-              : detailsCycle[idx % detailsCycle.length] === 'cross'
-              ? [cleanTurma, 'IX', '26']
-              : undefined,
-          ...pal,
-        },
-        ctaLabel: `Ver ${team.name}`,
-        ctaPath: `/equipe/${team.id}`,
-        subtitle: `${team.name} (${cleanTurma}) • ${count} atletas confirmados`,
-      };
-    });
-  }, [visibleMatches, visibleAthletes, visibleTeams, getSheetByMatchId, getTeamById]);
-
-  // 3. MODO ESTATÍSTICAS GERAIS DO TORNEIO
-  const statsEntries = useMemo<ShowcaseCardEntry[]>(() => {
+    // 3. Estatísticas Oficiais do Torneio
     const nonSwimming = visibleMatches.filter(
       (m) => m.modalityId !== 'natacao' && m.id !== 'match_natacao_geral_final'
     );
-    const finishedCount = nonSwimming.filter((m) => m.status === 'finished').length;
-    const liveCount = nonSwimming.filter(
-      (m) => m.status === 'live' || m.status === 'halftime'
-    ).length;
-
-    let totalGoalsAndPoints = 0;
-    for (const m of nonSwimming) {
-      if (m.status === 'live' || m.status === 'halftime' || m.status === 'finished') {
-        totalGoalsAndPoints += (m.homeTeam.score ?? 0) + (m.awayTeam.score ?? 0);
-      }
-    }
-
-    return [
+    const statItems: ShowcaseCardEntry[] = [
       {
         card: {
-          title: 'Atletas Oficiais\nConfirmados',
+          title: 'Estatísticas Oficiais\nAtletas Confirmados',
           value: String(visibleAthletes.length),
-          unit: 'atletas',
+          unit: 'ATLETAS',
           footer: '5 Turmas • Medicina UEMA',
-          detail: 'ring',
           ...BRAND_MESHES.intramed,
         },
-        ctaLabel: 'Ver Equipes',
         ctaPath: '/equipe',
-        subtitle: `${visibleAthletes.length} atletas confirmados nas 5 atléticas`,
       },
       {
         card: {
-          title: 'Grade Oficial\nde Confrontos',
+          title: 'Calendário Oficial\nConfrontos na Tabela',
           value: String(nonSwimming.length),
-          unit: 'jogos',
-          footer:
-            liveCount > 0
-              ? `${liveCount} ao vivo agora • ${finishedCount} encerrados`
-              : finishedCount > 0
-              ? `${finishedCount} de ${nonSwimming.length} jogos concluídos`
-              : 'De 20/11 a 29/11 • Tabela Oficial',
-          detail: 'wave',
+          unit: 'JOGOS',
+          footer: 'De 20/11 a 29/11 • Quadra Oficial',
           ...BRAND_MESHES.colossal,
         },
-        ctaLabel: 'Calendário Completo',
         ctaPath: '/jogos',
-        subtitle: `${nonSwimming.length} confrontos oficiais programados`,
       },
       {
         card: {
-          title: 'Modalidades\nem Disputa',
+          title: 'Troféu Geral\nModalidades em Disputa',
           value: '16',
-          unit: 'mod',
+          unit: 'ESPORTES',
           footer: '8 Coletivas (20 pts) • 8 Individuais',
-          detail: 'cross',
-          labels: ['IX Edição', '8C', '8I'],
           ...BRAND_MESHES.soberana,
         },
-        ctaLabel: 'Ver Chaveamento',
         ctaPath: '/chaveamento',
-        subtitle: '16 modalidades oficiais valendo pontos para o troféu geral',
-      },
-      {
-        card:
-          totalGoalsAndPoints > 0
-            ? {
-                title: 'Placar Acumulado\nGols & Sets',
-                value: String(totalGoalsAndPoints),
-                unit: 'pts',
-                footer: 'Registrados na Súmula Eletrônica',
-                detail: 'slider',
-                labels: ['Abertura', 'Finais'],
-                ...BRAND_MESHES.predadora,
-              }
-            : {
-                title: 'Disputa Pelo\nTítulo Geral',
-                value: '5',
-                unit: 'turmas',
-                footer: 'T21 • T22 • T23 • T24 • T25',
-                detail: 'slider',
-                labels: ['20/11', '29/11'],
-                ...BRAND_MESHES.tormenta,
-              },
-        ctaLabel: 'Ver Artilharia',
-        ctaPath: '/artilharia',
-        subtitle:
-          totalGoalsAndPoints > 0
-            ? `${totalGoalsAndPoints} gols/sets computados oficialmente`
-            : 'Sanguinária, Predadora, Tormenta, Colossal e Soberana',
       },
     ];
-  }, [visibleMatches, visibleAthletes.length]);
 
-  const activeEntries =
-    mode === 'upcoming'
-      ? upcomingEntries
-      : mode === 'scorers'
-      ? scorerEntries
-      : statsEntries;
+    if (initialMode === 'scorers') {
+      list.push(...scorerItems, ...statItems.slice(0, 2), ...matchItems.slice(0, 2));
+    } else if (initialMode === 'stats') {
+      list.push(...statItems, ...matchItems.slice(0, 2), ...scorerItems.slice(0, 2));
+    } else {
+      // Intercala próximos jogos, estatísticas e destaques em uma rotação única e fluida
+      list.push(
+        ...matchItems.slice(0, 2),
+        statItems[0],
+        ...scorerItems.slice(0, 1),
+        ...matchItems.slice(2, 4),
+        statItems[1],
+        statItems[2]
+      );
+    }
 
-  const safeEntries = activeEntries.length > 0 ? activeEntries : statsEntries;
-  const safeIndex = ((activeIndex % safeEntries.length) + safeEntries.length) % safeEntries.length;
-  const currentEntry = safeEntries[safeIndex];
-  const cards = useMemo(() => safeEntries.map((e) => e.card), [safeEntries]);
+    return list.filter(Boolean);
+  }, [
+    visibleMatches,
+    visibleAthletes,
+    visibleTeams,
+    getSheetByMatchId,
+    getTeamById,
+    initialMode,
+  ]);
 
-  const handleModeChange = (nextMode: ShowcaseMode) => {
-    setMode(nextMode);
-    setActiveIndex(0);
-  };
+  const cards = useMemo(() => entries.map((e) => e.card), [entries]);
 
   return (
-    <section className="all-sports-card overflow-hidden p-4 sm:p-5 space-y-3">
-      {/* Barra Superior: Seletor de Modo (Próximos Jogos | Artilheiros | Estatísticas) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-brand-yellow shrink-0" aria-hidden="true" />
-          <span className="text-xs sm:text-sm font-display font-extrabold text-brand-text-primary tracking-tight">
-            Radar 3D • IntraMed IX
-          </span>
-        </div>
-
-        <div
-          role="tablist"
-          aria-label="Modo de visualização do carrossel 3D"
-          className="inline-flex items-center gap-1 p-1 rounded-full bg-[#F3F4F9] shadow-[inset_0_0_0_1px_rgba(15,42,86,0.06)] self-start sm:self-auto"
-        >
-          {[
-            { id: 'upcoming' as const, label: 'Em Breve', icon: CalendarClock },
-            { id: 'scorers' as const, label: 'Artilheiros', icon: Flame },
-            { id: 'stats' as const, label: 'Estatísticas', icon: BarChart3 },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = mode === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => handleModeChange(tab.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-display font-bold transition-[transform,background-color,color,box-shadow] duration-[160ms] ease-emil-out active:scale-[0.96] ${
-                  isActive
-                    ? 'bg-[#0B218A] text-white shadow-sm'
-                    : 'text-slate-600 can-hover:hover:text-slate-900'
-                }`}
-              >
-                <Icon
-                  className={`w-3.5 h-3.5 ${
-                    isActive ? 'text-brand-yellow' : 'text-[#0B218A]'
-                  }`}
-                />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Palco 3D WebGL WarpCarousel integrado à superfície clara oficial */}
-      <div className="relative rounded-[18px] overflow-hidden shadow-[inset_0_0_0_1px_rgba(15,42,86,0.06)] bg-[#F4F6FB]">
-        <WarpCarousel
-          cards={cards}
-          index={safeIndex}
-          onIndexChange={setActiveIndex}
-          autoplay
-          step={1}
-          interval={4.2}
-          warp={0.92}
-          background="#F4F6FB"
-          ariaLabel="Destaques em 3D do IntraMed IX"
-          style={{
-            minHeight: compact ? 300 : 340,
-            maxHeight: compact ? 360 : 420,
-            aspectRatio: '16 / 10',
-          }}
-        />
-      </div>
-
-      {/* Rodapé Interativo: Resumo do Card em Foco + Controles & Ação Direta */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <button
-            type="button"
-            onClick={() =>
-              setActiveIndex((prev) => (prev - 1 + safeEntries.length) % safeEntries.length)
-            }
-            aria-label="Card anterior"
-            className="w-8 h-8 rounded-full bg-[#F3F4F9] can-hover:hover:bg-brand-blue-light text-[#0B218A] flex items-center justify-center transition-[transform,background-color] duration-[150ms] ease-emil-out active:scale-[0.92] shrink-0"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveIndex((prev) => (prev + 1) % safeEntries.length)}
-            aria-label="Próximo card"
-            className="w-8 h-8 rounded-full bg-[#F3F4F9] can-hover:hover:bg-brand-blue-light text-[#0B218A] flex items-center justify-center transition-[transform,background-color] duration-[150ms] ease-emil-out active:scale-[0.92] shrink-0"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-
-          <span className="text-xs font-semibold text-slate-600 truncate">
-            {currentEntry?.subtitle}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 ml-auto">
-          <div className="hidden sm:flex items-center gap-1" aria-hidden="true">
-            {safeEntries.map((_, idx) => (
-              <button
-                key={idx}
-                type="button"
-                tabIndex={-1}
-                onClick={() => setActiveIndex(idx)}
-                className={`h-1.5 rounded-full transition-[width,background-color] duration-[200ms] ease-emil-out ${
-                  idx === safeIndex ? 'w-5 bg-[#0B218A]' : 'w-1.5 bg-slate-300'
-                }`}
-              />
-            ))}
-          </div>
-
-          {currentEntry && (
-            <button
-              type="button"
-              onClick={() => navigate(currentEntry.ctaPath)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0B218A] can-hover:hover:bg-[#1532B5] text-white text-xs font-display font-bold shadow-sm transition-[transform,background-color] duration-[150ms] ease-emil-out active:scale-[0.97]"
-            >
-              <Trophy className="w-3.5 h-3.5 text-brand-yellow" />
-              <span>{currentEntry.ctaLabel}</span>
-              <ArrowRight className="w-3.5 h-3.5 text-brand-yellow" />
-            </button>
-          )}
-        </div>
-      </div>
+    <section className="relative -mx-4 sm:mx-0 overflow-hidden select-none">
+      <WarpCarousel
+        cards={cards}
+        autoplay
+        step={1}
+        interval={4.2}
+        warp={0.92}
+        background="#F4F6FB"
+        ariaLabel="Destaques em 3D do IX IntraMed"
+        onFrontCardClick={(idx) => {
+          const target = entries[idx];
+          if (target?.ctaPath) {
+            navigate(target.ctaPath);
+          }
+        }}
+        style={{
+          minHeight: compact ? 300 : 340,
+          maxHeight: compact ? 350 : 400,
+          aspectRatio: '16 / 9',
+        }}
+      />
     </section>
   );
 };
