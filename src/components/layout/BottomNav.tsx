@@ -1,16 +1,14 @@
-import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Home,
-  Tv,
-  GitBranch,
-  CreditCard,
   Calendar,
-  Trophy,
-  LogIn,
+  GitBranch,
+  Home,
   Menu,
+  Trophy,
+  Tv,
 } from 'lucide-react';
-import { useRegistrationStore } from '../../context/RegistrationStoreContext';
+import { LiquidNavbar, LiquidNavItem } from '@/components/ui/liquid-glass-navbar';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 
 interface BottomNavProps {
@@ -18,12 +16,14 @@ interface BottomNavProps {
 }
 
 /**
- * Dock de Navegação Móvel Otimizado para Ergonomia (Floating Dock com Thumb-Zone)
+ * Dock Móvel Liquid Glass ("Waterline" WebGL Metaball) nas cores oficiais do IntraMed IX:
+ * - Pílula translúcida Azul Royal (#0B218A) + gota líquida Dourada (#FACC15) que estica,
+ *   se divide em gotículas nos saltos longos e se funde com ondulações ao tocar.
  */
 export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
   const location = useLocation();
-  const { hasCompletedRegistration } = useRegistrationStore();
-  const { launchConfig, currentUser, hasActiveLiveMatch } = useCompetitionStore();
+  const navigate = useNavigate();
+  const { hasActiveLiveMatch } = useCompetitionStore();
 
   const triggerHaptic = () => {
     try {
@@ -35,117 +35,90 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
     }
   };
 
-  interface DockNavItem {
-    to: string;
-    label: string;
-    icon: any;
-    exact?: boolean;
-    isLive?: boolean;
-    highlight?: boolean;
-  }
+  const routes = useMemo(
+    () => [
+      { to: '/', exact: true },
+      hasActiveLiveMatch ? { to: '/placar', exact: false } : { to: '/jogos', exact: false },
+      { to: '/artilharia', exact: false },
+      { to: '/chaveamento', exact: false },
+    ],
+    [hasActiveLiveMatch]
+  );
 
-  const navItems: DockNavItem[] = [
-    {
-      to: '/',
-      label: 'Início',
-      icon: Home,
-      exact: true,
-    },
-    ...(hasActiveLiveMatch
-      ? [
-          {
-            to: '/placar',
+  const activeIndex = useMemo(() => {
+    for (let i = 0; i < routes.length; i++) {
+      const r = routes[i];
+      if (r.exact ? location.pathname === r.to : location.pathname.startsWith(r.to)) {
+        return i;
+      }
+    }
+    // Rotas secundárias abertas pelo Drawer ("Mais": equipes, comunidade, perfil, admin, inscrição)
+    return 4;
+  }, [location.pathname, routes]);
+
+  const liquidItems = useMemo<LiquidNavItem[]>(
+    () => [
+      {
+        label: 'Início',
+        icon: <Home className="w-[18px] h-[18px]" />,
+        fx: 'glow',
+      },
+      hasActiveLiveMatch
+        ? {
             label: 'Ao Vivo',
-            icon: Tv,
-            isLive: true,
-          },
-        ]
-      : [
-          {
-            to: '/jogos',
+            icon: <Tv className="w-[18px] h-[18px]" />,
+            badge: (
+              <span className="absolute -top-1 -right-1.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#0B218A] animate-pulse" />
+            ),
+            fx: 'pop',
+          }
+        : {
             label: 'Jogos',
-            icon: Calendar,
+            icon: <Calendar className="w-[18px] h-[18px]" />,
+            fx: 'pop',
           },
-        ]),
-    {
-      to: '/artilharia',
-      label: 'Artilharia',
-      icon: Trophy,
-    },
-    {
-      to: '/chaveamento',
-      label: 'Chaves',
-      icon: GitBranch,
-    },
-  ];
+      {
+        label: 'Artilharia',
+        icon: <Trophy className="w-[18px] h-[18px]" />,
+        fx: 'drop',
+      },
+      {
+        label: 'Chaves',
+        icon: <GitBranch className="w-[18px] h-[18px]" />,
+        fx: 'spin',
+      },
+      {
+        label: 'Mais',
+        icon: <Menu className="w-[18px] h-[18px]" />,
+        fx: 'wave',
+      },
+    ],
+    [hasActiveLiveMatch]
+  );
 
   return (
-    <nav
-      aria-label="Navegação móvel inferior"
-      className="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-3 pb-3 pt-1 pointer-events-none pb-safe"
-    >
-      <div className="pointer-events-auto flex items-center justify-around max-w-md mx-auto px-2 py-1.5 rounded-full bg-[#0B218A]/95 backdrop-blur-xl border border-white/15 shadow-[0_12px_32px_rgba(11,33,138,0.45)]">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = item.exact
-            ? location.pathname === item.to
-            : location.pathname.startsWith(item.to);
-
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={triggerHaptic}
-              title={item.label}
-              className="group relative flex flex-col items-center justify-center py-1 px-2 select-none touch-manipulation focus:outline-none transition-transform duration-[150ms] ease-emil-out active:scale-[0.94]"
-            >
-              <div
-                className={`relative flex items-center justify-center w-10 h-10 rounded-full transition-[transform,background-color,color,box-shadow] duration-[200ms] ease-emil-out ${
-                  isActive
-                    ? 'bg-brand-yellow text-[#0B218A] shadow-[0_0_16px_rgba(250,204,21,0.55)] scale-105'
-                    : item.highlight
-                    ? 'bg-amber-400/20 text-brand-yellow'
-                    : 'bg-white/10 text-white/80 can-hover:hover:bg-white/20 can-hover:hover:text-white'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {item.isLive && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#0B218A] animate-pulse" />
-                )}
-                {item.highlight && !isActive && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-brand-yellow ring-2 ring-[#0B218A]" />
-                )}
-              </div>
-              <span
-                className={`text-[9px] font-black tracking-tight mt-0.5 block transition-colors duration-[150ms] leading-none ${
-                  isActive ? 'text-brand-yellow' : 'text-white/70'
-                }`}
-              >
-                {item.label}
-              </span>
-            </NavLink>
-          );
-        })}
-
-        {/* Botão de Menu Completo (Abre Drawer Lateral com todas as 16 modalidades, favoritos e admin) */}
-        <button
-          type="button"
-          onClick={() => {
+    <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-3 pb-3 pt-1 pointer-events-none pb-safe">
+      <div className="pointer-events-auto max-w-md mx-auto">
+        <LiquidNavbar
+          tone="brand"
+          dock
+          sound={false}
+          active={activeIndex}
+          items={liquidItems}
+          ariaLabel="Navegação móvel inferior"
+          onChange={(idx) => {
             triggerHaptic();
-            onOpenMenu?.();
+            if (idx === 4) {
+              onOpenMenu?.();
+              return;
+            }
+            const target = routes[idx];
+            if (target && location.pathname !== target.to) {
+              navigate(target.to);
+            }
           }}
-          title="Mais opções e modalidades"
-          aria-label="Abrir menu completo"
-          className="group relative flex flex-col items-center justify-center py-1 px-2 select-none touch-manipulation focus:outline-none transition-transform duration-[150ms] ease-emil-out active:scale-[0.94]"
-        >
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white/80 can-hover:hover:bg-white/20 can-hover:hover:text-white transition-[background-color,color] duration-[150ms]">
-            <Menu className="w-4 h-4" />
-          </div>
-          <span className="text-[9px] font-black tracking-tight mt-0.5 block text-white/70 leading-none">
-            Mais
-          </span>
-        </button>
+        />
       </div>
-    </nav>
+    </div>
   );
 };
