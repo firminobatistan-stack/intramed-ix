@@ -131,6 +131,12 @@ export const LoginPage: React.FC = () => {
         if (data.token) {
           setStoredOperatorToken(data.token);
         }
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem(
+            'intramed_admin_session',
+            data.user.role === 'moderador_master' ? 'true' : 'user'
+          );
+        }
 
         const userObj = {
           id: data.user.id,
@@ -155,6 +161,10 @@ export const LoginPage: React.FC = () => {
         );
 
         setTimeout(() => {
+          if (data.user.role === 'moderador_master') {
+            navigate(returnTo || '/admin', { replace: true });
+            return;
+          }
           const needsProfileCompletion =
             Boolean(data.isNewUser) || !data.profile?.turma;
           const targetRoute = needsProfileCompletion
