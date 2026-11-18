@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WarpCard, WarpCarousel } from '@/components/ui/warp-carousel';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
-import { Athlete, Match, MatchEventType } from '../../types/domain';
+import { Athlete, Match, MatchEventType, PublicUserProfile } from '../../types/domain';
 
 export type ShowcaseMode = 'upcoming' | 'scorers' | 'stats';
 
@@ -177,17 +177,20 @@ function sortUpcomingMatches(matches: Match[]): Match[] {
 }
 
 /**
- * Seleciona atletas confirmados com foto real (`avatarUrl`), intercalando as 5 Turmas
- * para que todas as atléticas apareçam representadas nos cards 3D.
+ * Seleciona e intercala atletas confirmados das 5 Turmas (priorizando quem tem foto,
+ * e usando o brasão oficial da Turma caso ainda não tenha foto) para que TODOS os atletas
+ * apareçam em rotação contínua nos cards 3D.
  */
-function pickDiversifiedAthletesWithPhoto(athletes: Athlete[], limit = 6): Athlete[] {
-  const withPhoto = athletes.filter(
-    (a) => typeof a.avatarUrl === 'string' && a.avatarUrl.trim().length > 10
-  );
-  if (withPhoto.length === 0) return [];
+function buildDiversifiedAthleteList(athletes: Athlete[]): Athlete[] {
+  const sorted = [...athletes].sort((a, b) => {
+    const aHas = typeof a.avatarUrl === 'string' && a.avatarUrl.trim().length > 10 ? 0 : 1;
+    const bHas = typeof b.avatarUrl === 'string' && b.avatarUrl.trim().length > 10 ? 0 : 1;
+    if (aHas !== bHas) return aHas - bHas;
+    return a.name.localeCompare(b.name);
+  });
 
   const buckets = new Map<string, Athlete[]>();
-  for (const ath of withPhoto) {
+  for (const ath of sorted) {
     const key = (ath.teamId || ath.turma || 'other').toLowerCase();
     const list = buckets.get(key) || [];
     list.push(ath);
@@ -197,14 +200,13 @@ function pickDiversifiedAthletesWithPhoto(athletes: Athlete[], limit = 6): Athle
   const picked: Athlete[] = [];
   const keys = Array.from(buckets.keys());
   let round = 0;
-  while (picked.length < limit) {
+  while (picked.length < sorted.length) {
     let addedInRound = false;
     for (const k of keys) {
       const arr = buckets.get(k)!;
       if (round < arr.length) {
         picked.push(arr[round]);
         addedInRound = true;
-        if (picked.length >= limit) break;
       }
     }
     if (!addedInRound) break;
@@ -213,17 +215,77 @@ function pickDiversifiedAthletesWithPhoto(athletes: Athlete[], limit = 6): Athle
   return picked;
 }
 
+/**
+ * Seleciona e intercala confrontos de diferentes modalidades para variar os esportes exibidos.
+ */
+function buildDiversifiedMatchList(matches: Match[]): Match[] {
+  const sorted = sortUpcomingMatches(matches);
+  const buckets = new Map<string, Match[]>();
+  for (const m of sorted) {
+    const key = m.modalityId || 'other';
+    const list = buckets.get(key) || [];
+    list.push(m);
+    buckets.set(key, list);
+  }
+
+  const picked: Match[] = [];
+  const keys = Array.from(buckets.keys());
+  let round = 0;
+  while (picked.length < sorted.length && picked.length < 24) {
+    let addedInRound = false;
+    for (const k of keys) {
+      const arr = buckets.get(k)!;
+      if (round < arr.length) {
+        picked.push(arr[round]);
+        addedInRound = true;
+        if (picked.length >= 24) break;
+      }
+    }
+    if (!addedInRound) break;
+    round++;
+  }
+  return picked;
+}
+
+const RING_SIZE = 8;
+
 export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
   initialMode = 'upcoming',
   compact = false,
 }) => {
   const navigate = useNavigate();
-  const { visibleMatches, visibleAthletes, getSheetByMatchId, getTeamById } =
-    useCompetitionStore();
+  const {
+    visibleMatches,
+    visibleAthletes,
+    visibleTeams,
+    socialPosts,
+    getSheetByMatchId,
+    getTeamById,
+    getModalityStandings,
+    fetchPublicProfiles,
+    fetchFeedPosts,
+  } = useCompetitionStore();
 
-  const entries = useMemo<ShowcaseCardEntry[]>(() => {
-    const list: ShowcaseCardEntry[] = [];
+  const [communityProfiles, setCommunityProfiles] = useState<PublicUserProfile[]>([]);
 
+  useEffect(() => {
+    let active = true;
+    fetchPublicProfiles({ limit: 80 })
+      .then((profiles) => {
+        if (active && Array.isArray(profiles) && profiles.length > 0) {
+          setCommunityProfiles(profiles);
+        }
+      })
+      .catch(() => {});
+    if (socialPosts.length === 0) {
+      void fetchFeedPosts().catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [fetchPublicProfiles, fetchFeedPosts, socialPosts.length]);
+
+  const masterDeck = useMemo<ShowcaseCardEntry[]>(() => {
     // 1. Gols / Cestas / Pontos Marcados ao Vivo ou nas Partidas Recentes (com foto do atleta!)
     const recentPlayItems: ShowcaseCardEntry[] = [];
     const scoreMap = new Map<
@@ -259,7 +321,7 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
           .slice(0, 2)
           .join(' ');
 
-        if (recentPlayItems.length < 3 && photoUrl) {
+        if (recentPlayItems.length < 8 && photoUrl) {
           const eventBadge =
             m.modalityId === 'basquete'
               ? ev.type === 'point_3'
@@ -312,7 +374,7 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
     const realLeaders = Array.from(scoreMap.values())
       .filter((x) => x.points > 0)
       .sort((a, b) => b.points - a.points)
-      .slice(0, 3);
+      .slice(0, 6);
 
     const scorerItems: ShowcaseCardEntry[] = realLeaders.map((leader, idx) => {
       const team = leader.teamId ? getTeamById(leader.teamId) : undefined;
@@ -331,11 +393,16 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
       };
     });
 
-    // 2. Atletas com Presença Confirmada (Fotos Reais das 5 Turmas!)
-    const featuredAthletes = pickDiversifiedAthletesWithPhoto(visibleAthletes, 6);
-    const confirmedAthleteItems: ShowcaseCardEntry[] = featuredAthletes.map((ath) => {
+    // 2. Todos os Atletas Confirmados (intercalando as 5 Turmas!)
+    const allDiversifiedAthletes = buildDiversifiedAthleteList(visibleAthletes);
+    const seenPersonKeys = new Set<string>();
+    const confirmedAthleteItems: ShowcaseCardEntry[] = allDiversifiedAthletes.map((ath) => {
+      seenPersonKeys.add(ath.id);
+      if (ath.email) seenPersonKeys.add(ath.email.toLowerCase());
+      seenPersonKeys.add(ath.name.trim().toLowerCase());
+
       const team = ath.teamId ? getTeamById(ath.teamId) : undefined;
-      const pal = getPaletteForTeam(ath.teamId);
+      const pal = getPaletteForTeam(ath.teamId || ath.turma);
       const turmaLabel = getTurmaShortLabel(ath.teamId, ath.turma);
       const shortName = ath.name.split(' ').slice(0, 2).join(' ');
       const badgeVal =
@@ -349,24 +416,77 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
           value: badgeVal,
           unit: '',
           footer: `${team?.name || 'Atleta Oficial'} • ${turmaLabel}`,
-          imageUrl: ath.avatarUrl,
+          imageUrl: ath.avatarUrl || team?.crestUrl || null,
           ...pal,
         },
         ctaPath: `/atleta/${ath.id}`,
       };
     });
 
-    // 3. Próximos Jogos / Partidas Ao Vivo (com os 2 Escudos das Equipes!)
-    const upcoming = sortUpcomingMatches(
+    // 3. Membros da Comunidade & Torcida Oficial (Perfis com Foto que não duplicam os atletas já listados)
+    const communityItems: ShowcaseCardEntry[] = [];
+    for (const prof of communityProfiles) {
+      if (!prof || !prof.displayName) continue;
+      if (
+        (prof.linkedAthleteId && seenPersonKeys.has(prof.linkedAthleteId)) ||
+        seenPersonKeys.has(prof.displayName.trim().toLowerCase())
+      ) {
+        continue;
+      }
+      const hasAvatar = typeof prof.avatarUrl === 'string' && prof.avatarUrl.trim().length > 10;
+      const team = prof.teamId ? getTeamById(prof.teamId) : undefined;
+      if (!hasAvatar && !team?.crestUrl) continue;
+
+      seenPersonKeys.add(prof.displayName.trim().toLowerCase());
+      const pal = getPaletteForTeam(prof.teamId || prof.turma);
+      const turmaLabel = getTurmaShortLabel(prof.teamId, prof.turma);
+      const shortName = prof.displayName.split(' ').slice(0, 2).join(' ');
+
+      communityItems.push({
+        card: {
+          title: `${prof.isAthlete ? 'Presença Confirmada' : 'Comunidade IntraMed'}\n${shortName}`,
+          value: prof.isAthlete ? 'ATLETA' : 'TORCIDA',
+          unit: '',
+          footer: `${team?.name || prof.teamName || 'Medicina UEMA'} • ${turmaLabel}`,
+          imageUrl: hasAvatar ? prof.avatarUrl : team?.crestUrl || null,
+          ...pal,
+        },
+        ctaPath: prof.linkedAthleteId ? `/atleta/${prof.linkedAthleteId}` : `/perfil/${prof.userId}`,
+      });
+    }
+
+    // 4. Destaques Recentes do Feed Social
+    const feedItems: ShowcaseCardEntry[] = socialPosts.slice(0, 6).map((post) => {
+      const pal = getPaletteForTeam(post.authorTeamId || post.teamTag || post.authorTurma);
+      const shortAuthor = (post.authorName || 'Comunidade').split(' ').slice(0, 2).join(' ');
+      const postImg =
+        (Array.isArray(post.images) && post.images[0]) || post.authorAvatarUrl || null;
+      return {
+        card: {
+          title: `Feed da Comunidade\n${shortAuthor}`,
+          value: `${(post.likesCount || 0) + 1}`,
+          unit: 'CURTIDAS',
+          footer:
+            (post.content || 'Publicação oficial na comunidade IntraMed IX').slice(0, 44) +
+            ((post.content || '').length > 44 ? '…' : ''),
+          imageUrl: postImg,
+          ...pal,
+        },
+        ctaPath: '/feed',
+      };
+    });
+
+    // 5. Próximos Jogos / Partidas Ao Vivo diversificados nas 16 Modalidades (com os 2 Escudos!)
+    const diversifiedMatches = buildDiversifiedMatchList(
       visibleMatches.filter(
         (m) =>
           m.modalityId !== 'natacao' &&
           m.id !== 'match_natacao_geral_final' &&
           (m.status === 'live' || m.status === 'halftime' || m.status === 'scheduled')
       )
-    ).slice(0, 4);
+    );
 
-    const matchItems: ShowcaseCardEntry[] = upcoming.map((m) => {
+    const matchItems: ShowcaseCardEntry[] = diversifiedMatches.map((m) => {
       const isLive = m.status === 'live' || m.status === 'halftime';
       const sheet = getSheetByMatchId(m.id);
       const isSets = sheet?.scoringModel === 'sets_points';
@@ -405,7 +525,27 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
       };
     });
 
-    // 4. Estatísticas Oficiais do Torneio
+    // 6. Destaques das 5 Delegações / Atléticas (com Brasão e Contagem de Atletas / Pontuação)
+    const standings = getModalityStandings('all');
+    const teamHighlightItems: ShowcaseCardEntry[] = visibleTeams.map((team) => {
+      const pal = getPaletteForTeam(team.id);
+      const teamAthCount = visibleAthletes.filter((a) => a.teamId === team.id).length;
+      const standingRow = standings.find((s) => s.teamId === team.id);
+      const hasPoints = standingRow && standingRow.points > 0;
+      return {
+        card: {
+          title: `Delegação Oficial\n${team.name}`,
+          value: hasPoints ? String(standingRow.points) : String(Math.max(1, teamAthCount)),
+          unit: hasPoints ? 'PTS' : 'ATLETAS',
+          footer: `${team.CourseOrPeriod || getTurmaShortLabel(team.id)} • Medicina UEMA`,
+          imageUrl: team.crestUrl || null,
+          ...pal,
+        },
+        ctaPath: `/equipe/${team.id}`,
+      };
+    });
+
+    // 7. Estatísticas Gerais do Torneio
     const nonSwimming = visibleMatches.filter(
       (m) => m.modalityId !== 'natacao' && m.id !== 'match_natacao_geral_final'
     );
@@ -418,7 +558,7 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
           footer: '5 Turmas • Medicina UEMA',
           ...BRAND_MESHES.intramed,
         },
-        ctaPath: '/equipe',
+        ctaPath: '/comunidade',
       },
       {
         card: {
@@ -430,43 +570,121 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
         },
         ctaPath: '/jogos',
       },
+      {
+        card: {
+          title: 'Disputa Pelo Troféu\nModalidades Oficiais',
+          value: '16',
+          unit: 'MOD',
+          footer: '8 Coletivas (20 pts) • 8 Individuais',
+          ...BRAND_MESHES.soberana,
+        },
+        ctaPath: '/chaveamento',
+      },
     ];
 
     if (initialMode === 'scorers') {
-      list.push(
-        ...scorerItems,
+      const scorerDeck: ShowcaseCardEntry[] = [
         ...recentPlayItems,
-        ...confirmedAthleteItems.slice(0, 4),
-        ...statItems.slice(0, 1)
-      );
-    } else {
-      // Intercala: Atletas Confirmados (com foto), Gols/Artilheiros (quando houver), Próximos Jogos (com escudos) e Estatísticas!
-      if (recentPlayItems.length > 0 || scorerItems.length > 0) {
-        list.push(...recentPlayItems.slice(0, 2), ...scorerItems.slice(0, 2));
-      }
-      if (confirmedAthleteItems[0]) list.push(confirmedAthleteItems[0]);
-      if (matchItems[0]) list.push(matchItems[0]);
-      if (confirmedAthleteItems[1]) list.push(confirmedAthleteItems[1]);
-      if (statItems[0]) list.push(statItems[0]);
-      if (confirmedAthleteItems[2]) list.push(confirmedAthleteItems[2]);
-      if (matchItems[1]) list.push(matchItems[1]);
-      if (confirmedAthleteItems[3]) list.push(confirmedAthleteItems[3]);
-      if (matchItems[2]) list.push(matchItems[2]);
-      if (confirmedAthleteItems[4]) list.push(confirmedAthleteItems[4]);
-      if (statItems[1]) list.push(statItems[1]);
-      if (confirmedAthleteItems[5]) list.push(confirmedAthleteItems[5]);
+        ...scorerItems,
+        ...confirmedAthleteItems,
+        ...communityItems,
+        ...statItems,
+      ];
+      return scorerDeck.length >= RING_SIZE ? scorerDeck : [...scorerDeck, ...matchItems];
     }
 
-    return list.length >= 4 ? list : [...list, ...matchItems, ...statItems];
+    // Intercala dinamicamente todas as categorias para que cada giro traga uma pessoa diferente, um jogo novo, um lance ao vivo ou uma novidade da comunidade!
+    const allPeople = [...confirmedAthleteItems, ...communityItems];
+    const allHighlights = [...teamHighlightItems, ...feedItems, ...statItems];
+    const allLivePlays = [...recentPlayItems, ...scorerItems];
+
+    const interleaved: ShowcaseCardEntry[] = [];
+    let pIdx = 0;
+    let mIdx = 0;
+    let hIdx = 0;
+    let lIdx = 0;
+
+    const maxCycles = Math.max(
+      allPeople.length,
+      matchItems.length,
+      allHighlights.length,
+      12
+    );
+
+    for (let i = 0; i < maxCycles; i++) {
+      if (lIdx < allLivePlays.length) {
+        interleaved.push(allLivePlays[lIdx++]);
+      }
+      if (pIdx < allPeople.length) {
+        interleaved.push(allPeople[pIdx++]);
+      }
+      if (mIdx < matchItems.length) {
+        interleaved.push(matchItems[mIdx++]);
+      }
+      if (pIdx < allPeople.length) {
+        interleaved.push(allPeople[pIdx++]);
+      }
+      if (hIdx < allHighlights.length) {
+        interleaved.push(allHighlights[hIdx++]);
+      }
+    }
+
+    return interleaved.length >= RING_SIZE
+      ? interleaved
+      : [...interleaved, ...matchItems, ...statItems];
   }, [
     visibleMatches,
     visibleAthletes,
+    visibleTeams,
+    communityProfiles,
+    socialPosts,
     getSheetByMatchId,
     getTeamById,
+    getModalityStandings,
     initialMode,
   ]);
 
-  const cards = useMemo(() => entries.map((e) => e.card), [entries]);
+  // Mantém um anel ativo de RING_SIZE (8) slots e, a cada giro do carrossel, substitui o slot que está
+  // no lado oculto de trás do cilindro ((frontIdx + 4) % RING_SIZE) pelo próximo item inédito do masterDeck!
+  const deckCursorRef = useRef<number>(RING_SIZE);
+  const [ringEntries, setRingEntries] = useState<ShowcaseCardEntry[]>(() => {
+    const initial: ShowcaseCardEntry[] = [];
+    for (let i = 0; i < RING_SIZE; i++) {
+      initial.push(masterDeck[i % Math.max(1, masterDeck.length)]);
+    }
+    return initial;
+  });
+
+  // Quando o masterDeck ganha novos dados (ex: atletas hidratados, perfis da comunidade, gols ao vivo),
+  // atualiza o anel preservando a fluidez
+  useEffect(() => {
+    if (masterDeck.length === 0) return;
+    setRingEntries((prev) => {
+      const next: ShowcaseCardEntry[] = [];
+      for (let i = 0; i < RING_SIZE; i++) {
+        next.push(masterDeck[i % masterDeck.length] || prev[i]);
+      }
+      return next;
+    });
+    deckCursorRef.current = RING_SIZE % Math.max(1, masterDeck.length);
+  }, [masterDeck]);
+
+  const handleIndexChange = (frontIdx: number) => {
+    if (masterDeck.length <= RING_SIZE) return;
+    const backSlot = ((frontIdx % RING_SIZE) + RING_SIZE + Math.floor(RING_SIZE / 2)) % RING_SIZE;
+    const nextDeckItem = masterDeck[deckCursorRef.current % masterDeck.length];
+    deckCursorRef.current = (deckCursorRef.current + 1) % masterDeck.length;
+    if (!nextDeckItem) return;
+
+    setRingEntries((prev) => {
+      if (prev[backSlot] === nextDeckItem) return prev;
+      const copy = [...prev];
+      copy[backSlot] = nextDeckItem;
+      return copy;
+    });
+  };
+
+  const cards = useMemo(() => ringEntries.map((e) => e.card), [ringEntries]);
 
   return (
     <section className="relative -mx-4 sm:mx-0 overflow-hidden select-none">
@@ -474,12 +692,13 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
         cards={cards}
         autoplay
         step={1}
-        interval={4.2}
+        interval={3.8}
         warp={0.92}
         background="#F4F6FB"
         ariaLabel="Destaques em 3D do IX IntraMed"
+        onIndexChange={handleIndexChange}
         onFrontCardClick={(idx) => {
-          const target = entries[idx];
+          const target = ringEntries[idx % ringEntries.length];
           if (target?.ctaPath) {
             navigate(target.ctaPath);
           }

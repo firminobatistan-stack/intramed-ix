@@ -4265,10 +4265,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   const canEditAthleteProfile = useCallback(
     (athleteId: string): boolean => {
       if (!state.currentUser) return false;
-      if (
-        state.currentUser.role === 'administrador' ||
-        state.currentUser.role === 'organizacao'
-      ) {
+      if (isUserAdmin(state.currentUser)) {
         return true;
       }
       return state.currentUser.linkedAthleteId === athleteId;
@@ -5179,35 +5176,79 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       .catch(() => {});
   }, [state.currentUser?.id, state.currentUser?.email, state.currentUser?.name]);
 
-  // Validação estrita de sessão no boot (Item 1 e 2 da Auditoria - Zero Bypass Local)
+  // Validação resiliente de sessão no boot (preserva perfil completo e renova token expirado sem deslogar à força)
   useEffect(() => {
     const token = getStoredOperatorToken();
-    if (token) {
-      fetch('/api/cloud-sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-intramed-token': token,
-        },
-        body: JSON.stringify({ action: 'validate_session' }),
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          if (data && data.ok && data.user) {
-            setState((prev) => ({
-              ...prev,
-              currentUser: data.user,
-            }));
-          } else {
-            setStoredOperatorToken(null);
-            setState((prev) => ({ ...prev, currentUser: null }));
+    if (!token) return;
+
+    fetch('/api/cloud-sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        'x-intramed-token': token,
+      },
+      body: JSON.stringify({ action: 'validate_session' }),
+    })
+      .then(async (r) => {
+        const data = await r.json().catch(() => null);
+        if (r.ok && data?.ok && data?.user) {
+          setState((prev) => ({
+            ...prev,
+            currentUser: {
+              ...(prev.currentUser || {}),
+              ...data.user,
+              avatarUrl:
+                data.user.avatarUrl ||
+                data.profile?.avatarUrl ||
+                prev.currentUser?.avatarUrl ||
+                null,
+              turma: data.user.turma || data.profile?.turma || prev.currentUser?.turma || null,
+              turmaLabel:
+                data.user.turmaLabel ||
+                data.profile?.turmaLabel ||
+                prev.currentUser?.turmaLabel ||
+                null,
+              teamId: data.user.teamId || data.profile?.teamId || prev.currentUser?.teamId || null,
+              teamName:
+                data.user.teamName ||
+                data.profile?.teamName ||
+                prev.currentUser?.teamName ||
+                null,
+              modalityIds:
+                Array.isArray(data.user.modalityIds) && data.user.modalityIds.length > 0
+                  ? data.user.modalityIds
+                  : prev.currentUser?.modalityIds || [],
+              mustChangePassword: false,
+            },
+          }));
+          return;
+        }
+
+        // Se o token expirou (401) mas temos currentUser válido salvo, renova automaticamente o token em vez de expulsar o usuário!
+        if (r.status === 401 && state.currentUser?.id) {
+          const refreshRes = await fetch('/api/cloud-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'refresh_user_token',
+              userId: state.currentUser.id,
+              email: state.currentUser.email,
+              name: state.currentUser.name,
+            }),
+          }).catch(() => null);
+          const refreshData = refreshRes ? await refreshRes.json().catch(() => null) : null;
+          if (refreshData?.ok && typeof refreshData.token === 'string' && refreshData.token) {
+            setStoredOperatorToken(refreshData.token);
+            return;
           }
-        })
-        .catch(() => {
-          // Mantém o estado temporário em caso de falha transitória de rede
-        });
-    }
+          setStoredOperatorToken(null);
+          setState((prev) => ({ ...prev, currentUser: null }));
+        }
+      })
+      .catch(() => {
+        // Mantém o estado local em caso de falha transitória de rede
+      });
   }, []);
 
   const fetchFeedPosts = useCallback(

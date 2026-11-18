@@ -1017,7 +1017,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      const storedHash = String(matchedReg.accountPasswordHash || '');
+      const linkedUser =
+        (matchedReg.userId ? store.users?.[String(matchedReg.userId)] : undefined) ||
+        (matchedReg.athleteEmail
+          ? store.users?.[String(matchedReg.athleteEmail).trim().toLowerCase()]
+          : undefined);
+      const storedHash = String(
+        matchedReg.accountPasswordHash || matchedReg.passwordHash || linkedUser?.passwordHash || ''
+      );
       if (!storedHash) {
         return res.status(401).json({
           ok: false,
@@ -1025,10 +1032,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      const inputPinHash = hashSecretPin(passwordInput);
-      const inputPassHash = hashPassword(passwordInput);
-      const isAthletePassValid =
-        passwordInput && (inputPinHash === storedHash || inputPassHash === storedHash);
+      const isAthletePassValid = verifyAnyPasswordHash(passwordInput, storedHash);
 
       if (!isAthletePassValid) {
         return res.status(401).json({
@@ -2026,24 +2030,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const tokenEmail = (verifiedToken.email || '').toLowerCase().trim();
       const tokenUid = verifiedToken.userId || '';
 
-      const userRec = (tokenUid && store.users?.[tokenUid]) || (tokenEmail && store.users?.[tokenEmail]);
-      const adminRec = tokenEmail && store.admin_users?.[tokenEmail];
+      const userRec =
+        (tokenUid && store.users?.[tokenUid]) ||
+        (tokenEmail && store.users?.[tokenEmail]) ||
+        (tokenEmail
+          ? Object.values(store.users || {}).find(
+              (u) => String(u?.email || '').trim().toLowerCase() === tokenEmail
+            )
+          : undefined);
+      const adminRec =
+        (tokenEmail && store.admin_users?.[tokenEmail]) ||
+        (isMasterAccount(tokenEmail)
+          ? store.admin_users?.[MASTER_MODERATOR_EMAIL.toLowerCase()] ||
+            store.admin_users?.['usr_master_cangaceira']
+          : undefined);
 
-      if (!userRec && !adminRec) {
+      if (!userRec && !adminRec && !isMasterAccount(tokenEmail)) {
         return res.status(401).json({ ok: false, error: 'Usuário não localizado na base oficial central.' });
       }
 
-      const effectiveUid = tokenUid || (adminRec ? adminRec.id : (userRec ? userRec.id : ''));
-      const effectiveProfile = (effectiveUid && store.profiles?.[effectiveUid]) || (tokenEmail && store.profiles?.[tokenEmail]) || null;
+      const effectiveUid = String(
+        tokenUid || (adminRec ? adminRec.id : userRec ? userRec.id : 'usr_master_cangaceira')
+      );
+      const effectiveProfile =
+        (effectiveUid && store.profiles?.[effectiveUid]) ||
+        (userRec?.id && store.profiles?.[String(userRec.id)]) ||
+        (tokenEmail && store.profiles?.[tokenEmail]) ||
+        null;
+
+      const resolvedRole: UserRole = isMasterAccount(tokenEmail)
+        ? 'moderador_master'
+        : ((userRec?.role || adminRec?.role || verifiedToken.role) as UserRole);
+      const resolvedLinkedAthleteId =
+        (userRec?.linkedAthleteId as string) ||
+        (effectiveProfile?.linkedAthleteId as string) ||
+        null;
 
       return res.status(200).json({
         ok: true,
         user: {
           id: effectiveUid,
           email: tokenEmail || (userRec?.email as string) || '',
-          name: (verifiedToken.officialName || userRec?.name || adminRec?.name || 'Participante') as string,
-          role: verifiedToken.role,
-          linkedAthleteId: userRec?.linkedAthleteId || null,
+          name: (verifiedToken.officialName ||
+            userRec?.name ||
+            effectiveProfile?.displayName ||
+            adminRec?.name ||
+            'Participante') as string,
+          avatarUrl:
+            (effectiveProfile?.avatarUrl as string) ||
+            (isMasterAccount(tokenEmail) ? '/assets/atletica/logo.png' : null),
+          role: resolvedRole,
+          turma: (effectiveProfile?.turma as string) || null,
+          turmaLabel: (effectiveProfile?.turmaLabel as string) || null,
+          teamId: (effectiveProfile?.teamId as string) || null,
+          teamName:
+            (effectiveProfile?.teamName as string) ||
+            (isMasterAccount(tokenEmail)
+              ? 'Associação Atlética Acadêmica de Medicina UEMA – Cangaceira'
+              : null),
+          bio: (effectiveProfile?.bio as string) || null,
+          instagramHandle: (effectiveProfile?.instagramHandle as string) || null,
+          linkedAthleteId: resolvedLinkedAthleteId,
+          modalityIds: Array.isArray(effectiveProfile?.favoriteModalityIds)
+            ? effectiveProfile.favoriteModalityIds
+            : [],
+          mustChangePassword: false,
         },
         profile: effectiveProfile ? sanitizeUserProfileForPublic(effectiveProfile) : null,
       });

@@ -6,6 +6,7 @@
 
 // 1. USUÁRIOS E PERMISSÕES HIERÁRQUICAS (RBAC — 5 NÍVEIS)
 export type UserRole =
+  | 'visitante'        // Nível 1: Visitante / Torcedor cadastrado
   | 'usuario'          // Nível 1: Usuário comum
   | 'atleta'           // Nível 2: Atleta com inscrição confirmada
   | 'mesario'          // Nível 3: Mesário de partida
@@ -16,6 +17,7 @@ export type UserRole =
   | 'administrador';
 
 export const USER_ROLE_LEVELS: Record<UserRole, number> = {
+  visitante: 1,
   usuario: 1,
   atleta: 2,
   mesario: 3,

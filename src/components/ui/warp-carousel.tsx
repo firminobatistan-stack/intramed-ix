@@ -1187,7 +1187,13 @@ export function WarpCarousel({
   });
   const props = React.useRef({ onIndexChange, controlled, autoplay, gap, stepN, seconds, reduced, realCount });
   props.current = { onIndexChange, controlled, autoplay, gap, stepN, seconds, reduced, realCount };
-  const handles = React.useRef<{ kick: () => void; draw: () => void }>({ kick: () => {}, draw: () => {} });
+  const listRef = React.useRef<WarpCard[]>(list);
+  listRef.current = list;
+  const handles = React.useRef<{
+    kick: () => void;
+    draw: () => void;
+    syncCards: (nextList: WarpCard[]) => void;
+  }>({ kick: () => {}, draw: () => {}, syncCards: () => {} });
 
   const lastIndex = React.useRef(current);
   const request = React.useCallback((next: number) => {
@@ -1236,42 +1242,88 @@ export function WarpCarousel({
     let disposed = false;
     const bg = parseColor(background, [240, 240, 240]);
     const glowOverride = glow ? parseColor(glow) : null;
-    const glowCols = list.map((c) => (glowOverride ? glowOverride : parseColor(c.glow || "#7fd0f0")));
+    let glowCols = listRef.current.map((c) => (glowOverride ? glowOverride : parseColor(c.glow || "#7fd0f0")));
 
     const imgMap = new Map<string, HTMLImageElement>();
+    const loadingUrls = new Set<string>();
+    let cardKeys: string[] = [];
 
-    const paintAll = (w: number) => {
-      cardCanvases = list.map((card) => {
-        const cv = document.createElement("canvas");
-        cv.width = w;
-        cv.height = Math.round((w * CH) / CW);
-        paintCard(cv, card, font, imgMap);
-        return cv;
-      });
-      texW = w;
-      if (gls) uploadCards(gls, cardCanvases);
+    const cardSignature = (c: WarpCard) => {
+      const imgLoaded = c.imageUrl ? (imgMap.has(c.imageUrl) ? "1" : "0") : "";
+      const secLoaded = c.secondaryImageUrl ? (imgMap.has(c.secondaryImageUrl) ? "1" : "0") : "";
+      return `${c.title}|${c.value}|${c.unit || ""}|${c.footer || ""}|${c.imageUrl || ""}:${imgLoaded}|${c.secondaryImageUrl || ""}:${secLoaded}|${c.glow || ""}|${c.accent || ""}`;
     };
 
-    const urlsToLoad = new Set<string>();
-    list.forEach((c) => {
-      if (c.imageUrl) urlsToLoad.add(c.imageUrl);
-      if (c.secondaryImageUrl) urlsToLoad.add(c.secondaryImageUrl);
-    });
-    urlsToLoad.forEach((url) => {
-      const img = new Image();
-      if (!url.startsWith("data:")) {
-        img.crossOrigin = "anonymous";
-      }
-      img.onload = () => {
-        if (disposed) return;
-        imgMap.set(url, img);
-        if (texW > 0) {
-          paintAll(texW);
-          draw(performance.now() / 1000);
+    const paintAll = (w: number, forceAll = false) => {
+      const curList = listRef.current;
+      const h = Math.round((w * CH) / CW);
+      let anyChanged = forceAll || w !== texW || cardCanvases.length !== curList.length;
+
+      const nextCanvases: HTMLCanvasElement[] = [];
+      const nextKeys: string[] = [];
+
+      for (let idx = 0; idx < curList.length; idx++) {
+        const card = curList[idx];
+        const sig = cardSignature(card);
+        nextKeys.push(sig);
+        const existingCv = cardCanvases[idx];
+        if (!forceAll && w === texW && existingCv && cardKeys[idx] === sig) {
+          nextCanvases.push(existingCv);
+        } else {
+          const cv = existingCv && existingCv.width === w && existingCv.height === h
+            ? existingCv
+            : document.createElement("canvas");
+          cv.width = w;
+          cv.height = h;
+          paintCard(cv, card, font, imgMap);
+          nextCanvases.push(cv);
+          anyChanged = true;
         }
-      };
-      img.src = url;
-    });
+      }
+
+      cardCanvases = nextCanvases;
+      cardKeys = nextKeys;
+      texW = w;
+      if (gls && anyChanged) uploadCards(gls, cardCanvases);
+    };
+
+    const ensureImagesLoaded = (cardsToScan: WarpCard[]) => {
+      const urlsToLoad = new Set<string>();
+      cardsToScan.forEach((c) => {
+        if (c.imageUrl && !imgMap.has(c.imageUrl) && !loadingUrls.has(c.imageUrl)) {
+          urlsToLoad.add(c.imageUrl);
+        }
+        if (
+          c.secondaryImageUrl &&
+          !imgMap.has(c.secondaryImageUrl) &&
+          !loadingUrls.has(c.secondaryImageUrl)
+        ) {
+          urlsToLoad.add(c.secondaryImageUrl);
+        }
+      });
+      urlsToLoad.forEach((url) => {
+        loadingUrls.add(url);
+        const img = new Image();
+        if (!url.startsWith("data:")) {
+          img.crossOrigin = "anonymous";
+        }
+        img.onload = () => {
+          loadingUrls.delete(url);
+          if (disposed) return;
+          imgMap.set(url, img);
+          if (texW > 0) {
+            paintAll(texW);
+            draw(performance.now() / 1000);
+          }
+        };
+        img.onerror = () => {
+          loadingUrls.delete(url);
+        };
+        img.src = url;
+      });
+    };
+
+    ensureImagesLoaded(listRef.current);
 
     let W = 0;
     let H = 0;
@@ -1404,7 +1456,17 @@ export function WarpCarousel({
     const kick = () => {
       if (!raf && !disposed && L.visible) raf = requestAnimationFrame(loop);
     };
-    handles.current = { kick, draw: () => draw(performance.now() / 1000) };
+    const syncCards = (nextList: WarpCard[]) => {
+      if (disposed) return;
+      listRef.current = nextList;
+      glowCols = nextList.map((c) => (glowOverride ? glowOverride : parseColor(c.glow || "#7fd0f0")));
+      ensureImagesLoaded(nextList);
+      if (texW > 0) {
+        paintAll(texW);
+        draw(performance.now() / 1000);
+      }
+    };
+    handles.current = { kick, draw: () => draw(performance.now() / 1000), syncCards };
 
     const t0 = performance.now() / 1000;
     if (props.current.autoplay && !props.current.reduced && props.current.seconds === undefined) {
@@ -1491,7 +1553,11 @@ export function WarpCarousel({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [list, background, glow, warp, font, N]);
+  }, [background, glow, warp, font, N]);
+
+  React.useEffect(() => {
+    handles.current.syncCards(list);
+  }, [list]);
 
   React.useEffect(() => {
     if (seconds !== undefined) handles.current.draw();

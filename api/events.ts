@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { OFFICIAL_SERVER_LOTS } from './_lib/serverStore';
+import { OFFICIAL_SERVER_LOTS } from './_lib/serverStore.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
