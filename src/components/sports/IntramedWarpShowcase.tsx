@@ -456,10 +456,15 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
       return {
         card: {
           title: `Atleta Confirmado\n${shortName}`,
-          value: badgeVal,
+          value: 'ATLETA',
           unit: '',
           footer: `${team?.name || 'Atleta Oficial'} • ${turmaLabel}`,
           imageUrl: ath.avatarUrl || team?.crestUrl || null,
+          crestUrl: team?.crestUrl || null,
+          jerseyNumber:
+            ath.jerseyNumber != null && String(ath.jerseyNumber).trim() !== ''
+              ? String(ath.jerseyNumber)
+              : null,
           stats: [
             { label: 'TURMA', value: turmaLabel.replace('Turma ', 'T') },
             ...(ath.jerseyNumber != null && String(ath.jerseyNumber).trim() !== ''
