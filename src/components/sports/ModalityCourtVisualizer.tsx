@@ -418,7 +418,7 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
         : null;
       const isLiveNow = match.status === 'live' || match.status === 'halftime';
       const list =
-        matchGender && !isLiveNow && !editable
+        matchGender && !isLiveNow
           ? rawList.filter((p) => {
               const ath = athletes.find((a) => a.id === p.athleteId);
               const g = String(ath?.gender || '').toLowerCase();
