@@ -359,7 +359,25 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
         return;
       }
 
-      const list = (side === 'home' ? sheet.homeLineup : sheet.awayLineup) || [];
+      const rawList = (side === 'home' ? sheet.homeLineup : sheet.awayLineup) || [];
+      const catLower = (match.categoryName || '').toLowerCase();
+      const matchGender = catLower.includes('fem')
+        ? 'feminino'
+        : catLower.includes('masc')
+        ? 'masculino'
+        : null;
+      const isLiveNow = match.status === 'live' || match.status === 'halftime';
+      const list =
+        matchGender && !isLiveNow && !editable
+          ? rawList.filter((p) => {
+              const ath = athletes.find((a) => a.id === p.athleteId);
+              const g = String(ath?.gender || '').toLowerCase();
+              if (!g || g === 'geral') return true;
+              return matchGender === 'feminino'
+                ? g === 'feminino' || g === 'f'
+                : g === 'masculino' || g === 'm';
+            })
+          : rawList;
       list.slice(0, sideCoords.length).forEach((p, idx) => {
         const pt = sideCoords[idx];
         const athObj = athletes.find((a) => a.id === p.athleteId);

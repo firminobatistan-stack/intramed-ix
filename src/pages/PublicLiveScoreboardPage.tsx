@@ -1090,7 +1090,29 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {(['home', 'away'] as const).map((side) => {
                   const isHome = side === 'home';
-                  const list = isHome ? sheet.homeLineup : sheet.awayLineup;
+                  const rawList = isHome ? sheet.homeLineup : sheet.awayLineup;
+                  const catLower = (resolvedMatch?.categoryName || '').toLowerCase();
+                  const matchGender = catLower.includes('fem')
+                    ? 'feminino'
+                    : catLower.includes('masc')
+                    ? 'masculino'
+                    : null;
+                  const isLiveNow =
+                    resolvedMatch?.status === 'live' ||
+                    resolvedMatch?.status === 'halftime';
+                  const list =
+                    matchGender && !isLiveNow
+                      ? rawList.filter((p) => {
+                          const ath = visibleAthletes.find(
+                            (a) => a.id === p.athleteId
+                          );
+                          const g = String(ath?.gender || '').toLowerCase();
+                          if (!g || g === 'geral') return true;
+                          return matchGender === 'feminino'
+                            ? g === 'feminino' || g === 'f'
+                            : g === 'masculino' || g === 'm';
+                        })
+                      : rawList;
                   const tName = isHome ? homeName : awayName;
                   const tCrest = isHome
                     ? resolvedMatch?.homeTeam.crestUrl
