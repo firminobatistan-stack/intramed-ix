@@ -1553,9 +1553,11 @@ export function getCloudStore(): CloudCollectionMap {
   return global.__INTRAMED_CLOUD_STORE_V2__;
 }
 
-export function saveCloudStore(store: CloudCollectionMap) {
+export function saveCloudStore(store: CloudCollectionMap, bumpTimestamp = true) {
   ensureMasterAccountProvisioned(store);
-  store.updatedAtIso = new Date().toISOString();
+  if (bumpTimestamp || !store.updatedAtIso) {
+    store.updatedAtIso = new Date().toISOString();
+  }
   global.__INTRAMED_CLOUD_STORE_V2__ = store;
   try {
     fs.writeFileSync(CLOUD_STATE_FILE, JSON.stringify(store), 'utf-8');
@@ -1927,7 +1929,8 @@ export async function ensureCloudStoreHydrated(force = false): Promise<CloudColl
     );
     await deduplicateAndLinkCloudEntities(store);
     ensureMasterAccountProvisioned(store);
-    saveCloudStore(store);
+    // NÃO sobrescreve `updatedAtIso` se nenhum documento mudou no Firestore — garante retorno de 60 bytes (`notModified: true`) e evita consumo de Fast Origin Transfer!
+    saveCloudStore(store, false);
   } catch {
     // Non-blocking best-effort hydration
   }
