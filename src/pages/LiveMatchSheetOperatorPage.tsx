@@ -2733,7 +2733,31 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-slate-100 border border-slate-200">
             {(['home', 'away'] as const).map((tabSide) => {
               const tObj = tabSide === 'home' ? match.homeTeam : match.awayTeam;
-              const lList = tabSide === 'home' ? sheet.homeLineup : sheet.awayLineup;
+              const rawLList =
+                tabSide === 'home' ? sheet.homeLineup : sheet.awayLineup;
+              const catLowerTab = (match.categoryName || '').toLowerCase();
+              const tabMatchGender = catLowerTab.includes('fem')
+                ? 'feminino'
+                : catLowerTab.includes('masc')
+                ? 'masculino'
+                : null;
+              const isLiveMatchTab =
+                match.status === 'live' || match.status === 'halftime';
+              const lList =
+                tabMatchGender &&
+                !isLiveMatchTab &&
+                !allowOtherGenderBySide[tabSide]
+                  ? rawLList.filter((entry) => {
+                      const ath = visibleAthletes.find(
+                        (a) => a.id === entry.athleteId
+                      );
+                      const g = String(ath?.gender || '').toLowerCase();
+                      if (!g || g === 'geral') return true;
+                      return tabMatchGender === 'feminino'
+                        ? g === 'feminino' || g === 'f'
+                        : g === 'masculino' || g === 'm';
+                    })
+                  : rawLList;
               const isTabActive = lineupActiveTab === tabSide;
               const isReady = lList.length >= rosterLimits.min;
               return (
@@ -2773,14 +2797,34 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             .map((side) => {
               const teamObj = side === 'home' ? match.homeTeam : match.awayTeam;
               const teamName = teamObj.teamName;
-              const lineup =
+              const rawLineup =
                 side === 'home' ? sheet.homeLineup : sheet.awayLineup;
-              const canAddOtherGender = lineup.length < rosterLimits.min;
-              const allowOtherGender =
-                Boolean(allowOtherGenderBySide[side]) && canAddOtherGender;
               const matchIsFem = (match.categoryName || '')
                 .toLowerCase()
                 .includes('fem');
+              const matchIsMasc = (match.categoryName || '')
+                .toLowerCase()
+                .includes('masc');
+              const isLiveMatch =
+                match.status === 'live' || match.status === 'halftime';
+              const lineup =
+                (matchIsFem || matchIsMasc) &&
+                !isLiveMatch &&
+                !allowOtherGenderBySide[side]
+                  ? rawLineup.filter((entry) => {
+                      const ath = visibleAthletes.find(
+                        (a) => a.id === entry.athleteId
+                      );
+                      const g = String(ath?.gender || '').toLowerCase();
+                      if (!g || g === 'geral') return true;
+                      return matchIsFem
+                        ? g === 'feminino' || g === 'f'
+                        : g === 'masculino' || g === 'm';
+                    })
+                  : rawLineup;
+              const canAddOtherGender = lineup.length < rosterLimits.min;
+              const allowOtherGender =
+                Boolean(allowOtherGenderBySide[side]) && canAddOtherGender;
               const eligibleTeamAthletes = teamObj.teamId
                 ? getAthletesByTeam(teamObj.teamId)
                 : [];
