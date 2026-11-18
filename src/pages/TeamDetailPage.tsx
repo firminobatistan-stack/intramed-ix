@@ -17,6 +17,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { MatchCard } from '../components/sports/MatchCard';
 import { SportIcon } from '../components/sports/SportIcon';
+import { TeamAthleteCardsSection } from '../components/sports/TeamAthleteCardsSection';
 
 type TeamTabId = 'overview' | 'table' | 'squad' | 'matches';
 
@@ -143,7 +144,7 @@ export const TeamDetailPage: React.FC = () => {
   const tabs: Array<{ id: TeamTabId; label: string }> = [
     { id: 'overview', label: 'Visão Geral' },
     { id: 'table', label: 'Tabela' },
-    { id: 'squad', label: `Elenco (${teamSquad.length})` },
+    { id: 'squad', label: `Cards (${teamSquad.length})` },
     { id: 'matches', label: 'Partidas' },
   ];
 
@@ -602,15 +603,15 @@ export const TeamDetailPage: React.FC = () => {
         </section>
       )}
 
-      {/* ABA 3: ELENCO DA EQUIPE */}
-      {activeTab === 'squad' && (
-        <section className="all-sports-card p-5 sm:p-6 space-y-4">
+      {/* ABA 3: COLEÇÃO DE CARDS & ELENCO DA EQUIPE */}
+      {activeTab === 'squad' && resolvedTeam && (
+        <section className="all-sports-card p-4 sm:p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div
               style={{ backgroundColor: `${primaryHex}14`, color: primaryHex }}
               className="all-sports-section-pill flex-1"
             >
-              Elenco Oficial • {resolvedTeam?.name}
+              Cards Oficiais • {resolvedTeam.name}
             </div>
             {isAdmin && (
               <button
@@ -620,70 +621,21 @@ export const TeamDetailPage: React.FC = () => {
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-white text-xs font-display font-bold shadow-sm hover:opacity-95"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>Inscrever Atleta na {resolvedTeam?.name}</span>
+                <span>Inscrever Atleta na {resolvedTeam.name}</span>
               </button>
             )}
           </div>
 
           {teamSquad.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {teamSquad.map((ath) => (
-                <div
-                  key={ath.id}
-                  onClick={() => navigate(`/atleta/${ath.id}`)}
-                  className="cursor-pointer p-3.5 rounded-2xl bg-[#F8FAFC] hover:bg-slate-100/80 border border-slate-200/80 transition-all flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      style={{ backgroundColor: primaryHex }}
-                      className="relative w-12 h-12 rounded-full text-white flex items-center justify-center overflow-hidden shrink-0 border-2 border-white shadow"
-                    >
-                      {ath.avatarUrl ? (
-                        <img
-                          src={ath.avatarUrl}
-                          alt={ath.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <User className="w-6 h-6 text-white/90" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          style={{
-                            backgroundColor: primaryHex,
-                            color: '#FFFFFF',
-                          }}
-                          className="px-2 py-0.5 rounded-md text-[10px] font-display font-black"
-                        >
-                          #{ath.jerseyNumber || '—'}
-                        </span>
-                        <h4 className="text-sm font-display font-extrabold text-slate-900 truncate">
-                          {ath.name}
-                        </h4>
-                      </div>
-                      {ath.instagramHandle && (
-                        <p className="text-xs text-slate-500 mt-0.5 truncate">
-                          {ath.instagramHandle.startsWith('@')
-                            ? ath.instagramHandle
-                            : `@${ath.instagramHandle}`}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
-                </div>
-              ))}
-            </div>
+            <TeamAthleteCardsSection team={resolvedTeam} athletes={teamSquad} />
           ) : (
             <EmptyState
               variant="teams"
-              title={`Elenco Oficial • ${resolvedTeam?.name}`}
+              title={`Cards Oficiais • ${resolvedTeam.name}`}
               message={
                 isAdmin
-                  ? `Os atletas inscritos pela ${resolvedTeam?.name} aparecerão listados aqui. Você pode inscrevê-los na aba Cadastros do Painel Admin.`
-                  : `Ainda não há atletas confirmados na equipe ${resolvedTeam?.name}. Assim que as inscrições forem confirmadas, o elenco aparecerá listado aqui.`
+                  ? `Os atletas inscritos pela ${resolvedTeam.name} aparecerão como cards colecionáveis aqui.`
+                  : `Ainda não há atletas confirmados na equipe ${resolvedTeam.name}. Assim que as inscrições forem confirmadas, os cards aparecerão aqui.`
               }
             />
           )}
