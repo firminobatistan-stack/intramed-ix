@@ -144,13 +144,21 @@ function canClientWriteDocument(
       }
     }
 
-    // Preserva votos reais da torcida ao salvar a súmula pelo operador
+    // Preserva votos reais da torcida ao salvar a súmula pelo operador (exceto quando a partida foi resetada p/ agendado)
+    const isFullSheetReset =
+      collectionName === 'match_sheets' &&
+      Array.isArray(incoming.events) &&
+      incoming.events.length === 0 &&
+      (incoming.timer as Record<string, unknown> | undefined)?.lifecycle === 'not_started';
+
     const mergedFanVotes =
       collectionName === 'match_sheets'
-        ? {
-            ...((existing?.fanVotes as Record<string, unknown>) || {}),
-            ...((incoming.fanVotes as Record<string, unknown>) || {}),
-          }
+        ? isFullSheetReset
+          ? {}
+          : {
+              ...((existing?.fanVotes as Record<string, unknown>) || {}),
+              ...((incoming.fanVotes as Record<string, unknown>) || {}),
+            }
         : undefined;
 
     const merged: Record<string, unknown> = {

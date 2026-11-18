@@ -106,6 +106,7 @@ export const AdminDashboardPage: React.FC = () => {
     registerAthlete,
     createOfficialMatch,
     updateMatchTablePassword,
+    resetMatchToScheduled,
     launchConfig,
     updateLaunchConfig,
     officialBrackets,
@@ -727,6 +728,73 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
           ) : (
             <>
+              {/* Alerta rápido no topo se alguma partida oficial estiver marcada como AO VIVO */}
+              {!isTestMode &&
+                visibleMatches.some(
+                  (m) => m.status === 'live' || m.status === 'halftime'
+                ) && (
+                  <div className="rounded-2xl bg-rose-50 border-2 border-rose-300 p-4 space-y-2.5 shadow-sm">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs font-display font-extrabold uppercase tracking-wider text-rose-800 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping" />
+                        Partidas Oficiais em Modo Ao Vivo Agora
+                      </span>
+                      <span className="text-[11px] font-semibold text-rose-700">
+                        Iniciou sem querer? Desative em 1 clique abaixo:
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {visibleMatches
+                        .filter((m) => m.status === 'live' || m.status === 'halftime')
+                        .map((liveM) => (
+                          <div
+                            key={liveM.id}
+                            className="flex flex-wrap items-center justify-between gap-2 bg-white px-3.5 py-2.5 rounded-xl border border-rose-200"
+                          >
+                            <div className="text-xs">
+                              <strong className="font-display font-extrabold text-slate-900">
+                                {liveM.modalityName} ({liveM.phaseLabel}):
+                              </strong>{' '}
+                              <span className="font-semibold text-slate-700">
+                                {liveM.homeTeam.teamName} {liveM.homeTeam.score ?? 0} ×{' '}
+                                {liveM.awayTeam.score ?? 0} {liveM.awayTeam.teamName}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 ml-auto">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => navigate(`/sumula/${liveM.id}`)}
+                              >
+                                Abrir Súmula
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      `Desativar o Modo Ao Vivo de "${liveM.modalityName}: ${liveM.homeTeam.teamName} × ${liveM.awayTeam.teamName}" e voltar para Agendado?`
+                                    )
+                                  ) {
+                                    resetMatchToScheduled(liveM.id, { keepLineups: true });
+                                    showNotice(
+                                      'ok',
+                                      `Modo Ao Vivo desativado para ${liveM.homeTeam.teamName} × ${liveM.awayTeam.teamName}.`
+                                    );
+                                  }
+                                }}
+                              >
+                                Desativar Ao Vivo
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+
               {/* Barra de filtro por modalidade + botão de resetar bancada */}
               <div className="bg-white rounded-2xl border border-brand-surface-border p-4 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-3 flex-wrap">
@@ -954,6 +1022,29 @@ export const AdminDashboardPage: React.FC = () => {
                           >
                             Documento
                           </Button>
+
+                          {match.status !== 'scheduled' && (
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Voltar "${match.modalityName}: ${match.homeTeam.teamName} × ${match.awayTeam.teamName}" para Agendado e desativar o Ao Vivo?`
+                                  )
+                                ) {
+                                  resetMatchToScheduled(match.id, { keepLineups: true });
+                                  showNotice(
+                                    'ok',
+                                    `Partida ${match.homeTeam.teamName} × ${match.awayTeam.teamName} restaurada para Agendado.`
+                                  );
+                                }
+                              }}
+                            >
+                              Desativar Ao Vivo / Resetar
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>

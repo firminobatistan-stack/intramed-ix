@@ -217,6 +217,10 @@ interface CompetitionStoreContextValue {
   ) => void;
   finalizeMatch: (matchId: string) => void;
   reopenMatchForCorrection: (matchId: string) => void;
+  resetMatchToScheduled: (
+    matchId: string,
+    options?: { keepLineups?: boolean }
+  ) => void;
   setMatchSheetOfficialReleased: (matchId: string, released: boolean) => void;
   visibleTeams: Team[];
   visibleAthletes: Athlete[];
@@ -3750,6 +3754,55 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     [updateMatchAndSheet]
   );
 
+  // Desativa o Modo Ao Vivo e restaura a partida ao estado original "Agendado" (retirando imediatamente da aba Ao Vivo)
+  const resetMatchToScheduled = useCallback(
+    (matchId: string, options?: { keepLineups?: boolean }) => {
+      updateMatchAndSheet(matchId, (match, sheet, prevState) => {
+        const isTest = matchId.startsWith('test-');
+        const resetMatch: Match = {
+          ...match,
+          status: 'scheduled',
+          homeTeam: {
+            ...match.homeTeam,
+            score: isTest ? 0 : null,
+            setsWon: 0,
+            isWinner: false,
+          },
+          awayTeam: {
+            ...match.awayTeam,
+            score: isTest ? 0 : null,
+            setsWon: 0,
+            isWinner: false,
+          },
+        };
+
+        const freshSheet = buildDefaultOfficialSheetForMatch(
+          resetMatch,
+          isTest ? prevState.testAthletes : prevState.officialAthletes
+        );
+
+        const resetSheet: MatchSheet = {
+          ...freshSheet,
+          id: sheet.id,
+          isTestMode: sheet.isTestMode,
+          homeLineup: options?.keepLineups ? sheet.homeLineup : [],
+          awayLineup: options?.keepLineups ? sheet.awayLineup : [],
+          volleyballSetConfigs: {},
+          fanVotes: {},
+          isClosed: false,
+          isOfficialReleased: false,
+          closedAtIso: null,
+        };
+
+        return {
+          match: resetMatch,
+          sheet: resetSheet,
+        };
+      });
+    },
+    [updateMatchAndSheet]
+  );
+
   const setMatchSheetOfficialReleased = useCallback(
     (matchId: string, released: boolean) => {
       updateMatchAndSheet(matchId, (match, sheet) => ({
@@ -5600,6 +5653,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updateRefereeMetadata,
       finalizeMatch,
       reopenMatchForCorrection,
+      resetMatchToScheduled,
       setMatchSheetOfficialReleased,
       visibleTeams,
       visibleAthletes,
@@ -5722,6 +5776,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updateRefereeMetadata,
       finalizeMatch,
       reopenMatchForCorrection,
+      resetMatchToScheduled,
       setMatchSheetOfficialReleased,
       visibleTeams,
       visibleAthletes,

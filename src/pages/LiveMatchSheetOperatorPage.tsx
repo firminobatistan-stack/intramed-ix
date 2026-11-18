@@ -96,6 +96,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     updateRefereeMetadata,
     finalizeMatch,
     reopenMatchForCorrection,
+    resetMatchToScheduled,
     setMatchSheetOfficialReleased,
     isOnline,
     pendingSyncCount,
@@ -153,6 +154,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     null,
   ]);
   const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
+  const [isCancelLiveModalOpen, setIsCancelLiveModalOpen] = useState(false);
   const [isOfficialsModalOpen, setIsOfficialsModalOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [possessionSide, setPossessionSide] = useState<'home' | 'away'>('home');
@@ -763,6 +765,21 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
               <ShieldAlert className="w-4 h-4 text-brand-yellow" />
               <span className="hidden sm:inline">Mesa / Árbitros</span>
             </button>
+
+            {(match.status !== 'scheduled' ||
+              sheet.timer.isRunning ||
+              sheet.timer.lifecycle !== 'not_started' ||
+              activeEvents.length > 0) && (
+              <button
+                type="button"
+                onClick={() => setIsCancelLiveModalOpen(true)}
+                title="Desativar Modo Ao Vivo e voltar a partida para Agendado"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-500/25 hover:bg-rose-500/40 border border-rose-400/50 text-xs font-display font-extrabold text-rose-100 transition-colors min-h-[38px]"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-200" />
+                <span>Desativar Ao Vivo</span>
+              </button>
+            )}
 
             {!sheet.isClosed ? (
               <button
@@ -3303,6 +3320,60 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
           >
             Confirmar Reinício
           </Button>
+        </div>
+      </Modal>
+
+      {/* =====================================================================
+          MODAL 5B: DESATIVAR MODO AO VIVO / VOLTAR PARA AGENDADO
+         ===================================================================== */}
+      <Modal
+        isOpen={isCancelLiveModalOpen}
+        onClose={() => setIsCancelLiveModalOpen(false)}
+        title="Desativar Ao Vivo / Voltar p/ Agendado?"
+        description="Use esta opção se a partida oficial foi iniciada por engano. A aba 'Ao Vivo' será desativada imediatamente para o público e o placar/eventos serão zerados."
+      >
+        <div className="space-y-3 pt-1">
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-900 leading-relaxed">
+            <strong>{match.homeTeam.teamName} × {match.awayTeam.teamName}</strong> voltará ao status{' '}
+            <strong>Agendado</strong>, zerando cronômetro, sets e lances registrados.
+          </div>
+
+          <div className="flex flex-col gap-2 pt-1">
+            <Button
+              variant="primary"
+              size="md"
+              fullWidth
+              leftIcon={<RotateCcw className="w-4 h-4" />}
+              onClick={() => {
+                resetMatchToScheduled(match.id, { keepLineups: true });
+                setIsCancelLiveModalOpen(false);
+              }}
+            >
+              Desativar Ao Vivo (Manter Escalação)
+            </Button>
+
+            <Button
+              variant="danger"
+              size="md"
+              fullWidth
+              leftIcon={<Trash2 className="w-4 h-4" />}
+              onClick={() => {
+                resetMatchToScheduled(match.id, { keepLineups: false });
+                setIsCancelLiveModalOpen(false);
+              }}
+            >
+              Zerar Tudo (Limpar Escalação Também)
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              fullWidth
+              onClick={() => setIsCancelLiveModalOpen(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
         </div>
       </Modal>
 
