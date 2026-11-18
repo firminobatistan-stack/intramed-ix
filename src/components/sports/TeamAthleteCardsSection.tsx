@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useGyroscopeTilt, type GyroTilt } from '../../hooks/useGyroscopeTilt';
 import { useNavigate } from 'react-router-dom';
 import { ArrowUpRight, Shield, User } from 'lucide-react';
 import { Athlete, Team } from '../../types/domain';
@@ -84,6 +85,7 @@ const CollectibleAthleteCard: React.FC<CollectibleCardProps> = ({
     });
   };
 
+  const gyro = useGyroscopeTilt(true);
   const resetTilt = () => setTilt({ rx: 0, ry: 0 });
 
   return (
@@ -100,11 +102,15 @@ const CollectibleAthleteCard: React.FC<CollectibleCardProps> = ({
       onPointerMove={handlePointerMove}
       onPointerLeave={resetTilt}
       style={{
-        transform: `perspective(850px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+        transform: `perspective(850px) rotateX(${
+          tilt.rx !== 0 ? tilt.rx : gyro.active ? (-gyro.y * 7).toFixed(2) : 0
+        }deg) rotateY(${
+          tilt.ry !== 0 ? tilt.ry : gyro.active ? (gyro.x * 8).toFixed(2) : 0
+        }deg)`,
         transition:
-          tilt.rx === 0 && tilt.ry === 0
+          tilt.rx === 0 && tilt.ry === 0 && !gyro.active
             ? 'transform 320ms cubic-bezier(0.22, 1, 0.36, 1)'
-            : 'transform 80ms ease-out',
+            : 'transform 100ms ease-out',
         animationDelay: enlarged ? '0ms' : `${Math.min(index, 12) * 35}ms`,
         background: `linear-gradient(155deg, ${secondaryHex} 0%, ${primaryHex} 52%, #071126 100%)`,
         boxShadow: enlarged

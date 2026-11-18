@@ -4,6 +4,7 @@
 // 140+ more hand-made React components at https://studios.lou15.com/?ref=21st-code
 
 import * as React from "react";
+import { useGyroscopeTilt } from "@/hooks/useGyroscopeTilt";
 
 /** The small graphic under each numeral. */
 export type WarpCardDetail = "slider" | "ring" | "wave" | "cross" | "none";
@@ -1234,6 +1235,7 @@ export function WarpCarousel({
 }: WarpCarouselProps) {
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const gyro = useGyroscopeTilt(true);
   const reduced = usePrefersReducedMotion();
   const list = React.useMemo(() => {
     const src = cards && cards.length ? cards : WARP_CAROUSEL_CARDS;
@@ -1755,7 +1757,18 @@ export function WarpCarousel({
       <canvas
         ref={canvasRef}
         aria-hidden="true"
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          display: "block",
+          transform: gyro.active
+            ? `perspective(1100px) rotateY(${(gyro.x * 7).toFixed(2)}deg) rotateX(${(-gyro.y * 5).toFixed(2)}deg) scale(1.02)`
+            : undefined,
+          transition: "transform 120ms ease-out",
+          willChange: gyro.active ? "transform" : undefined,
+        }}
       />
       <div
         aria-live="polite"
