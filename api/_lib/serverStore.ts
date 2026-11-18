@@ -310,18 +310,6 @@ export const PREPAID_EXTERNAL_ATHLETES_SERVER_QUEUE: ServerPreApprovedExternalCr
     externalRef: 'EXTERNO-T24-SOCIO-02',
   },
   {
-    key: 't24-emily-da-fonseca-leal',
-    athleteName: 'Emily da Fonseca Leal',
-    turma: '24',
-    turmaLabel: 'Colossal • T24',
-    teamId: 'colossal',
-    teamName: 'Colossal',
-    categoryName: 'Feminino',
-    isSocio: false,
-    paidAmount: 60,
-    externalRef: 'EXTERNO-T24-NSOCIO-06',
-  },
-  {
     key: 't24-david-arison-castro-e-silva',
     athleteName: 'David Arison Castro e Silva',
     turma: '24',
