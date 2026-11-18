@@ -1,16 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowUpRight, Shield, Sparkles, User } from 'lucide-react';
+import { ArrowUpRight, Shield, User } from 'lucide-react';
 import { Athlete, Team } from '../../types/domain';
-import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 import { Modal } from '../ui/Modal';
 
 interface TeamAthleteCardsSectionProps {
   team: Team;
   athletes: Athlete[];
 }
-
-type CardCollectionFilter = 'all' | 'mine';
 
 function splitCollectibleName(fullName: string): { top: string; main: string } {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
@@ -282,26 +279,11 @@ export const TeamAthleteCardsSection: React.FC<TeamAthleteCardsSectionProps> = (
   athletes,
 }) => {
   const navigate = useNavigate();
-  const { currentUser } = useCompetitionStore();
-  const [collectionTab, setCollectionTab] = useState<CardCollectionFilter>('all');
   const [selectedCardAthlete, setSelectedCardAthlete] = useState<Athlete | null>(null);
 
   const primaryHex = team.theme?.primaryHex || '#0B218A';
 
-  const myCardsList = useMemo(() => {
-    if (!currentUser) return [];
-    const emailLower = (currentUser.email || '').trim().toLowerCase();
-    return athletes.filter(
-      (a) =>
-        (currentUser.linkedAthleteId && a.id === currentUser.linkedAthleteId) ||
-        (emailLower && a.email?.trim().toLowerCase() === emailLower)
-    );
-  }, [athletes, currentUser]);
-
   const displayedAthletes = useMemo(() => {
-    if (collectionTab === 'mine') {
-      return myCardsList;
-    }
     // Prioriza atletas com foto primeiro para deixar a grade visualmente rica
     return [...athletes].sort((a, b) => {
       const aPhoto = a.avatarUrl ? 0 : 1;
@@ -309,117 +291,22 @@ export const TeamAthleteCardsSection: React.FC<TeamAthleteCardsSectionProps> = (
       if (aPhoto !== bPhoto) return aPhoto - bPhoto;
       return a.name.localeCompare(b.name);
     });
-  }, [collectionTab, athletes, myCardsList]);
+  }, [athletes]);
 
   return (
     <div className="space-y-4">
-      {/* Cabeçalho da Coleção (inspirado no topo da referência, adaptado à paleta do app) */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0B218A] via-[#0F2A56] to-[#071126] text-white p-4 sm:p-5 border border-white/10 shadow-md">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-10 -top-10 w-40 h-40 rounded-full blur-2xl opacity-35"
-          style={{ backgroundColor: primaryHex }}
-        />
-
-        <div className="relative z-10 flex flex-col items-center text-center">
-          <div className="w-14 h-14 rounded-full bg-white/15 border-2 border-[#FACC15] p-0.5 shadow-lg overflow-hidden flex items-center justify-center">
-            {currentUser?.avatarUrl ? (
-              <img
-                src={currentUser.avatarUrl}
-                alt={currentUser.name}
-                className="w-full h-full object-cover rounded-full"
-              />
-            ) : team.crestUrl ? (
-              <img
-                src={team.crestUrl}
-                alt={team.name}
-                className="w-full h-full object-cover rounded-full"
-              />
-            ) : (
-              <User className="w-6 h-6 text-white" />
-            )}
-          </div>
-
-          <span className="mt-2 inline-flex items-center gap-1 text-[10px] font-display font-extrabold uppercase tracking-[0.2em] text-[#FACC15]">
-            <Sparkles className="w-3 h-3" />
-            <span>Coleção Oficial de Cards • {team.name}</span>
-          </span>
-          <h3 className="mt-0.5 text-lg sm:text-xl font-display font-black tracking-tight text-white">
-            {currentUser?.name || `Elenco ${team.name}`}
-          </h3>
-
-          {/* Toggle "Meus cards" | "Ver todos" com pílula deslizante a 60fps */}
-          <div className="mt-3.5 relative inline-grid grid-cols-2 rounded-full bg-white/10 p-1 border border-white/15 backdrop-blur-md">
-            <span
-              aria-hidden="true"
-              style={{
-                transform: `translate3d(${collectionTab === 'all' ? '100%' : '0%'}, 0, 0)`,
-                transition: 'transform 260ms cubic-bezier(0.16, 1, 0.3, 1)',
-              }}
-              className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-full bg-white shadow-sm"
-            />
-            <button
-              type="button"
-              onClick={() => setCollectionTab('mine')}
-              className={`relative z-10 px-4 py-1.5 rounded-full text-xs font-display font-extrabold transition-colors duration-200 ${
-                collectionTab === 'mine'
-                  ? 'text-[#0B218A]'
-                  : 'text-white/80 hover:text-white'
-              }`}
-            >
-              Meus cards ({myCardsList.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setCollectionTab('all')}
-              className={`relative z-10 px-4 py-1.5 rounded-full text-xs font-display font-extrabold transition-colors duration-200 ${
-                collectionTab === 'all'
-                  ? 'text-[#0B218A]'
-                  : 'text-white/80 hover:text-white'
-              }`}
-            >
-              Ver todos ({athletes.length})
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Grade de Cards Colecionáveis em 2 Colunas */}
-      {displayedAthletes.length > 0 ? (
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
-          {displayedAthletes.map((ath, idx) => (
-            <CollectibleAthleteCard
-              key={ath.id}
-              athlete={ath}
-              team={team}
-              index={idx}
-              onSelect={() => setSelectedCardAthlete(ath)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-2xl bg-[#F8FAFC] border border-slate-200/80 p-6 text-center space-y-2">
-          <p className="text-sm font-display font-extrabold text-slate-800">
-            {collectionTab === 'mine'
-              ? 'Você ainda não possui card nesta equipe'
-              : 'Nenhum card disponível nesta equipe ainda'}
-          </p>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            {collectionTab === 'mine'
-              ? 'Quando sua inscrição como atleta nesta equipe for confirmada, seu card colecionável oficial aparecerá aqui.'
-              : 'Assim que as inscrições forem confirmadas, os cards dos atletas aparecerão aqui.'}
-          </p>
-          {collectionTab === 'mine' && athletes.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setCollectionTab('all')}
-              className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#0B218A] text-white text-xs font-display font-bold shadow-sm hover:opacity-95"
-            >
-              <span>Ver todos os cards ({athletes.length})</span>
-            </button>
-          )}
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
+        {displayedAthletes.map((ath, idx) => (
+          <CollectibleAthleteCard
+            key={ath.id}
+            athlete={ath}
+            team={team}
+            index={idx}
+            onSelect={() => setSelectedCardAthlete(ath)}
+          />
+        ))}
+      </div>
 
       {/* Modal de Visualização Ampliada do Card Selecionado */}
       <Modal

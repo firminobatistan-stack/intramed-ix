@@ -144,7 +144,7 @@ export const TeamDetailPage: React.FC = () => {
   const tabs: Array<{ id: TeamTabId; label: string }> = [
     { id: 'overview', label: 'Visão Geral' },
     { id: 'table', label: 'Tabela' },
-    { id: 'squad', label: `Cards (${teamSquad.length})` },
+    { id: 'squad', label: `Atletas (${teamSquad.length})` },
     { id: 'matches', label: 'Partidas' },
   ];
 
@@ -611,7 +611,7 @@ export const TeamDetailPage: React.FC = () => {
               style={{ backgroundColor: `${primaryHex}14`, color: primaryHex }}
               className="all-sports-section-pill flex-1"
             >
-              Cards Oficiais • {resolvedTeam.name}
+              Atletas • {resolvedTeam.name}
             </div>
             {isAdmin && (
               <button
