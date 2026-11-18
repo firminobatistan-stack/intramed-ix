@@ -558,7 +558,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     };
 
-    const launchConfig: PublicLaunchConfig = store.launch_config || DEFAULT_LAUNCH_CONFIG;
     const isPublicProfilesVisible = Boolean(launchConfig.publicProfilesVisible || isAdminRequest);
     const isPublicPricesVisible = Boolean(launchConfig.publicPricesVisible || isAdminRequest);
 
