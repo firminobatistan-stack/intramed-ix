@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -13,6 +13,10 @@ import { TeamCrest } from './TeamCrest';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 import { StoryShareButton } from '../social/StoryShareModal';
 import { formatSecondsToClock, MODALITY_RULE_ENGINE } from '../../data/sportRulesConfig';
+import {
+  isCollectiveOrBeachVolley,
+  ModalityCourtVisualizer,
+} from './ModalityCourtVisualizer';
 
 interface MatchCardProps {
   match?: Match | null;
@@ -51,8 +55,10 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   className = '',
 }) => {
   const navigate = useNavigate();
-  const { getSheetByMatchId, canOperateOfficialData } = useCompetitionStore();
+  const { getSheetByMatchId, canOperateOfficialData, visibleAthletes } =
+    useCompetitionStore();
   const isAdmin = canOperateOfficialData();
+  const [cardTab, setCardTab] = useState<'score' | 'court'>('score');
 
   const sheet = match ? getSheetByMatchId(match.id) : undefined;
   const isSetsMatch = sheet?.scoringModel === 'sets_points';
@@ -117,6 +123,7 @@ export const MatchCard: React.FC<MatchCardProps> = ({
 
   const isLive = match.status === 'live' || match.status === 'halftime';
   const isFinished = match.status === 'finished';
+  const hasInteractiveCourt = isCollectiveOrBeachVolley(match.modalityId);
 
   const headerTitle = `${match.modalityName}${
     match.categoryName &&
@@ -130,42 +137,85 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     <div
       className={`all-sports-card emil-card-hover px-4 py-3.5 sm:px-5 sm:py-4 ${className}`}
     >
-      {/* 1. Topo Compacto: Pílula da Modalidade/Fase + Status ou Lembrete na mesma linha (raio concêntrico: 24px - 12px = 12px) */}
+      {/* 1. Topo Compacto: Pílula da Modalidade/Fase + Seletor X-NFL (Placar | Quadra 3D) nos jogos coletivos e Vôlei de Praia */}
       <div className="flex items-center justify-between gap-2 mb-2.5 px-3 py-1.5 rounded-[12px] bg-[#F3F4F9] shadow-[inset_0_0_0_1px_rgba(15,42,86,0.04)]">
         <span className="text-[11px] sm:text-xs font-display font-extrabold text-[#1E293B] truncate">
           {headerTitle}
         </span>
 
-        {isLive ? (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#10B981] text-white text-[10px] font-display font-extrabold tabular-nums shrink-0">
-            <Clock className="w-3 h-3 animate-pulse" />
-            <span>
-              {match.status === 'halftime'
-                ? 'INTERVALO'
-                : MODALITY_RULE_ENGINE[match.modalityId]?.timerDirection ===
-                    'countdown' && sheet?.timer
-                ? `${sheet.timer.periodLabel || 'AO VIVO'} • ${formatSecondsToClock(
-                    sheet.timer.remainingSeconds
-                  )}`
-                : sheet?.timer?.periodLabel
-                ? `${sheet.timer.periodLabel}`
-                : 'AO VIVO'}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {hasInteractiveCourt && (
+            <div className="relative inline-grid grid-cols-2 rounded-full bg-slate-200/80 p-0.5 border border-slate-300/60">
+              <span
+                aria-hidden="true"
+                style={{
+                  transform: `translate3d(${cardTab === 'court' ? '100%' : '0%'}, 0, 0)`,
+                  transition: 'transform 260ms cubic-bezier(0.16, 1, 0.3, 1)',
+                }}
+                className="pointer-events-none absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-[#0B218A] shadow-xs"
+              />
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCardTab('score');
+                }}
+                className={`relative z-10 px-2.5 py-0.5 rounded-full text-[10px] font-display font-extrabold transition-colors duration-200 ${
+                  cardTab === 'score'
+                    ? 'text-white'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Placar
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCardTab('court');
+                }}
+                className={`relative z-10 px-2.5 py-0.5 rounded-full text-[10px] font-display font-extrabold transition-colors duration-200 ${
+                  cardTab === 'court'
+                    ? 'text-[#FACC15]'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Quadra 3D
+              </button>
+            </div>
+          )}
+
+          {isLive ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#10B981] text-white text-[10px] font-display font-extrabold tabular-nums shrink-0">
+              <Clock className="w-3 h-3 animate-pulse" />
+              <span>
+                {match.status === 'halftime'
+                  ? 'INTERVALO'
+                  : MODALITY_RULE_ENGINE[match.modalityId]?.timerDirection ===
+                      'countdown' && sheet?.timer
+                  ? `${sheet.timer.periodLabel || 'AO VIVO'} • ${formatSecondsToClock(
+                      sheet.timer.remainingSeconds
+                    )}`
+                  : sheet?.timer?.periodLabel
+                  ? `${sheet.timer.periodLabel}`
+                  : 'AO VIVO'}
+              </span>
             </span>
-          </span>
-        ) : isFinished ? (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#9CA3AF] text-white text-[10px] font-display font-extrabold shrink-0">
-            <span>FIM</span>
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => navigate(`/notificacoes`)}
-            title="Ativar lembrete da partida"
-            className="w-6 h-6 rounded-full bg-white can-hover:hover:bg-blue-50 shadow-[0_0_0_1px_rgba(15,42,86,0.08)] flex items-center justify-center text-[#4F6BED] transition-[transform,background-color] duration-[150ms] ease-emil-out active:scale-[0.93] shrink-0"
-          >
-            <Bell className="w-3 h-3" />
-          </button>
-        )}
+          ) : isFinished ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#9CA3AF] text-white text-[10px] font-display font-extrabold shrink-0">
+              <span>FIM</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate(`/notificacoes`)}
+              title="Ativar lembrete da partida"
+              className="w-6 h-6 rounded-full bg-white can-hover:hover:bg-blue-50 shadow-[0_0_0_1px_rgba(15,42,86,0.08)] flex items-center justify-center text-[#4F6BED] transition-[transform,background-color] duration-[150ms] ease-emil-out active:scale-[0.93] shrink-0"
+            >
+              <Bell className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 2. Linha Principal do Confronto (Equipes + Escudos + Placar ou Horário Central) */}
@@ -265,6 +315,23 @@ export const MatchCard: React.FC<MatchCardProps> = ({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 3.5. Quadra 3D Interativa da Modalidade (Exibida quando a aba "Quadra 3D" está selecionada no card) */}
+      {hasInteractiveCourt && cardTab === 'court' && (
+        <div
+          style={{
+            animation: 'fadeIn 280ms cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        >
+          <ModalityCourtVisualizer
+            match={match}
+            sheet={sheet}
+            athletes={visibleAthletes}
+            scoringEvents={scoringEvents}
+            compact
+          />
         </div>
       )}
 

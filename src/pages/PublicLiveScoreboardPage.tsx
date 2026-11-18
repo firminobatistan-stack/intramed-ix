@@ -24,6 +24,10 @@ import { StandingsTable } from '../components/sports/StandingsTable';
 import { StoryShareButton } from '../components/social/StoryShareModal';
 import { MatchEventType } from '../types/domain';
 import { computeLiveVolleyballRotation } from '../utils/volleyballRotation';
+import {
+  isCollectiveOrBeachVolley,
+  ModalityCourtVisualizer,
+} from '../components/sports/ModalityCourtVisualizer';
 
 type MatchInfoTab = 'details' | 'lineups' | 'standings' | 'statistics';
 
@@ -72,6 +76,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
     isTestMode,
     setTestMode,
     visibleMatches,
+    visibleAthletes,
     activeLiveMatches,
     getMatchById,
     getSheetByMatchId,
@@ -631,6 +636,19 @@ export const PublicLiveScoreboardPage: React.FC = () => {
             )}
           </div>
         </section>
+
+        {/* 2.5. QUADRA INTERATIVA 3D EM 60FPS (Estilo X NFL Games Tab Switch Interaction — Coletivos & Vôlei de Praia) */}
+        {resolvedMatch && isCollectiveOrBeachVolley(resolvedMatch.modalityId) && (
+          <ModalityCourtVisualizer
+            match={resolvedMatch}
+            sheet={sheet}
+            athletes={visibleAthletes}
+            scoringEvents={scoringEvents}
+            activePageTab={activeTab}
+            liveVolleyballRotation={liveVolleyballRotation}
+            onSelectPageTab={setActiveTab}
+          />
+        )}
 
         {/* LINHA DO TEMPO COMPLETA LANCE A LANCE (Estilo Sofascore / Flashscore) */}
         <section className="all-sports-card p-5 sm:p-6 space-y-4">
