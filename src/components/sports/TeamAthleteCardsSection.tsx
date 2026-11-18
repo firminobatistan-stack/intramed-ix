@@ -37,20 +37,11 @@ function getTurmaShortCode(teamId: string, turma?: string | null): string {
   return 'UEMA';
 }
 
-function getCardRarityBadge(ath: Athlete): {
+function getCardRarityBadge(): {
   label: string;
   isSpecial: boolean;
 } {
-  if (ath.memberStatus === 'aprovado' && ath.jerseyNumber != null) {
-    return { label: '★ SÓCIO PRO', isSpecial: true };
-  }
-  if (ath.paymentStatus === 'pago' && ath.jerseyNumber != null) {
-    return { label: '★ OFICIAL', isSpecial: true };
-  }
-  if (ath.memberStatus === 'aprovado') {
-    return { label: '★ SÓCIO', isSpecial: true };
-  }
-  return { label: '★ ATLETA IX', isSpecial: false };
+  return { label: '★ ATLETA', isSpecial: true };
 }
 
 interface CollectibleCardProps {
@@ -81,7 +72,7 @@ const CollectibleAthleteCard: React.FC<CollectibleCardProps> = ({
       : String(athlete.gender || '').toLowerCase().startsWith('m')
       ? 'MASC'
       : 'OFICIAL';
-  const rarity = getCardRarityBadge(athlete);
+  const rarity = getCardRarityBadge();
   const hasNumber =
     athlete.jerseyNumber != null && String(athlete.jerseyNumber).trim() !== '';
 
@@ -230,7 +221,7 @@ const CollectibleAthleteCard: React.FC<CollectibleCardProps> = ({
               WebkitMaskImage:
                 'radial-gradient(ellipse 88% 92% at 50% 48%, #000 66%, transparent 100%)',
             }}
-            className="w-full h-full object-cover object-top drop-shadow-[0_12px_20px_rgba(0,0,0,0.55)] transition-transform duration-300 can-hover:group-hover:scale-[1.04]"
+            className="w-full h-full object-cover object-center drop-shadow-[0_12px_20px_rgba(0,0,0,0.55)] transition-transform duration-300 can-hover:group-hover:scale-[1.04]"
           />
         ) : (
           <div className="w-24 h-24 sm:w-28 sm:h-28 mb-4 rounded-full bg-white/10 border border-white/25 flex items-center justify-center backdrop-blur-xs">
