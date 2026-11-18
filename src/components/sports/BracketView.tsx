@@ -40,8 +40,13 @@ export const BracketView: React.FC<BracketViewProps> = ({
   modalityName,
 }) => {
   const navigate = useNavigate();
-  const { visibleMatches, launchConfig, officialBrackets, canOperateOfficialData } =
-    useCompetitionStore();
+  const {
+    visibleMatches,
+    launchConfig,
+    officialBrackets,
+    canOperateOfficialData,
+    getSheetByMatchId,
+  } = useCompetitionStore();
   const isAdmin = canOperateOfficialData();
 
   const [zoomPercent, setZoomPercent] = useState<number>(100);
@@ -370,6 +375,17 @@ export const BracketView: React.FC<BracketViewProps> = ({
       return renderEmptySlotCard(phaseLabel, slot.orderIndex, isFinal);
     }
 
+    const sheet = getSheetByMatchId(match.id);
+    const isSetsLive =
+      (match.status === 'live' || match.status === 'halftime') &&
+      sheet?.scoringModel === 'sets_points';
+    const curSet =
+      isSetsLive && sheet
+        ? sheet.periodScores.find(
+            (p) => p.periodNumber === (sheet.timer.currentPeriod || 1)
+          ) || sheet.periodScores[0]
+        : undefined;
+
     const teams = [match.homeTeam, match.awayTeam];
 
     return (
@@ -440,13 +456,19 @@ export const BracketView: React.FC<BracketViewProps> = ({
                   </div>
                 </div>
                 <span
-                  className={`text-sm font-display font-extrabold px-2 py-0.5 rounded-lg ${
+                  className={`text-sm font-display font-extrabold px-2 py-0.5 rounded-lg tabular-nums ${
                     isWinner
                       ? 'bg-brand-blue text-white'
+                      : isSetsLive
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs'
                       : 'text-brand-text-secondary'
                   }`}
                 >
-                  {teamSlot.score ?? '—'}
+                  {isSetsLive
+                    ? `${teamSlot.score ?? 0} (${
+                        idx === 0 ? curSet?.homeScore ?? 0 : curSet?.awayScore ?? 0
+                      })`
+                    : teamSlot.score ?? '—'}
                 </span>
               </div>
             );

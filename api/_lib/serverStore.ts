@@ -1796,8 +1796,8 @@ export async function ensureCloudStoreHydrated(force = false): Promise<CloudColl
   const lastHydratedMs = store.hydratedFromFirestoreAtIso
     ? new Date(store.hydratedFromFirestoreAtIso).getTime()
     : 0;
-  // Re-hidrata se forçado, se nunca hidratou ou se passou mais de 15s (sincroniza entre instâncias serverless)
-  if (!force && lastHydratedMs > 0 && Date.now() - lastHydratedMs < 15000) {
+  // Re-hidrata se forçado, se nunca hidratou ou se passou mais de 2s (garante tempo real entre múltiplas instâncias serverless)
+  if (!force && lastHydratedMs > 0 && Date.now() - lastHydratedMs < 2000) {
     return store;
   }
 
@@ -1891,20 +1891,32 @@ export async function ensureCloudStoreHydrated(force = false): Promise<CloudColl
             } else if (colName === 'matches') {
               if (!store.matches) store.matches = {};
               const exM = store.matches[docId] || {};
-              store.matches[docId] = {
-                ...exM,
-                ...parsedDoc,
-                id: docId,
-                scheduledDate: parsedDoc.scheduledDate || exM.scheduledDate || null,
-                scheduledTime: parsedDoc.scheduledTime || exM.scheduledTime || null,
-                venue: parsedDoc.venue || exM.venue || null,
-              };
+              const exRev = Number(exM.revision || 0);
+              const inRev = Number(parsedDoc.revision || 0);
+              if (!exM.id || inRev >= exRev) {
+                if (inRev > exRev || parsedDoc.status !== exM.status) {
+                  store.updatedAtIso = new Date().toISOString();
+                }
+                store.matches[docId] = {
+                  ...exM,
+                  ...parsedDoc,
+                  id: docId,
+                  scheduledDate: parsedDoc.scheduledDate || exM.scheduledDate || null,
+                  scheduledTime: parsedDoc.scheduledTime || exM.scheduledTime || null,
+                  venue: parsedDoc.venue || exM.venue || null,
+                };
+              }
             } else {
               const targetCol = (store as Record<string, any>)[colName] || {};
               const exDoc = targetCol[docId];
               const exRev = Number(exDoc?.revision || 0);
               const inRev = Number(parsedDoc.revision || 0);
-              if (!exDoc || inRev >= exRev) {
+              const exIso = String(exDoc?.lastUpdatedIso || exDoc?.updatedAtIso || '');
+              const inIso = String(parsedDoc.lastUpdatedIso || parsedDoc.updatedAtIso || '');
+              if (!exDoc || inRev > exRev || (inRev === exRev && inIso >= exIso)) {
+                if (!exDoc || inRev > exRev || inIso > exIso) {
+                  store.updatedAtIso = new Date().toISOString();
+                }
                 targetCol[docId] = { ...(exDoc || {}), ...parsedDoc, id: docId };
                 (store as Record<string, any>)[colName] = targetCol;
               }

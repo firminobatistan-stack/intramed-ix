@@ -12,6 +12,7 @@ import { Match, MatchEventType } from '../../types/domain';
 import { TeamCrest } from './TeamCrest';
 import { useCompetitionStore } from '../../context/CompetitionStoreContext';
 import { StoryShareButton } from '../social/StoryShareModal';
+import { formatSecondsToClock, MODALITY_RULE_ENGINE } from '../../data/sportRulesConfig';
 
 interface MatchCardProps {
   match?: Match | null;
@@ -23,11 +24,18 @@ interface MatchCardProps {
 
 const SCORING_EVENT_TYPES: MatchEventType[] = [
   'goal',
+  'own_goal',
   'point_1',
   'point_2',
   'point_3',
   'set_point',
   'penalty_goal',
+  'seven_meters',
+  'direct_free_throw',
+  'volleyball_ace',
+  'volleyball_block',
+  'volleyball_attack',
+  'volleyball_opponent_error',
 ];
 
 /**
@@ -47,14 +55,30 @@ export const MatchCard: React.FC<MatchCardProps> = ({
   const isAdmin = canOperateOfficialData();
 
   const sheet = match ? getSheetByMatchId(match.id) : undefined;
+  const isSetsMatch = sheet?.scoringModel === 'sets_points';
+  const currentSetObj =
+    isSetsMatch && sheet
+      ? sheet.periodScores.find(
+          (p) => p.periodNumber === (sheet.timer.currentPeriod || 1)
+        ) || sheet.periodScores[0]
+      : undefined;
   const scoringEvents = (sheet?.events || []).filter(
     (e) => !e.isDeleted && SCORING_EVENT_TYPES.includes(e.type) && e.teamSide
   );
+  const getEffectiveScoringSide = (ev: {
+    type: MatchEventType;
+    teamSide?: 'home' | 'away' | null;
+  }) =>
+    ev.type === 'own_goal'
+      ? ev.teamSide === 'home'
+        ? 'away'
+        : 'home'
+      : ev.teamSide;
   const homeScorers = scoringEvents
-    .filter((e) => e.teamSide === 'home')
+    .filter((e) => getEffectiveScoringSide(e) === 'home')
     .slice(0, 3);
   const awayScorers = scoringEvents
-    .filter((e) => e.teamSide === 'away')
+    .filter((e) => getEffectiveScoringSide(e) === 'away')
     .slice(0, 3);
 
   if (!match) {
@@ -116,7 +140,14 @@ export const MatchCard: React.FC<MatchCardProps> = ({
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#10B981] text-white text-[10px] font-display font-extrabold shrink-0">
             <Clock className="w-3 h-3 animate-pulse" />
             <span>
-              {sheet?.timer?.periodLabel
+              {match.status === 'halftime'
+                ? 'INTERVALO'
+                : MODALITY_RULE_ENGINE[match.modalityId]?.timerDirection ===
+                    'countdown' && sheet?.timer
+                ? `${sheet.timer.periodLabel || 'AO VIVO'} • ${formatSecondsToClock(
+                    sheet.timer.remainingSeconds
+                  )}`
+                : sheet?.timer?.periodLabel
                 ? `${sheet.timer.periodLabel}`
                 : 'AO VIVO'}
             </span>
@@ -159,9 +190,20 @@ export const MatchCard: React.FC<MatchCardProps> = ({
         {/* Placar Central ou Horário */}
         <div className="flex flex-col items-center justify-center px-1.5 min-w-[68px]">
           {isLive || isFinished ? (
-            <div className="px-3.5 py-1 rounded-full bg-[#F3F4F9] border border-slate-200/70 text-slate-900 font-display font-extrabold text-sm sm:text-base tracking-tight tabular-nums shadow-inner">
-              {match.homeTeam.score ?? 0} - {match.awayTeam.score ?? 0}
-            </div>
+            isSetsMatch && isLive ? (
+              <div className="flex flex-col items-center">
+                <span className="text-[9px] font-display font-extrabold uppercase text-[#0B218A] leading-none mb-0.5">
+                  Sets {match.homeTeam.score ?? 0}-{match.awayTeam.score ?? 0}
+                </span>
+                <div className="px-3 py-0.5 rounded-full bg-[#F3F4F9] border border-slate-200/70 text-slate-900 font-display font-extrabold text-sm sm:text-base tracking-tight tabular-nums shadow-inner">
+                  {currentSetObj?.homeScore ?? 0} × {currentSetObj?.awayScore ?? 0}
+                </div>
+              </div>
+            ) : (
+              <div className="px-3.5 py-1 rounded-full bg-[#F3F4F9] border border-slate-200/70 text-slate-900 font-display font-extrabold text-sm sm:text-base tracking-tight tabular-nums shadow-inner">
+                {match.homeTeam.score ?? 0} - {match.awayTeam.score ?? 0}
+              </div>
+            )
           ) : (
             <div className="text-center">
               <span className="block text-sm sm:text-base font-display font-extrabold text-[#EF4444] leading-none">

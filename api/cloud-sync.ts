@@ -95,7 +95,11 @@ function canClientWriteDocument(
   }
 
   // Proteção contra sobrescrita por cliente desatualizado (Item 10 da Auditoria)
+  // Exceção para súmulas/partidas: quando um Admin/Mesário autenticado opera a súmula em um aparelho
+  // cuja revisão local estava menor que o servidor, aceitamos o comando e elevamos para prevRevision + 1!
   if (
+    collectionName !== 'matches' &&
+    collectionName !== 'match_sheets' &&
     existing &&
     prevRevision > 0 &&
     incomingRevision > 0 &&
@@ -140,10 +144,20 @@ function canClientWriteDocument(
       }
     }
 
+    // Preserva votos reais da torcida ao salvar a súmula pelo operador
+    const mergedFanVotes =
+      collectionName === 'match_sheets'
+        ? {
+            ...((existing?.fanVotes as Record<string, unknown>) || {}),
+            ...((incoming.fanVotes as Record<string, unknown>) || {}),
+          }
+        : undefined;
+
     const merged: Record<string, unknown> = {
       ...(existing || {}),
       ...incoming,
       ...(mergedEvents !== undefined ? { events: mergedEvents } : {}),
+      ...(mergedFanVotes !== undefined ? { fanVotes: mergedFanVotes } : {}),
       id: docId,
       revision: Math.max(prevRevision + 1, incomingRevision),
       lastUpdatedIso: nowIso,
@@ -463,6 +477,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // GET: Retorna snapshot sincronizado (com suporte a ?since=updatedAtIso, ?force=true e projeção LGPD sem PII/senhas)
   if (req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     const isForce = req.query.force === 'true';
     const sinceParam = typeof req.query.since === 'string' ? req.query.since : null;
     if (!isForce && sinceParam && sinceParam === store.updatedAtIso) {
@@ -674,6 +689,77 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({
         ok: false,
         error: 'Senha administrativa incorreta.',
+      });
+    }
+
+    // AÇÃO 2A-VOTE: Voto Real da Torcida em Partida (1 voto real por usuário/dispositivo, sem números fictícios)
+    if (action === 'cast_match_vote') {
+      const matchId = String(body.matchId || '').trim();
+      const choice = String(body.choice || '').trim() as 'home' | 'away' | 'draw';
+      const rawVoterId = String(
+        verifiedToken?.userId ||
+          verifiedToken?.email ||
+          body.voterId ||
+          ''
+      )
+        .trim()
+        .slice(0, 120);
+
+      if (
+        !matchId ||
+        !rawVoterId ||
+        (choice !== 'home' && choice !== 'away' && choice !== 'draw')
+      ) {
+        return res.status(400).json({ ok: false, error: 'Dados de voto inválidos.' });
+      }
+
+      const nowIso = new Date().toISOString();
+      const existingSheet = store.match_sheets[matchId] || {
+        id: matchId,
+        matchId,
+        modalityId: String(store.matches[matchId]?.modalityId || 'futsal'),
+        scoringModel: 'timed_goals',
+        isTestMode: false,
+        homeLineup: [],
+        awayLineup: [],
+        periodScores: [],
+        events: [],
+        activeSuspensions: [],
+        activeTimeout: null,
+        homeTimeoutsUsed: 0,
+        awayTimeoutsUsed: 0,
+        homeFoulsCurrentPeriod: 0,
+        awayFoulsCurrentPeriod: 0,
+        refereeNotes: '',
+        isClosed: false,
+        syncStatus: 'synced',
+        revision: 1,
+        lastUpdatedIso: nowIso,
+      };
+
+      const prevVotes =
+        existingSheet.fanVotes && typeof existingSheet.fanVotes === 'object'
+          ? { ...(existingSheet.fanVotes as Record<string, string>) }
+          : {};
+      prevVotes[rawVoterId] = choice;
+
+      const updatedSheet: Record<string, unknown> = {
+        ...existingSheet,
+        id: matchId,
+        matchId,
+        fanVotes: prevVotes,
+        revision: Number(existingSheet.revision || 0) + 1,
+        lastUpdatedIso: nowIso,
+      };
+
+      store.match_sheets[matchId] = updatedSheet;
+      saveCloudStore(store);
+      await MirrorDocumentToFirestoreRest('match_sheets', matchId, updatedSheet);
+
+      return res.status(200).json({
+        ok: true,
+        matchId,
+        fanVotes: prevVotes,
       });
     }
 
@@ -1512,10 +1598,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ ok: false, error: 'ID de usuário obrigatório.' });
       }
       const storedUser = store.users?.[uid] || (email ? store.users?.[email] : undefined);
+      const storedAdmin = email ? store.admin_users?.[email] : undefined;
       const role: UserRole =
-        isMasterAccount(email)
+        isMasterAccount(email) || email === 'organizacao@intramed.uema.br'
           ? 'moderador_master'
-          : (storedUser?.role as UserRole) || 'visitante';
+          : (storedAdmin?.role as UserRole) || (storedUser?.role as UserRole) || 'visitante';
       const token = createSignedOperatorToken({
         role,
         email: email || String(storedUser?.email || ''),

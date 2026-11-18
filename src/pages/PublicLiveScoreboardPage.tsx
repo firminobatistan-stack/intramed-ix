@@ -17,7 +17,7 @@ import {
   User,
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
-import { formatSecondsToClock } from '../data/sportRulesConfig';
+import { formatSecondsToClock, MODALITY_RULE_ENGINE } from '../data/sportRulesConfig';
 import { TeamCrest } from '../components/sports/TeamCrest';
 import { TestModeBanner } from '../components/layout/TestModeBanner';
 import { StandingsTable } from '../components/sports/StandingsTable';
@@ -29,11 +29,18 @@ type MatchInfoTab = 'details' | 'lineups' | 'standings' | 'statistics';
 
 const SCORING_TYPES: MatchEventType[] = [
   'goal',
+  'own_goal',
   'point_1',
   'point_2',
   'point_3',
   'set_point',
   'penalty_goal',
+  'seven_meters',
+  'direct_free_throw',
+  'volleyball_ace',
+  'volleyball_block',
+  'volleyball_attack',
+  'volleyball_opponent_error',
 ];
 
 const CARD_SUB_TYPES: MatchEventType[] = [
@@ -71,19 +78,13 @@ export const PublicLiveScoreboardPage: React.FC = () => {
     getModalityStandings,
     canOperateOfficialData,
     canOperateMatch,
+    currentUser,
+    castMatchFanVote,
   } = useCompetitionStore();
   const isAdmin = canOperateOfficialData();
 
   const [activeTab, setActiveTab] = useState<MatchInfoTab>('details');
   const [isFullscreen, setIsFullscreen] = useState(false);
-
-  // Estado interativo do Sistema de Votação da Torcida ("Who Will Win?" - Imagem 4)
-  const [votes, setVotes] = useState<{ home: number; away: number; draw: number }>({
-    home: 45,
-    away: 35,
-    draw: 20,
-  });
-  const [userVote, setUserVote] = useState<'home' | 'away' | 'draw' | null>(null);
 
   const nonSwimmingMatches = visibleMatches.filter(
     (m) => m.modalityId !== 'natacao' && m.id !== 'match_natacao_geral_final'
@@ -97,23 +98,46 @@ export const PublicLiveScoreboardPage: React.FC = () => {
     visibleMatches[0];
 
   const sheet = resolvedMatch ? getSheetByMatchId(resolvedMatch.id) : undefined;
+  const isSetsMatch = sheet?.scoringModel === 'sets_points';
+  const currentSetObj =
+    isSetsMatch && sheet
+      ? sheet.periodScores.find(
+          (p) => p.periodNumber === (sheet.timer.currentPeriod || 1)
+        ) || sheet.periodScores[0]
+      : undefined;
+
   const liveVolleyballRotation =
     resolvedMatch?.modalityId === 'volei' && sheet
       ? computeLiveVolleyballRotation(sheet, sheet.timer.currentPeriod || 1)
       : null;
 
+  // Enquete 100% Real da Torcida (zero votos fictícios — computa diretamente de sheet.fanVotes)
+  const localVoterId =
+    currentUser?.id ||
+    currentUser?.email?.trim().toLowerCase() ||
+    (typeof window !== 'undefined'
+      ? localStorage.getItem('intramed_fan_voter_id') || ''
+      : '');
+  const fanVotesMap = sheet?.fanVotes || {};
+  const userVote = localVoterId ? fanVotesMap[localVoterId] || null : null;
+  const votes = Object.values(fanVotesMap).reduce(
+    (acc, v) => {
+      if (v === 'home') acc.home += 1;
+      else if (v === 'away') acc.away += 1;
+      else if (v === 'draw') acc.draw += 1;
+      return acc;
+    },
+    { home: 0, away: 0, draw: 0 }
+  );
   const totalVotes = votes.home + votes.away + votes.draw;
-  const homePct = totalVotes > 0 ? Math.round((votes.home / totalVotes) * 100) : 45;
-  const awayPct = totalVotes > 0 ? Math.round((votes.away / totalVotes) * 100) : 35;
-  const drawPct = Math.max(0, 100 - homePct - awayPct);
+  const homePct = totalVotes > 0 ? Math.round((votes.home / totalVotes) * 100) : 0;
+  const awayPct = totalVotes > 0 ? Math.round((votes.away / totalVotes) * 100) : 0;
+  const drawPct =
+    totalVotes > 0 ? Math.max(0, 100 - homePct - awayPct) : 0;
 
   const handleVote = (choice: 'home' | 'away' | 'draw') => {
-    if (userVote === choice) return;
-    setVotes((prev) => ({
-      ...prev,
-      [choice]: prev[choice] + 8,
-    }));
-    setUserVote(choice);
+    if (!resolvedMatch || userVote === choice) return;
+    void castMatchFanVote(resolvedMatch.id, choice);
   };
 
   const toggleFullscreen = () => {
@@ -136,8 +160,24 @@ export const PublicLiveScoreboardPage: React.FC = () => {
   const scoringEvents = events.filter(
     (e) => SCORING_TYPES.includes(e.type) && e.teamSide
   );
-  const homeScorers = scoringEvents.filter((e) => e.teamSide === 'home');
-  const awayScorers = scoringEvents.filter((e) => e.teamSide === 'away');
+  const getEffectiveScoringSide = (ev: {
+    type: MatchEventType;
+    teamSide?: 'home' | 'away' | null;
+  }) =>
+    ev.type === 'own_goal'
+      ? ev.teamSide === 'home'
+        ? 'away'
+        : 'home'
+      : ev.teamSide;
+  const homeScorers = scoringEvents.filter(
+    (e) => getEffectiveScoringSide(e) === 'home'
+  );
+  const awayScorers = scoringEvents.filter(
+    (e) => getEffectiveScoringSide(e) === 'away'
+  );
+  const modalityEngine = resolvedMatch
+    ? MODALITY_RULE_ENGINE[resolvedMatch.modalityId]
+    : undefined;
 
   const cardAndSubEvents = events.filter((e) => CARD_SUB_TYPES.includes(e.type));
   const yellowCardsCount = events.filter((e) => e.type === 'yellow_card').length;
@@ -149,25 +189,41 @@ export const PublicLiveScoreboardPage: React.FC = () => {
   const awayName = resolvedMatch?.awayTeam.teamName || 'Equipe Visitante';
   const homeScore = resolvedMatch?.homeTeam.score ?? 0;
   const awayScore = resolvedMatch?.awayTeam.score ?? 0;
+  const homeCurrentSetPoints = currentSetObj?.homeScore ?? 0;
+  const awayCurrentSetPoints = currentSetObj?.awayScore ?? 0;
 
-  // Gera 28 barras para o gráfico "Pressing Threat" (Imagem 5)
-  const threatBars = Array.from({ length: 28 }, (_, idx) => {
-    const matchingEvent = events[idx % Math.max(1, events.length)];
-    if (!resolvedMatch) {
-      return { side: idx % 2 === 0 ? 'home' : 'away', value: 18 };
+  // Barras reais de ritmo de jogo: baseadas exclusivamente nos lances reais registrados (sem ondas fictícias)
+  const chronologicalScoringAndPlays = [...events].reverse();
+  const threatBars = Array.from({ length: 24 }, (_, idx) => {
+    const ev = chronologicalScoringAndPlays[idx];
+    if (!ev || !ev.teamSide) {
+      return { side: 'none' as const, value: 0 };
     }
-    if (matchingEvent && matchingEvent.teamSide) {
-      return {
-        side: matchingEvent.teamSide,
-        value: SCORING_TYPES.includes(matchingEvent.type) ? 85 : 48,
-      };
-    }
-    const wave = ((idx * 17 + 11) % 65) + 20;
     return {
-      side: idx % 3 === 0 ? 'away' : 'home',
-      value: wave,
+      side: ev.teamSide,
+      value: SCORING_TYPES.includes(ev.type) ? 88 : 48,
     };
   });
+
+  // Destaques reais da partida: quem marcou mais pontos/gols nesta partida (sem notas 7.8 / 7.5 inventadas)
+  const getTopPerformerForSide = (side: 'home' | 'away') => {
+    const counts = new Map<string, { name: string; count: number }>();
+    for (const ev of scoringEvents) {
+      if (ev.teamSide === side && ev.athleteName) {
+        const key = ev.athleteId || ev.athleteName;
+        const prev = counts.get(key) || { name: ev.athleteName, count: 0 };
+        prev.count += 1;
+        counts.set(key, prev);
+      }
+    }
+    let best: { name: string; count: number } | null = null;
+    for (const item of counts.values()) {
+      if (!best || item.count > best.count) best = item;
+    }
+    return best;
+  };
+  const homeTopPerformer = getTopPerformerForSide('home');
+  const awayTopPerformer = getTopPerformerForSide('away');
 
   const tabs: Array<{ id: MatchInfoTab; label: string }> = [
     { id: 'details', label: 'Detalhes' },
@@ -350,7 +406,11 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               <span className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-[#10B981] text-white text-xs font-display font-extrabold shadow-sm">
                 <Clock className="w-3.5 h-3.5 animate-pulse" />
                 <span>
-                  {sheet?.timer
+                  {resolvedMatch.status === 'halftime'
+                    ? 'INTERVALO'
+                    : isSetsMatch
+                    ? `AO VIVO • ${sheet?.timer?.periodLabel || 'Set 1'}`
+                    : modalityEngine?.timerDirection === 'countdown' && sheet?.timer
                     ? formatSecondsToClock(sheet.timer.remainingSeconds)
                     : 'AO VIVO'}
                 </span>
@@ -358,7 +418,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
             ) : resolvedMatch?.status === 'finished' ? (
               <span className="inline-flex items-center gap-1.5 px-4 py-1 rounded-full bg-[#9CA3AF] text-white text-xs font-display font-extrabold">
                 <Clock className="w-3.5 h-3.5" />
-                <span>FT</span>
+                <span>FIM DE JOGO</span>
               </span>
             ) : (
               <span className="w-9 h-9 rounded-full bg-[#F3F4F9] border border-slate-200 flex items-center justify-center text-[#4F6BED]">
@@ -375,18 +435,35 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               <TeamCrest
                 crestUrl={resolvedMatch?.homeTeam.crestUrl}
                 teamName={resolvedMatch?.homeTeam.teamName}
+                teamId={resolvedMatch?.homeTeam.teamId}
                 size="md"
               />
             </div>
 
             <div className="text-center px-2">
-              <div className="px-4 py-1.5 rounded-full bg-[#F3F4F9] border border-slate-200/80 text-slate-900 font-display font-extrabold text-base sm:text-lg tabular-nums">
-                {resolvedMatch ? `${homeScore} - ${awayScore}` : '— : —'}
-              </div>
-              {sheet?.timer?.periodLabel && (
-                <span className="block text-[11px] font-semibold text-slate-400 mt-1">
-                  ({sheet.timer.periodLabel})
-                </span>
+              {isSetsMatch && resolvedMatch?.status !== 'finished' ? (
+                <>
+                  <span className="block text-[10px] font-display font-extrabold uppercase tracking-wider text-[#0B218A] mb-1">
+                    SETS: {homeScore} — {awayScore}
+                  </span>
+                  <div className="px-4 py-1.5 rounded-full bg-[#F3F4F9] border border-slate-200/80 text-slate-900 font-display font-extrabold text-xl sm:text-2xl tabular-nums">
+                    {homeCurrentSetPoints} × {awayCurrentSetPoints}
+                  </div>
+                  <span className="block text-[10px] font-semibold text-slate-500 mt-1">
+                    Pontos no {sheet?.timer?.periodLabel || 'Set Atual'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <div className="px-4 py-1.5 rounded-full bg-[#F3F4F9] border border-slate-200/80 text-slate-900 font-display font-extrabold text-base sm:text-lg tabular-nums">
+                    {resolvedMatch ? `${homeScore} - ${awayScore}` : '— : —'}
+                  </div>
+                  {sheet?.timer?.periodLabel && (
+                    <span className="block text-[11px] font-semibold text-slate-400 mt-1">
+                      ({sheet.timer.periodLabel})
+                    </span>
+                  )}
+                </>
               )}
               {sheet?.periodScores &&
                 sheet.periodScores.some((p) => p.homeScore > 0 || p.awayScore > 0 || p.isFinished) && (
@@ -416,7 +493,11 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                               null
                                 ? `#${liveVolleyballRotation.currentServer.jerseyNumber} `
                                 : ''
-                            }${liveVolleyballRotation.currentServer.athleteName.split(' ')[0]}`
+                            }${liveVolleyballRotation.currentServer.athleteName.split(' ')[0]} (${
+                              liveVolleyballRotation.currentServingSide === 'home'
+                                ? homeName
+                                : awayName
+                            })`
                           : liveVolleyballRotation.currentServingSide === 'home'
                           ? homeName
                           : awayName}
@@ -430,6 +511,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               <TeamCrest
                 crestUrl={resolvedMatch?.awayTeam.crestUrl}
                 teamName={resolvedMatch?.awayTeam.teamName}
+                teamId={resolvedMatch?.awayTeam.teamId}
                 size="md"
               />
               <span className="text-sm sm:text-base font-display font-bold text-slate-800 truncate">
@@ -445,7 +527,9 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 {homeScorers.map((ev) => (
                   <div key={ev.id} className="inline-flex items-center gap-1.5">
                     <span>
-                      {ev.athleteName || ev.typeLabel}{' '}
+                      {ev.athleteName
+                        ? `${ev.athleteName}${ev.type === 'own_goal' ? ' (GC)' : ''}`
+                        : ev.typeLabel}{' '}
                       <span className="text-slate-400">{ev.matchClockDisplay}</span>
                     </span>
                     <CircleDot className="w-3.5 h-3.5 text-[#0B218A]" />
@@ -458,13 +542,73 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                     <CircleDot className="w-3.5 h-3.5 text-[#0B218A]" />
                     <span>
                       <span className="text-slate-400">{ev.matchClockDisplay}</span>{' '}
-                      {ev.athleteName || ev.typeLabel}
+                      {ev.athleteName
+                        ? `${ev.athleteName}${ev.type === 'own_goal' ? ' (GC)' : ''}`
+                        : ev.typeLabel}
                     </span>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          {/* Tênis de Mesa: Placar ao vivo das 3 Partidas Individuais do Confronto */}
+          {sheet?.scoringModel === 'team_submatches' &&
+            Array.isArray(sheet.subMatches) &&
+            sheet.subMatches.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
+                <span className="block text-[10px] font-display font-extrabold uppercase tracking-wider text-center text-[#0B218A]">
+                  Jogos Individuais do Confronto (Melhor de 3)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {sheet.subMatches.map((sm) => (
+                    <div
+                      key={sm.id}
+                      className={`rounded-xl border p-2.5 text-xs ${
+                        sm.status === 'live'
+                          ? 'bg-emerald-50/70 border-emerald-200'
+                          : sm.status === 'finished'
+                          ? 'bg-slate-50 border-slate-200'
+                          : 'bg-white border-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[10px] font-bold mb-1">
+                        <span className="text-[#0B218A]">{sm.label}</span>
+                        <span
+                          className={
+                            sm.status === 'live'
+                              ? 'text-emerald-700'
+                              : 'text-slate-400'
+                          }
+                        >
+                          {sm.status === 'finished'
+                            ? 'Fim'
+                            : sm.status === 'live'
+                            ? 'Ao Vivo'
+                            : 'A seguir'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="truncate font-semibold text-slate-700">
+                          {sm.homeAthleteName}
+                        </span>
+                        <span className="font-mono font-extrabold text-[#0B218A]">
+                          {sm.homeSetsWon} ({sm.currentSetHomePoints})
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <span className="truncate font-semibold text-slate-700">
+                          {sm.awayAthleteName}
+                        </span>
+                        <span className="font-mono font-extrabold text-[#10B981]">
+                          {sm.awaySetsWon} ({sm.currentSetAwayPoints})
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
           <div className="mt-4 pt-3 border-t border-slate-100 text-center space-y-0.5">
             <p className="text-xs font-bold text-slate-600">
@@ -574,84 +718,93 @@ export const PublicLiveScoreboardPage: React.FC = () => {
         {/* ABA 1: DETALHES */}
         {activeTab === 'details' && (
           <>
-            {/* 3. CARD "PRESSING THREAT & STAR PERFORMERS" */}
+            {/* 3. CARD "RITMO DE JOGO & ARTILHEIROS/DESTAQUES REAIS" */}
             <section className="all-sports-card p-5 sm:p-6 space-y-4">
               <div className="all-sports-section-pill">
                 Ritmo de Jogo
               </div>
 
-              {/* Gráfico de Barras Verticais Espelhadas (Verde em cima / Azul embaixo) */}
-              <div className="rounded-2xl overflow-hidden border border-slate-200/70">
-                {/* Metade Superior Verde (Mandante) */}
-                <div className="h-20 bg-gradient-to-b from-emerald-100/80 to-emerald-50/40 px-3 flex items-end justify-between gap-1 border-b border-slate-200/80">
-                  {threatBars.map((bar, idx) => (
-                    <div
-                      key={`top-${idx}`}
-                      className="flex-1 rounded-t-sm bg-[#10B981] transition-all duration-300"
-                      style={{
-                        height:
-                          bar.side === 'home' ? `${Math.min(95, bar.value)}%` : '10%',
-                        opacity: bar.side === 'home' ? 0.95 : 0.2,
-                      }}
-                    />
-                  ))}
-                </div>
+              {events.some((e) => e.teamSide === 'home' || e.teamSide === 'away') ? (
+                <>
+                  <div className="rounded-2xl overflow-hidden border border-slate-200/70">
+                    {/* Metade Superior Verde (Mandante) */}
+                    <div className="h-16 bg-gradient-to-b from-emerald-100/80 to-emerald-50/40 px-3 flex items-end justify-between gap-1 border-b border-slate-200/80">
+                      {threatBars.map((bar, idx) => (
+                        <div
+                          key={`top-${idx}`}
+                          className="flex-1 rounded-t-sm bg-[#10B981] transition-all duration-300"
+                          style={{
+                            height:
+                              bar.side === 'home' ? `${Math.min(95, bar.value)}%` : '6%',
+                            opacity: bar.side === 'home' ? 0.95 : 0.15,
+                          }}
+                        />
+                      ))}
+                    </div>
 
-                {/* Metade Inferior Azul (Visitante) */}
-                <div className="h-20 bg-gradient-to-t from-blue-100/70 to-blue-50/40 px-3 flex items-start justify-between gap-1">
-                  {threatBars.map((bar, idx) => (
-                    <div
-                      key={`bot-${idx}`}
-                      className="flex-1 rounded-b-sm bg-[#2563EB] transition-all duration-300"
-                      style={{
-                        height:
-                          bar.side === 'away' ? `${Math.min(95, bar.value)}%` : '10%',
-                        opacity: bar.side === 'away' ? 0.9 : 0.2,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 px-1">
-                <span>Início • 1º Período</span>
-                <span>Tempo Real / FT</span>
-              </div>
-
-              {/* Faixa "Star Performers" (Idêntica à Imagem 5) */}
-              <div className="rounded-2xl bg-[#F3F4F9] p-3 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-[#0B218A] text-white flex items-center justify-center shrink-0 font-display font-bold text-xs">
-                    {homeName.slice(0, 2).toUpperCase()}
+                    {/* Metade Inferior Azul (Visitante) */}
+                    <div className="h-16 bg-gradient-to-t from-blue-100/70 to-blue-50/40 px-3 flex items-start justify-between gap-1">
+                      {threatBars.map((bar, idx) => (
+                        <div
+                          key={`bot-${idx}`}
+                          className="flex-1 rounded-b-sm bg-[#2563EB] transition-all duration-300"
+                          style={{
+                            height:
+                              bar.side === 'away' ? `${Math.min(95, bar.value)}%` : '6%',
+                            opacity: bar.side === 'away' ? 0.9 : 0.15,
+                          }}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <span className="inline-block px-2 py-0.5 rounded bg-[#10B981] text-white text-[10px] font-extrabold">
-                      {resolvedMatch ? '7.8' : '—'}
-                    </span>
-                    <span className="block text-xs font-bold text-slate-700 truncate mt-0.5">
-                      {sheet?.homeLineup[0]?.athleteName || homeName}
-                    </span>
+
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 px-1">
+                    <span>Início da Partida</span>
+                    <span>Lances Reais Registrados</span>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-center text-slate-400 py-3">
+                  O gráfico de ritmo de jogo será preenchido conforme os lances reais forem marcados na súmula.
+                </p>
+              )}
+
+              {/* Destaques reais (somente se houver atletas pontuadores registrados na súmula) */}
+              {(homeTopPerformer || awayTopPerformer) && (
+                <div className="rounded-2xl bg-[#F3F4F9] p-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-9 h-9 rounded-full bg-[#0B218A] text-white flex items-center justify-center shrink-0 font-display font-bold text-xs">
+                      {homeName.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <span className="inline-block px-2 py-0.5 rounded bg-[#0B218A] text-white text-[10px] font-extrabold">
+                        {homeTopPerformer ? `${homeTopPerformer.count} pts/gols` : '—'}
+                      </span>
+                      <span className="block text-xs font-bold text-slate-700 truncate mt-0.5">
+                        {homeTopPerformer ? homeTopPerformer.name : homeName}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="text-[11px] font-display font-bold text-slate-500 shrink-0">
+                    Pontuadores
+                  </span>
+
+                  <div className="flex items-center gap-2.5 min-w-0 text-right">
+                    <div className="min-w-0">
+                      <span className="inline-block px-2 py-0.5 rounded bg-[#10B981] text-white text-[10px] font-extrabold">
+                        {awayTopPerformer ? `${awayTopPerformer.count} pts/gols` : '—'}
+                      </span>
+                      <span className="block text-xs font-bold text-slate-700 truncate mt-0.5">
+                        {awayTopPerformer ? awayTopPerformer.name : awayName}
+                      </span>
+                    </div>
+                    <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 font-display font-bold text-xs">
+                      {awayName.slice(0, 2).toUpperCase()}
+                    </div>
                   </div>
                 </div>
-
-                <span className="text-[11px] font-display font-bold text-slate-500 shrink-0">
-                  Destaques
-                </span>
-
-                <div className="flex items-center gap-2.5 min-w-0 text-right">
-                  <div className="min-w-0">
-                    <span className="inline-block px-2 py-0.5 rounded bg-[#10B981] text-white text-[10px] font-extrabold">
-                      {resolvedMatch ? '7.5' : '—'}
-                    </span>
-                    <span className="block text-xs font-bold text-slate-700 truncate mt-0.5">
-                      {sheet?.awayLineup[0]?.athleteName || awayName}
-                    </span>
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 font-display font-bold text-xs">
-                    {awayName.slice(0, 2).toUpperCase()}
-                  </div>
-                </div>
-              </div>
+              )}
 
               <div className="text-center">
                 <button
@@ -666,69 +819,66 @@ export const PublicLiveScoreboardPage: React.FC = () => {
               </div>
             </section>
 
-            {/* 4. CARD "WHO WILL WIN?" */}
-            <section className="all-sports-card p-5 sm:p-6 space-y-5">
-              <div className="all-sports-section-pill">
-                Palpite da Torcida
+            {/* 4. CARD "PALPITE DA TORCIDA" (100% VOTOS REAIS, INICIA EM 0 VOTOS) */}
+            <section className="all-sports-card p-5 sm:p-6 space-y-4">
+              <div className="all-sports-section-pill flex items-center justify-between gap-2 px-4">
+                <span>Torcida • Quem Vence?</span>
+                <span className="text-[10px] font-mono font-bold text-[#0B218A]">
+                  {totalVotes} {totalVotes === 1 ? 'voto real' : 'votos reais'}
+                </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.3fr] items-center gap-6">
-                {/* Legenda à Esquerda */}
-                <div className="space-y-3 text-xs font-semibold text-slate-600">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-3 h-3 rounded-full bg-[#1D63FF] shrink-0" />
-                    <span className="truncate">{homeName}</span>
+              {totalVotes > 0 ? (
+                <div className="space-y-2">
+                  <div className="h-3 rounded-full bg-slate-100 overflow-hidden flex">
+                    {homePct > 0 && (
+                      <div
+                        className="h-full bg-[#1D63FF] transition-all duration-300"
+                        style={{ width: `${homePct}%` }}
+                      />
+                    )}
+                    {!isSetsMatch && drawPct > 0 && (
+                      <div
+                        className="h-full bg-[#FACC15] transition-all duration-300"
+                        style={{ width: `${drawPct}%` }}
+                      />
+                    )}
+                    {awayPct > 0 && (
+                      <div
+                        className="h-full bg-[#10B981] transition-all duration-300"
+                        style={{ width: `${awayPct}%` }}
+                      />
+                    )}
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-3 h-3 rounded-full bg-[#10B981] shrink-0" />
-                    <span className="truncate">{awayName}</span>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-3 h-3 rounded-full bg-[#FACC15] shrink-0" />
-                    <span>Empate / Prorrogação</span>
-                  </div>
-                </div>
-
-                {/* Gráfico de 3 Bolhas Circulares Sobrepostas (Azul, Verde e Amarelo - Imagem 4) */}
-                <div className="relative h-44 w-full max-w-[270px] mx-auto select-none">
-                  {/* Bolha Azul (Mandante) */}
-                  <div className="absolute left-2 top-5 w-32 h-32 rounded-full bg-[#1D63FF] text-white flex flex-col items-center justify-center text-center p-2 shadow-lg ring-4 ring-white">
-                    <span className="text-2xl font-display font-extrabold leading-none">
-                      {homePct}%
+                  <div className="flex items-center justify-between text-[11px] font-display font-bold text-slate-600">
+                    <span className="text-[#1D63FF]">
+                      {homeName}: {homePct}% ({votes.home})
                     </span>
-                    <span className="text-[10px] font-medium text-white/90 mt-1 line-clamp-2 px-1">
-                      {homeName}
-                    </span>
-                  </div>
-
-                  {/* Bolha Verde (Visitante) */}
-                  <div className="absolute right-2 top-1 w-28 h-28 rounded-full bg-[#10B981] text-white flex flex-col items-center justify-center text-center p-2 shadow-lg ring-4 ring-white">
-                    <span className="text-xl font-display font-extrabold leading-none">
-                      {awayPct}%
-                    </span>
-                    <span className="text-[10px] font-medium text-white/90 mt-1 line-clamp-1 px-1">
-                      {awayName}
-                    </span>
-                  </div>
-
-                  {/* Bolha Amarela (Empate) */}
-                  <div className="absolute right-10 bottom-1 w-20 h-20 rounded-full bg-[#FACC15] text-slate-900 flex flex-col items-center justify-center text-center p-1.5 shadow-md ring-4 ring-white">
-                    <span className="text-sm font-display font-extrabold leading-none">
-                      {drawPct}%
-                    </span>
-                    <span className="text-[9px] font-bold text-slate-800 mt-0.5">
-                      Empate
+                    {!isSetsMatch && (
+                      <span className="text-amber-600">
+                        Empate: {drawPct}% ({votes.draw})
+                      </span>
+                    )}
+                    <span className="text-[#10B981]">
+                      {awayName}: {awayPct}% ({votes.away})
                     </span>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <p className="text-xs text-center text-slate-400 py-1">
+                  Nenhum voto registrado ainda nesta partida. Deixe sua torcida abaixo!
+                </p>
+              )}
 
-              {/* 3 Botões Interativos de Votação na Base (👍 com Anel Colorido - Imagem 4) */}
-              <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-slate-100">
+              <div
+                className={`grid ${
+                  isSetsMatch ? 'grid-cols-2' : 'grid-cols-3'
+                } gap-2.5 pt-2 border-t border-slate-100`}
+              >
                 <button
                   type="button"
                   onClick={() => handleVote('home')}
-                  className={`flex items-center gap-2.5 p-2 rounded-2xl border transition-all ${
+                  className={`flex items-center gap-2.5 p-2.5 rounded-2xl border transition-all touch-manipulation ${
                     userVote === 'home'
                       ? 'bg-blue-50/80 border-[#1D63FF]'
                       : 'bg-white border-slate-100 hover:bg-slate-50'
@@ -742,7 +892,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                       {homeName}
                     </span>
                     <span className="block text-xs font-display font-extrabold text-slate-800">
-                      {votes.home} votos
+                      {votes.home} {votes.home === 1 ? 'voto' : 'votos'}
                     </span>
                   </div>
                 </button>
@@ -750,7 +900,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleVote('away')}
-                  className={`flex items-center gap-2.5 p-2 rounded-2xl border transition-all ${
+                  className={`flex items-center gap-2.5 p-2.5 rounded-2xl border transition-all touch-manipulation ${
                     userVote === 'away'
                       ? 'bg-emerald-50/80 border-[#10B981]'
                       : 'bg-white border-slate-100 hover:bg-slate-50'
@@ -764,32 +914,34 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                       {awayName}
                     </span>
                     <span className="block text-xs font-display font-extrabold text-slate-800">
-                      {votes.away} votos
+                      {votes.away} {votes.away === 1 ? 'voto' : 'votos'}
                     </span>
                   </div>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleVote('draw')}
-                  className={`flex items-center gap-2.5 p-2 rounded-2xl border transition-all ${
-                    userVote === 'draw'
-                      ? 'bg-amber-50/80 border-[#FACC15]'
-                      : 'bg-white border-slate-100 hover:bg-slate-50'
-                  }`}
-                >
-                  <span className="w-9 h-9 rounded-full bg-amber-50 border-2 border-[#FACC15] flex items-center justify-center text-amber-600 shrink-0">
-                    <ThumbsUp className="w-4 h-4" />
-                  </span>
-                  <div className="text-left min-w-0">
-                    <span className="block text-[10px] font-bold uppercase text-slate-400">
-                      Empate
+                {!isSetsMatch && (
+                  <button
+                    type="button"
+                    onClick={() => handleVote('draw')}
+                    className={`flex items-center gap-2.5 p-2.5 rounded-2xl border transition-all touch-manipulation ${
+                      userVote === 'draw'
+                        ? 'bg-amber-50/80 border-[#FACC15]'
+                        : 'bg-white border-slate-100 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="w-9 h-9 rounded-full bg-amber-50 border-2 border-[#FACC15] flex items-center justify-center text-amber-600 shrink-0">
+                      <ThumbsUp className="w-4 h-4" />
                     </span>
-                    <span className="block text-xs font-display font-extrabold text-slate-800">
-                      {votes.draw} votos
-                    </span>
-                  </div>
-                </button>
+                    <div className="text-left min-w-0">
+                      <span className="block text-[10px] font-bold uppercase text-slate-400">
+                        Empate
+                      </span>
+                      <span className="block text-xs font-display font-extrabold text-slate-800">
+                        {votes.draw} {votes.draw === 1 ? 'voto' : 'votos'}
+                      </span>
+                    </div>
+                  </button>
+                )}
               </div>
             </section>
 
@@ -1089,16 +1241,42 @@ export const PublicLiveScoreboardPage: React.FC = () => {
             </div>
 
             {[
-              {
-                label: 'Gols / Pontos Convertidos',
-                home: homeScore,
-                away: awayScore,
-              },
-              {
-                label: 'Faltas de Equipe no Período',
-                home: sheet?.homeFoulsCurrentPeriod ?? 0,
-                away: sheet?.awayFoulsCurrentPeriod ?? 0,
-              },
+              ...(isSetsMatch
+                ? [
+                    {
+                      label: 'Sets Vencidos',
+                      home: homeScore,
+                      away: awayScore,
+                    },
+                    {
+                      label: `Pontos no ${sheet?.timer?.periodLabel || 'Set Atual'}`,
+                      home: homeCurrentSetPoints,
+                      away: awayCurrentSetPoints,
+                    },
+                    {
+                      label: 'Total de Pontos na Partida',
+                      home: (sheet?.periodScores || []).reduce(
+                        (s, p) => s + (p.homeScore ?? 0),
+                        0
+                      ),
+                      away: (sheet?.periodScores || []).reduce(
+                        (s, p) => s + (p.awayScore ?? 0),
+                        0
+                      ),
+                    },
+                  ]
+                : [
+                    {
+                      label: 'Gols / Pontos Convertidos',
+                      home: homeScore,
+                      away: awayScore,
+                    },
+                    {
+                      label: 'Faltas de Equipe no Período',
+                      home: sheet?.homeFoulsCurrentPeriod ?? 0,
+                      away: sheet?.awayFoulsCurrentPeriod ?? 0,
+                    },
+                  ]),
               {
                 label: 'Pedidos de Tempo Utilizados',
                 home: sheet?.homeTimeoutsUsed ?? 0,

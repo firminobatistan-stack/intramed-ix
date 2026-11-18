@@ -435,6 +435,8 @@ export interface MatchSheet {
   swimmingLanes?: SwimmingLaneEntry[];
   // Específicos de Voleibol (Rotação Oficial FIVB / CBV Posições I a VI por Set)
   volleyballSetConfigs?: Record<number, VolleyballSetRotationConfig>;
+  // Enquete Real de Torcida (sem números fictícios — votos reais por userId/deviceId)
+  fanVotes?: Record<string, 'home' | 'away' | 'draw'>;
   // Arbitragem e Fechamento
   refereeNotes: string;
   refereeName?: string;

@@ -97,6 +97,8 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     finalizeMatch,
     reopenMatchForCorrection,
     setMatchSheetOfficialReleased,
+    isOnline,
+    pendingSyncCount,
   } = useCompetitionStore();
 
   // Proteção contra duplo clique / toque acidental (Item 31)
@@ -429,7 +431,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
   // Ação direta com proteção contra duplo toque para +1 Ponto em Vôlei / Vôlei de Praia
   const handleDirectSetPoint = (side: 'home' | 'away') => {
     if (sheet.isClosed || !matchId) return;
-    if (!canExecuteRapidAction(600)) return; // Proteção anti-duplo-toque (Item 31)
+    if (!canExecuteRapidAction(250)) return; // Proteção leve anti-duplo-toque sem travar cliques seguidos
 
     recordMatchEvent(matchId, {
       type: 'set_point',
@@ -620,8 +622,36 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Direita: Status + Ações de Súmula (Escalação, Placar ao Vivo, Encerrar) */}
+          {/* Direita: Status + Sincronização Nuvem + Ações de Súmula */}
           <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-display font-extrabold border ${
+                !isOnline
+                  ? 'bg-rose-500/20 border-rose-400/50 text-rose-200'
+                  : pendingSyncCount > 0
+                  ? 'bg-amber-400/20 border-amber-300/50 text-amber-200'
+                  : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
+              }`}
+              title="Status da transmissão em tempo real para o placar público"
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  !isOnline
+                    ? 'bg-rose-400'
+                    : pendingSyncCount > 0
+                    ? 'bg-amber-300 animate-ping'
+                    : 'bg-emerald-400'
+                }`}
+              />
+              <span>
+                {!isOnline
+                  ? 'Offline'
+                  : pendingSyncCount > 0
+                  ? 'Sincronizando...'
+                  : 'Tempo Real Ativo'}
+              </span>
+            </span>
+
             <StatusBadge
               status={match.status}
               label={
@@ -1271,6 +1301,17 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                     </>
                   )}
 
+                  {engine.timerDirection === 'none' && match.status === 'scheduled' && (
+                    <Button
+                      variant="accent"
+                      size="lg"
+                      leftIcon={<Play className="w-5 h-5" />}
+                      onClick={() => handleStartOrResumeTimer()}
+                    >
+                      INICIAR PARTIDA AO VIVO
+                    </Button>
+                  )}
+
                   {engine.scoringModel === 'sets_points' && (
                     <div className="flex flex-wrap items-center justify-center gap-3 w-full">
                       <Button
@@ -1298,6 +1339,46 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                         onClick={() => finishCurrentSet(match.id)}
                       >
                         Encerrar {sheet.timer.periodLabel}
+                      </Button>
+                    </div>
+                  )}
+
+                  {engine.scoringModel === 'modular_table' && (
+                    <div className="flex flex-wrap items-center justify-center gap-3 w-full">
+                      <Button
+                        variant="primary"
+                        size="lg"
+                        leftIcon={<Plus className="w-5 h-5" />}
+                        onClick={() => {
+                          if (!canExecuteRapidAction(250)) return;
+                          recordMatchEvent(match.id, {
+                            type: 'point_1',
+                            typeLabel: `Ponto (${match.homeTeam.teamName})`,
+                            teamSide: 'home',
+                            pointsDelta: 1,
+                          });
+                          if (soundEnabled) matchSound.playConfirmBeep();
+                        }}
+                      >
+                        +1 Ponto {match.homeTeam.teamName}
+                      </Button>
+
+                      <Button
+                        variant="primary"
+                        size="lg"
+                        leftIcon={<Plus className="w-5 h-5" />}
+                        onClick={() => {
+                          if (!canExecuteRapidAction(250)) return;
+                          recordMatchEvent(match.id, {
+                            type: 'point_1',
+                            typeLabel: `Ponto (${match.awayTeam.teamName})`,
+                            teamSide: 'away',
+                            pointsDelta: 1,
+                          });
+                          if (soundEnabled) matchSound.playConfirmBeep();
+                        }}
+                      >
+                        +1 Ponto {match.awayTeam.teamName}
                       </Button>
                     </div>
                   )}

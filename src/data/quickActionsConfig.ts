@@ -298,7 +298,149 @@ const VOLEI_QUADRA_QUICK_ACTIONS: QuickActionDef[] = [
   },
 ];
 
+const TENIS_MESA_QUICK_ACTIONS: QuickActionDef[] = [
+  {
+    type: 'point_1',
+    label: '+1 VITÓRIA INDIVIDUAL',
+    shortBadge: '🏓 +1',
+    pointsDelta: 1,
+    requiresAthlete: false,
+    accentColor: 'blue',
+  },
+  {
+    type: 'timeout',
+    label: 'PEDIDO DE TEMPO (1m)',
+    shortBadge: '⏱️',
+    requiresAthlete: false,
+    accentColor: 'neutral',
+  },
+  {
+    type: 'yellow_card',
+    label: 'ADVERTÊNCIA / CARTÃO',
+    shortBadge: '🟨',
+    requiresAthlete: true,
+    accentColor: 'yellow',
+  },
+  {
+    type: 'table_note',
+    label: 'OCORRÊNCIA DE MESA',
+    shortBadge: '📝',
+    requiresAthlete: false,
+    accentColor: 'neutral',
+  },
+];
+
+const TRUCO_QUICK_ACTIONS: QuickActionDef[] = [
+  {
+    type: 'point_1',
+    label: '+1 TENTO / QUEDA',
+    shortBadge: '🃏 +1',
+    pointsDelta: 1,
+    requiresAthlete: false,
+    accentColor: 'blue',
+  },
+  {
+    type: 'point_3',
+    label: '+3 TRUCO',
+    shortBadge: '🔥 +3',
+    pointsDelta: 3,
+    requiresAthlete: false,
+    accentColor: 'yellow',
+  },
+  {
+    type: 'point_2',
+    label: '+6 SEIS',
+    shortBadge: '⚡ +6',
+    pointsDelta: 6,
+    requiresAthlete: false,
+    accentColor: 'yellow',
+  },
+  {
+    type: 'set_point',
+    label: '+9 NOVE',
+    shortBadge: '💥 +9',
+    pointsDelta: 9,
+    requiresAthlete: false,
+    accentColor: 'red',
+  },
+  {
+    type: 'goal',
+    label: '+12 DOZE (QUEDA)',
+    shortBadge: '🏆 +12',
+    pointsDelta: 12,
+    requiresAthlete: false,
+    accentColor: 'blue',
+  },
+  {
+    type: 'table_note',
+    label: 'REGISTRAR OCORRÊNCIA',
+    shortBadge: '📝',
+    requiresAthlete: false,
+    accentColor: 'neutral',
+  },
+];
+
+const SINUCA_QUICK_ACTIONS: QuickActionDef[] = [
+  {
+    type: 'point_1',
+    label: '+1 PARTIDA / MESA',
+    shortBadge: '🎱 +1',
+    pointsDelta: 1,
+    requiresAthlete: false,
+    accentColor: 'blue',
+  },
+  {
+    type: 'volleyball_opponent_error',
+    label: 'FALTA ADVERSÁRIO (+1)',
+    shortBadge: '⚠️ +1',
+    pointsDelta: 1,
+    requiresAthlete: false,
+    accentColor: 'yellow',
+  },
+  {
+    type: 'table_note',
+    label: 'REGISTRAR OCORRÊNCIA',
+    shortBadge: '📝',
+    requiresAthlete: false,
+    accentColor: 'neutral',
+  },
+];
+
+const POKER_QUICK_ACTIONS: QuickActionDef[] = [
+  {
+    type: 'point_1',
+    label: '+1 MÃO / VITÓRIA',
+    shortBadge: '♠️ +1',
+    pointsDelta: 1,
+    requiresAthlete: false,
+    accentColor: 'blue',
+  },
+  {
+    type: 'point_3',
+    label: '+3 BÔNUS MESA FINAL',
+    shortBadge: '♦️ +3',
+    pointsDelta: 3,
+    requiresAthlete: false,
+    accentColor: 'yellow',
+  },
+  {
+    type: 'table_note',
+    label: 'ELIMINAÇÃO / NOTA',
+    shortBadge: '📝',
+    requiresAthlete: false,
+    accentColor: 'neutral',
+  },
+];
+
 const DEFAULT_QUICK_ACTIONS: QuickActionDef[] = [
+  {
+    type: 'point_1',
+    label: '+1 PONTO',
+    shortBadge: '➕',
+    pointsDelta: 1,
+    requiresAthlete: false,
+    accentColor: 'blue',
+  },
   {
     type: 'table_note',
     label: 'REGISTRAR OCORRÊNCIA',
@@ -320,6 +462,14 @@ export function getQuickActionsForModality(modalityId: ModalitySlug): QuickActio
       return VOLEI_QUADRA_QUICK_ACTIONS;
     case 'volei-de-praia':
       return VOLEI_BASE_QUICK_ACTIONS;
+    case 'tenis-de-mesa':
+      return TENIS_MESA_QUICK_ACTIONS;
+    case 'truco':
+      return TRUCO_QUICK_ACTIONS;
+    case 'sinuca':
+      return SINUCA_QUICK_ACTIONS;
+    case 'poker':
+      return POKER_QUICK_ACTIONS;
     default:
       return DEFAULT_QUICK_ACTIONS;
   }

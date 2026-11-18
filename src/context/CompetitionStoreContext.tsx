@@ -181,6 +181,10 @@ interface CompetitionStoreContextValue {
     teamSide: 'home' | 'away',
     delta: 1 | -1
   ) => void;
+  castMatchFanVote: (
+    matchId: string,
+    choice: 'home' | 'away' | 'draw'
+  ) => Promise<void>;
   finishCurrentSet: (matchId: string) => void;
   recordTableTennisPoint: (
     matchId: string,
@@ -433,6 +437,116 @@ function isEligiblePaidAthlete(athlete: Athlete | undefined | null): boolean {
   return true;
 }
 
+function ensureModalitySpecificSheetFields(
+  sheet: MatchSheet,
+  match: Match
+): MatchSheet {
+  let nextSheet = sheet;
+
+  // 1. Tênis de Mesa: garante sempre as 3 sub-partidas individuais e sincroniza nomes dos atletas escalados
+  if (sheet.modalityId === 'tenis-de-mesa') {
+    const homeName = match.homeTeam.teamName || 'Mandante';
+    const awayName = match.awayTeam.teamName || 'Visitante';
+    const h0 = sheet.homeLineup[0];
+    const h1 = sheet.homeLineup[1] || h0;
+    const a0 = sheet.awayLineup[0];
+    const a1 = sheet.awayLineup[1] || a0;
+
+    if (!Array.isArray(sheet.subMatches) || sheet.subMatches.length === 0) {
+      nextSheet = {
+        ...nextSheet,
+        subMatches: [
+          {
+            id: `${match.id}-tt-1`,
+            orderNumber: 1,
+            label: '1º Jogo Individual',
+            homeAthleteId: h0?.athleteId || null,
+            homeAthleteName: h0?.athleteName || `${homeName} #1`,
+            awayAthleteId: a0?.athleteId || null,
+            awayAthleteName: a0?.athleteName || `${awayName} #1`,
+            homeSetsWon: 0,
+            awaySetsWon: 0,
+            currentSetHomePoints: 0,
+            currentSetAwayPoints: 0,
+            status: 'live',
+            winnerSide: null,
+          },
+          {
+            id: `${match.id}-tt-2`,
+            orderNumber: 2,
+            label: '2º Jogo Individual',
+            homeAthleteId: h1?.athleteId || null,
+            homeAthleteName: h1?.athleteName || `${homeName} #2`,
+            awayAthleteId: a1?.athleteId || null,
+            awayAthleteName: a1?.athleteName || `${awayName} #2`,
+            homeSetsWon: 0,
+            awaySetsWon: 0,
+            currentSetHomePoints: 0,
+            currentSetAwayPoints: 0,
+            status: 'pending',
+            winnerSide: null,
+          },
+          {
+            id: `${match.id}-tt-3`,
+            orderNumber: 3,
+            label: '3º Jogo Decisivo',
+            homeAthleteId: h0?.athleteId || null,
+            homeAthleteName: h0?.athleteName || `${homeName} (Decisivo)`,
+            awayAthleteId: a1?.athleteId || null,
+            awayAthleteName: a1?.athleteName || `${awayName} (Decisivo)`,
+            homeSetsWon: 0,
+            awaySetsWon: 0,
+            currentSetHomePoints: 0,
+            currentSetAwayPoints: 0,
+            status: 'pending',
+            winnerSide: null,
+          },
+        ],
+        activeSubMatchIndex: sheet.activeSubMatchIndex ?? 0,
+      };
+    } else if (sheet.homeLineup.length > 0 || sheet.awayLineup.length > 0) {
+      nextSheet = {
+        ...nextSheet,
+        subMatches: sheet.subMatches.map((sm, idx) => {
+          const homePick = idx === 1 ? h1 : h0;
+          const awayPick = idx === 1 ? a1 : a0;
+          return {
+            ...sm,
+            homeAthleteId: homePick?.athleteId || sm.homeAthleteId || null,
+            homeAthleteName: homePick?.athleteName || sm.homeAthleteName,
+            awayAthleteId: awayPick?.athleteId || sm.awayAthleteId || null,
+            awayAthleteName: awayPick?.athleteName || sm.awayAthleteName,
+          };
+        }),
+      };
+    }
+  }
+
+  // 2. Natação: garante as 5 raias oficiais (1 por Atlética/Turma) caso ainda não existam
+  if (
+    sheet.modalityId === 'natacao' &&
+    (!Array.isArray(sheet.swimmingLanes) || sheet.swimmingLanes.length === 0)
+  ) {
+    nextSheet = {
+      ...nextSheet,
+      swimmingStroke: sheet.swimmingStroke || 'Crawl',
+      swimmingDistanceLabel: sheet.swimmingDistanceLabel || '50m Livre',
+      swimmingLanes: INITIAL_TEAMS.map((team, idx) => ({
+        laneNumber: idx + 1,
+        athleteId: `swim-${team.id}-${idx + 1}`,
+        athleteName: `Representante ${team.name}`,
+        teamName: team.name,
+        registeredTimeMs: null,
+        formattedTime: null,
+        status: 'ready' as const,
+        placement: null,
+      })),
+    };
+  }
+
+  return nextSheet;
+}
+
 function buildDefaultOfficialSheetForMatch(
   match: Match,
   athletesPool: Athlete[]
@@ -473,7 +587,7 @@ function buildDefaultOfficialSheetForMatch(
     })
   );
 
-  return {
+  const baseSheet: MatchSheet = {
     id: match.matchSheetId || `sheet_${match.id}`,
     matchId: match.id,
     modalityId: match.modalityId,
@@ -514,6 +628,7 @@ function buildDefaultOfficialSheetForMatch(
     lastUpdatedIso: '',
     revision: 0,
   };
+  return ensureModalitySpecificSheetFields(baseSheet, match);
 }
 
 function hydrateOfficialSheetsWithDefaults(
@@ -523,8 +638,10 @@ function hydrateOfficialSheetsWithDefaults(
 ): Record<string, MatchSheet> {
   const result: Record<string, MatchSheet> = { ...(savedSheets || {}) };
   for (const m of matches) {
-    if (m && m.id && !result[m.id]) {
-      result[m.id] = buildDefaultOfficialSheetForMatch(m, athletesPool);
+    if (m && m.id) {
+      result[m.id] = result[m.id]
+        ? ensureModalitySpecificSheetFields(result[m.id], m)
+        : buildDefaultOfficialSheetForMatch(m, athletesPool);
     }
   }
   return result;
@@ -715,7 +832,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       const sinceQuery = lastCloudUpdatedAtRef.current
         ? `?since=${encodeURIComponent(lastCloudUpdatedAtRef.current)}`
         : '';
-      const res = await fetch(`/api/cloud-sync${sinceQuery}`, { headers });
+      const res = await fetch(`/api/cloud-sync${sinceQuery}`, {
+        headers,
+        cache: 'no-store',
+      });
       if (!res || !res.ok) return;
       const payload = await res.json();
       if (!payload || !payload.success || payload.notModified) return;
@@ -837,17 +957,31 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               const ex = byId.get(rm.id);
               const exRev = ex?.revision ?? 0;
               const rmRev = rm.revision ?? 0;
-              // Só aceita o remoto se a revisão for maior ou se mudou status/placar sem regredir revisão
+              const isOperatorHere =
+                typeof window !== 'undefined' &&
+                window.location.pathname.startsWith(`/sumula/${rm.id}`) &&
+                (isUserAdmin(prev.currentUser) ||
+                  unlockedMatchIdsRef.current.includes(rm.id));
+              const matchFieldsDiffer =
+                !ex ||
+                ex.status !== rm.status ||
+                ex.homeTeam?.score !== rm.homeTeam?.score ||
+                ex.awayTeam?.score !== rm.awayTeam?.score ||
+                ex.homeTeam?.setsWon !== rm.homeTeam?.setsWon ||
+                ex.awayTeam?.setsWon !== rm.awayTeam?.setsWon ||
+                ex.homeTeam?.isWinner !== rm.homeTeam?.isWinner ||
+                ex.awayTeam?.isWinner !== rm.awayTeam?.isWinner ||
+                ex.scheduledDate !== rm.scheduledDate ||
+                ex.scheduledTime !== rm.scheduledTime ||
+                ex.venue !== rm.venue;
+
+              // Espectadores SEMPRE aceitam a partida remota quando houver qualquer mudança real no servidor;
+              // o operador ativo na rota `/sumula/:id` aceita sempre que `rmRev >= exRev`.
               if (
                 !ex ||
                 rmRev > exRev ||
-                (rmRev === exRev &&
-                  (ex.status !== rm.status ||
-                    ex.homeTeam?.score !== rm.homeTeam?.score ||
-                    ex.awayTeam?.score !== rm.awayTeam?.score ||
-                    ex.scheduledDate !== rm.scheduledDate ||
-                    ex.scheduledTime !== rm.scheduledTime ||
-                    ex.venue !== rm.venue))
+                (!isOperatorHere && matchFieldsDiffer && rmRev > 0) ||
+                (rmRev === exRev && matchFieldsDiffer)
               ) {
                 const defMatch = INITIAL_MATCHES.find((im) => im.id === rm.id);
                 byId.set(
@@ -887,20 +1021,29 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               const ex = copySheets[rs.matchId];
               const exRev = ex?.revision ?? 0;
               const rsRev = rs.revision ?? 0;
-              const isOperatorForThisMatch =
-                isUserAdmin(prev.currentUser) ||
-                unlockedMatchIdsRef.current.includes(rs.matchId);
+              const isOperatorHere =
+                typeof window !== 'undefined' &&
+                window.location.pathname.startsWith(`/sumula/${rs.matchId}`) &&
+                (isUserAdmin(prev.currentUser) ||
+                  unlockedMatchIdsRef.current.includes(rs.matchId));
               const isStrictlyNewerTime =
                 !ex ||
                 (rs.lastUpdatedIso &&
                   (!ex.lastUpdatedIso ||
                     new Date(rs.lastUpdatedIso).getTime() >
                       new Date(ex.lastUpdatedIso).getTime()));
+              const hasContentDiff =
+                !ex ||
+                rs.lastUpdatedIso !== ex.lastUpdatedIso ||
+                (rs.events?.length ?? 0) !== (ex.events?.length ?? 0) ||
+                rs.timer?.isRunning !== ex.timer?.isRunning ||
+                rs.timer?.currentPeriod !== ex.timer?.currentPeriod;
 
               if (
                 !ex ||
                 rsRev > exRev ||
-                (!isOperatorForThisMatch && rsRev >= exRev && isStrictlyNewerTime) ||
+                (!isOperatorHere && rsRev > 0 && hasContentDiff) ||
+                (!isOperatorHere && rsRev >= exRev && isStrictlyNewerTime) ||
                 (rsRev >= exRev && isStrictlyNewerTime && !ex.timer.isRunning)
               ) {
                 copySheets[rs.matchId] = rs;
@@ -1269,7 +1412,26 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 const ex = byId.get(rm.id);
                 const exRev = ex?.revision ?? 0;
                 const rmRev = rm.revision ?? 0;
-                if (!ex || rmRev >= exRev) {
+                const isOperatorHere =
+                  typeof window !== 'undefined' &&
+                  window.location.pathname.startsWith(`/sumula/${rm.id}`) &&
+                  (isUserAdmin(prev.currentUser) ||
+                    unlockedMatchIdsRef.current.includes(rm.id));
+                const matchFieldsDiffer =
+                  !ex ||
+                  ex.status !== rm.status ||
+                  ex.homeTeam?.score !== rm.homeTeam?.score ||
+                  ex.awayTeam?.score !== rm.awayTeam?.score ||
+                  ex.homeTeam?.setsWon !== rm.homeTeam?.setsWon ||
+                  ex.awayTeam?.setsWon !== rm.awayTeam?.setsWon ||
+                  ex.homeTeam?.isWinner !== rm.homeTeam?.isWinner ||
+                  ex.awayTeam?.isWinner !== rm.awayTeam?.isWinner;
+
+                if (
+                  !ex ||
+                  rmRev >= exRev ||
+                  (!isOperatorHere && matchFieldsDiffer && rmRev > 0)
+                ) {
                   byId.set(rm.id, ex ? { ...ex, ...rm } : rm);
                   changed = true;
                 }
@@ -1300,18 +1462,27 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 const ex = nextSheets[rs.matchId];
                 const exRev = ex?.revision ?? 0;
                 const rsRev = rs.revision ?? 0;
-                const isOperatorForThisMatch =
-                  isUserAdmin(prev.currentUser) ||
-                  unlockedMatchIdsRef.current.includes(rs.matchId);
+                const isOperatorHere =
+                  typeof window !== 'undefined' &&
+                  window.location.pathname.startsWith(`/sumula/${rs.matchId}`) &&
+                  (isUserAdmin(prev.currentUser) ||
+                    unlockedMatchIdsRef.current.includes(rs.matchId));
                 const isNewerIso =
                   !ex ||
                   (rs.lastUpdatedIso &&
                     (!ex.lastUpdatedIso || rs.lastUpdatedIso > ex.lastUpdatedIso));
+                const hasContentDiff =
+                  !ex ||
+                  rs.lastUpdatedIso !== ex.lastUpdatedIso ||
+                  (rs.events?.length ?? 0) !== (ex.events?.length ?? 0) ||
+                  rs.timer?.isRunning !== ex.timer?.isRunning ||
+                  rs.timer?.currentPeriod !== ex.timer?.currentPeriod;
 
                 if (
                   !ex ||
                   rsRev > exRev ||
-                  (!isOperatorForThisMatch && rsRev >= exRev && isNewerIso) ||
+                  (!isOperatorHere && rsRev > 0 && hasContentDiff) ||
+                  (!isOperatorHere && rsRev >= exRev && isNewerIso) ||
                   (rsRev === exRev && isNewerIso)
                 ) {
                   nextSheets[rs.matchId] = rs;
@@ -1496,13 +1667,15 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
             if (sheetChanged) {
               anyChanged = true;
-              const isOperatorForThisMatch =
-                isUserAdmin(prev.currentUser) ||
-                unlockedMatchIdsRef.current.includes(mId);
+              const isActiveOperatorOnSheetRoute =
+                typeof window !== 'undefined' &&
+                window.location.pathname.startsWith(`/sumula/${mId}`) &&
+                (isUserAdmin(prev.currentUser) ||
+                  unlockedMatchIdsRef.current.includes(mId));
 
               const shouldBroadcastTick =
                 !isTestCollection &&
-                isOperatorForThisMatch &&
+                isActiveOperatorOnSheetRoute &&
                 (nextTimer.elapsedSeconds % 2 === 0 || !nextTimer.isRunning);
 
               const nextSheetObj: MatchSheet = {
@@ -1515,8 +1688,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 revision: shouldBroadcastTick
                   ? (sheet.revision ?? 0) + 1
                   : sheet.revision,
-                // Só atualiza `lastUpdatedIso` e envia para a nuvem se este aparelho for o operador da partida!
-                lastUpdatedIso: isOperatorForThisMatch
+                // Só atualiza `lastUpdatedIso` e envia para a nuvem se este aparelho estiver operando `/sumula/:id`!
+                lastUpdatedIso: isActiveOperatorOnSheetRoute
                   ? new Date().toISOString()
                   : sheet.lastUpdatedIso,
               };
@@ -1586,7 +1759,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
         const matchIdx = matchesList.findIndex((m) => m.id === matchId);
         if (matchIdx === -1) return prev;
-        const currentSheet =
+        const rawCurrentSheet =
           sheetsMap[matchId] ||
           (!isTest
             ? buildDefaultOfficialSheetForMatch(
@@ -1594,13 +1767,18 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 prev.officialAthletes
               )
             : undefined);
-        if (!currentSheet) return prev;
+        if (!rawCurrentSheet) return prev;
+        const currentSheet = ensureModalitySpecificSheetFields(
+          rawCurrentSheet,
+          matchesList[matchIdx]
+        );
 
-        const { match: nextMatch, sheet: nextSheet } = updater(
+        const { match: nextMatch, sheet: nextSheetRaw } = updater(
           matchesList[matchIdx],
           currentSheet,
           prev
         );
+        const nextSheet = ensureModalitySpecificSheetFields(nextSheetRaw, nextMatch);
 
         const nextRevision = (currentSheet.revision ?? 0) + 1;
         const finalizedMatch: Match = {
@@ -1617,20 +1795,36 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         matchesList[matchIdx] = finalizedMatch;
         sheetsMap[matchId] = finalizedSheet;
 
-        // Avanço automático de chaveamento no mata-mata (Quartas -> Semifinais -> Final)
+        // Avanço automático de chaveamento no mata-mata (Quartas -> Semifinais -> Final) respeitando estritamente a mesma Categoria (Masc/Fem)!
         if (finalizedMatch.status === 'finished') {
           const homeScore = finalizedMatch.homeTeam.score ?? 0;
           const awayScore = finalizedMatch.awayTeam.score ?? 0;
           const winnerSlot =
-            homeScore > awayScore ? finalizedMatch.homeTeam : finalizedMatch.awayTeam;
+            homeScore > awayScore
+              ? finalizedMatch.homeTeam
+              : awayScore > homeScore
+              ? finalizedMatch.awayTeam
+              : null;
+
+          const isSameModalityAndCategory = (m: Match): boolean => {
+            if (m.modalityId !== finalizedMatch.modalityId) return false;
+            const finCatId = (finalizedMatch.categoryId || '').trim().toLowerCase();
+            const mCatId = (m.categoryId || '').trim().toLowerCase();
+            if (finCatId && mCatId) return finCatId === mCatId;
+            const finCatName = (finalizedMatch.categoryName || '').trim().toLowerCase();
+            const mCatName = (m.categoryName || '').trim().toLowerCase();
+            return finCatName === mCatName;
+          };
 
           if (winnerSlot?.teamId) {
             if (finalizedMatch.phase === 'quarterfinals') {
               const semiMatch = matchesList.find(
                 (m) =>
-                  m.modalityId === finalizedMatch.modalityId &&
+                  isSameModalityAndCategory(m) &&
                   m.phase === 'semifinals' &&
-                  (!m.homeTeam.teamId ||
+                  (m.id.includes('sf1') ||
+                    m.phaseLabel?.includes('1') ||
+                    !m.homeTeam.teamId ||
                     !m.awayTeam.teamId ||
                     m.homeTeam.teamName?.includes('Quartas') ||
                     m.awayTeam.teamName?.includes('Quartas') ||
@@ -1645,22 +1839,23 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                     revision: (semiMatch.revision ?? 0) + 1,
                   };
                   if (
-                    !updatedSemi.homeTeam.teamId ||
-                    updatedSemi.homeTeam.teamName?.includes('Quartas') ||
-                    updatedSemi.homeTeam.teamName?.includes('A Definir')
+                    !updatedSemi.awayTeam.teamId ||
+                    updatedSemi.awayTeam.teamName?.includes('Quartas') ||
+                    updatedSemi.awayTeam.teamName?.includes('A Definir') ||
+                    updatedSemi.id.includes('sf1')
                   ) {
-                    updatedSemi.homeTeam = {
-                      teamId: winnerSlot.teamId,
-                      teamName: winnerSlot.teamName,
-                      crestUrl: winnerSlot.crestUrl,
-                      score: 0,
-                    };
-                  } else {
                     updatedSemi.awayTeam = {
                       teamId: winnerSlot.teamId,
                       teamName: winnerSlot.teamName,
                       crestUrl: winnerSlot.crestUrl,
-                      score: 0,
+                      score: updatedSemi.awayTeam.score ?? 0,
+                    };
+                  } else {
+                    updatedSemi.homeTeam = {
+                      teamId: winnerSlot.teamId,
+                      teamName: winnerSlot.teamName,
+                      crestUrl: winnerSlot.crestUrl,
+                      score: updatedSemi.homeTeam.score ?? 0,
                     };
                   }
                   matchesList[sIdx] = updatedSemi;
@@ -1669,15 +1864,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               }
             } else if (finalizedMatch.phase === 'semifinals') {
               const finalMatch = matchesList.find(
-                (m) =>
-                  m.modalityId === finalizedMatch.modalityId &&
-                  m.phase === 'final' &&
-                  (!m.homeTeam.teamId ||
-                    !m.awayTeam.teamId ||
-                    m.homeTeam.teamName?.includes('Semifinal') ||
-                    m.awayTeam.teamName?.includes('Semifinal') ||
-                    m.homeTeam.teamName?.includes('A Definir') ||
-                    m.awayTeam.teamName?.includes('A Definir'))
+                (m) => isSameModalityAndCategory(m) && m.phase === 'final'
               );
               if (finalMatch) {
                 const fIdx = matchesList.findIndex((m) => m.id === finalMatch.id);
@@ -1686,23 +1873,22 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                     ...finalMatch,
                     revision: (finalMatch.revision ?? 0) + 1,
                   };
-                  if (
-                    !updatedFinal.homeTeam.teamId ||
-                    updatedFinal.homeTeam.teamName?.includes('Semifinal') ||
-                    updatedFinal.homeTeam.teamName?.includes('A Definir')
-                  ) {
+                  const isSemi2 =
+                    finalizedMatch.id.includes('sf2') ||
+                    finalizedMatch.phaseLabel?.includes('2');
+                  if (!isSemi2) {
                     updatedFinal.homeTeam = {
                       teamId: winnerSlot.teamId,
                       teamName: winnerSlot.teamName,
                       crestUrl: winnerSlot.crestUrl,
-                      score: 0,
+                      score: updatedFinal.homeTeam.score ?? 0,
                     };
                   } else {
                     updatedFinal.awayTeam = {
                       teamId: winnerSlot.teamId,
                       teamName: winnerSlot.teamName,
                       crestUrl: winnerSlot.crestUrl,
-                      score: 0,
+                      score: updatedFinal.awayTeam.score ?? 0,
                     };
                   }
                   matchesList[fIdx] = updatedFinal;
@@ -1863,7 +2049,15 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         s.timer.lifecycle === 'paused' ||
         s.timer.lifecycle === 'interval' ||
         s.timer.lifecycle === 'overtime' ||
-        (s.events && s.events.some((ev) => !ev.isDeleted))
+        (s.events && s.events.some((ev) => !ev.isDeleted)) ||
+        (s.subMatches &&
+          s.subMatches.some(
+            (sm) =>
+              sm.currentSetHomePoints > 0 ||
+              sm.currentSetAwayPoints > 0 ||
+              sm.homeSetsWon > 0 ||
+              sm.awaySetsWon > 0
+          ))
       );
     });
   }, [visibleMatches, activeSheetsMap]);
@@ -1885,21 +2079,26 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       if (matchId.startsWith('test-')) {
         return state.testSheets[matchId];
       }
+      const targetMatch = state.officialMatches.find((m) => m.id === matchId);
       const existing = state.officialSheets[matchId];
       if (existing) {
-        if (existing.isClosed) return existing;
+        const hydratedExisting = targetMatch
+          ? ensureModalitySpecificSheetFields(existing, targetMatch)
+          : existing;
+        if (hydratedExisting.isClosed) return hydratedExisting;
         const filterEligibleLineup = (lineup: MatchLineupEntry[]) =>
           lineup.filter((entry) => {
             const ath = state.officialAthletes.find((a) => a.id === entry.athleteId);
-            return ath ? isEligiblePaidAthlete(ath) : false;
+            // Se o registro completo do atleta estiver carregado, exige pagamento confirmado;
+            // se ainda não estiver na lista local (hidratação assíncrona), preserva a entrada escalada pelo mesário!
+            return ath ? isEligiblePaidAthlete(ath) : true;
           });
         return {
-          ...existing,
-          homeLineup: filterEligibleLineup(existing.homeLineup),
-          awayLineup: filterEligibleLineup(existing.awayLineup),
+          ...hydratedExisting,
+          homeLineup: filterEligibleLineup(hydratedExisting.homeLineup),
+          awayLineup: filterEligibleLineup(hydratedExisting.awayLineup),
         };
       }
-      const targetMatch = state.officialMatches.find((m) => m.id === matchId);
       if (!targetMatch) return undefined;
       return buildDefaultOfficialSheetForMatch(targetMatch, state.officialAthletes);
     },
@@ -2228,7 +2427,29 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       updateMatchAndSheet(matchId, (match, sheet) => {
         if (sheet.isClosed) return { match, sheet };
 
-        const clockStr = getCurrentMatchClockDisplay(sheet);
+        let clockStr = getCurrentMatchClockDisplay(sheet);
+        if (
+          sheet.scoringModel === 'sets_points' &&
+          (payload.teamSide === 'home' || payload.teamSide === 'away')
+        ) {
+          const curSetNum = sheet.timer.currentPeriod || 1;
+          const curSetObj = sheet.periodScores.find(
+            (p) => p.periodNumber === curSetNum
+          );
+          const ptDelta = getEventPointsDelta({
+            type: payload.type,
+            pointsDelta: payload.pointsDelta,
+          });
+          const nextH =
+            (curSetObj?.homeScore ?? 0) +
+            (payload.teamSide === 'home' ? ptDelta : 0);
+          const nextA =
+            (curSetObj?.awayScore ?? 0) +
+            (payload.teamSide === 'away' ? ptDelta : 0);
+          if (ptDelta > 0) {
+            clockStr = `${nextH}×${nextA}`;
+          }
+        }
         const teamName =
           payload.teamSide === 'home'
             ? match.homeTeam.teamName
@@ -2918,6 +3139,91 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       });
     },
     [updateMatchAndSheet]
+  );
+
+  const castMatchFanVote = useCallback(
+    async (matchId: string, choice: 'home' | 'away' | 'draw'): Promise<void> => {
+      if (!matchId) return;
+      let voterId =
+        state.currentUser?.id ||
+        state.currentUser?.email?.trim().toLowerCase() ||
+        '';
+      if (!voterId && typeof window !== 'undefined') {
+        const storedVoter = localStorage.getItem('intramed_fan_voter_id');
+        if (storedVoter) {
+          voterId = storedVoter;
+        } else {
+          voterId = generateUniqueId('fan');
+          localStorage.setItem('intramed_fan_voter_id', voterId);
+        }
+      }
+      if (!voterId) return;
+
+      const isTest = matchId.startsWith('test-');
+
+      setState((prev) => {
+        const sheetsMap = isTest
+          ? { ...prev.testSheets }
+          : { ...prev.officialSheets };
+        const matchesList = isTest ? prev.testMatches : prev.officialMatches;
+        const targetMatch = matchesList.find((m) => m.id === matchId);
+        const existingSheet =
+          sheetsMap[matchId] ||
+          (!isTest && targetMatch
+            ? buildDefaultOfficialSheetForMatch(targetMatch, prev.officialAthletes)
+            : undefined);
+        if (!existingSheet) return prev;
+
+        const nextFanVotes: Record<string, 'home' | 'away' | 'draw'> = {
+          ...(existingSheet.fanVotes || {}),
+          [voterId]: choice,
+        };
+        const updatedSheet: MatchSheet = {
+          ...existingSheet,
+          fanVotes: nextFanVotes,
+          lastUpdatedIso: new Date().toISOString(),
+          revision: (existingSheet.revision ?? 0) + 1,
+        };
+        sheetsMap[matchId] = updatedSheet;
+
+        if (!isTest) {
+          try {
+            const cleanData = JSON.parse(JSON.stringify(updatedSheet));
+            void setDoc(doc(db, 'match_sheets', matchId), cleanData, { merge: true }).catch(() => {});
+          } catch {}
+        }
+
+        return {
+          ...prev,
+          ...(isTest ? { testSheets: sheetsMap } : { officialSheets: sheetsMap }),
+        };
+      });
+
+      if (!isTest && typeof window !== 'undefined') {
+        try {
+          const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+          };
+          const opToken = getStoredOperatorToken();
+          if (opToken) {
+            headers['Authorization'] = `Bearer ${opToken}`;
+          }
+          await fetch('/api/cloud-sync', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              action: 'cast_match_vote',
+              matchId,
+              choice,
+              voterId,
+            }),
+          });
+        } catch {
+          // O voto já ficou salvo localmente e espelhado no Firestore SDK
+        }
+      }
+    },
+    [state.currentUser]
   );
 
   // ENCERRAMENTO DE SET (VÔLEI / VÔLEI DE PRAIA — Item 16 da Auditoria: valida set empatado e encerra a partida ao atingir maioria dos sets)
@@ -3645,6 +3951,56 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       (state.currentUser.role as string) === 'moderador_master'
     );
   }, [state.currentUser]);
+
+  // Se o administrador/organizador está logado mas o JWT expirou ou foi limpo no navegador,
+  // renova o token em background para garantir que o envio da súmula para /api/cloud-sync nunca falhe com 403!
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!canOperateOfficialData() || !state.currentUser) return;
+    const existingToken = getStoredOperatorToken();
+    let needsRefresh = !existingToken;
+    if (existingToken && existingToken.includes('.')) {
+      try {
+        const [b64] = existingToken.split('.');
+        const decoded = JSON.parse(atob(b64.replace(/-/g, '+').replace(/_/g, '/')));
+        const exp = Number(decoded?.exp || 0);
+        const role = String(decoded?.role || '');
+        const isOpRole =
+          role === 'admin' ||
+          role === 'moderador_master' ||
+          role === 'moderador' ||
+          role === 'organizacao' ||
+          role === 'administrador';
+        if (!exp || exp < Math.floor(Date.now() / 1000) + 300 || !isOpRole) {
+          needsRefresh = true;
+        }
+      } catch {
+        needsRefresh = true;
+      }
+    }
+    if (needsRefresh) {
+      fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'refresh_user_token',
+          userId: state.currentUser.id,
+          email: state.currentUser.email,
+          name: state.currentUser.name,
+        }),
+      })
+        .then((r) => r.json())
+        .then((resData) => {
+          if (resData?.ok && resData?.token) {
+            setStoredOperatorToken(resData.token);
+            void flushOfflineQueue(resData.token).then((res) => {
+              setState((prev) => ({ ...prev, pendingSyncCount: res.remainingCount }));
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [canOperateOfficialData, state.currentUser]);
 
   const canOperateMatch = useCallback(
     (matchId?: string): boolean => {
@@ -5234,6 +5590,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       removeAthleteFromMatchLineup,
       configureVolleyballSetRotation,
       adjustVolleyballManualRotation,
+      castMatchFanVote,
       finishCurrentSet,
       recordTableTennisPoint,
       finishTableTennisSet,
@@ -5355,6 +5712,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       removeAthleteFromMatchLineup,
       configureVolleyballSetRotation,
       adjustVolleyballManualRotation,
+      castMatchFanVote,
       finishCurrentSet,
       recordTableTennisPoint,
       finishTableTennisSet,
