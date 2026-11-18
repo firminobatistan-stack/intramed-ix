@@ -838,7 +838,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         : '';
       const res = await fetch(`/api/cloud-sync${sinceQuery}`, {
         headers,
-        cache: 'no-store',
+        cache: opToken ? 'no-store' : 'default',
       });
       if (!res || !res.ok) return;
       const payload = await res.json();
@@ -1514,12 +1514,31 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     };
   }, []);
 
-  // Sincronização em tempo real via API Cloud Sync (/api/cloud-sync) com `?since=` e comparação estrita `>` (Itens 10, 23 da Auditoria)
+  // Sincronização complementar via API Cloud Sync (/api/cloud-sync):
+  // O tempo real (<100ms) já é entregue diretamente pelo Firebase `onSnapshot` acima (zero custo na Vercel).
+  // Mantemos o `/api/cloud-sync` apenas na abertura, ao voltar para a aba visível e a cada 45s (aba visível) para reconciliar contas/configurações sem estourar cota Serverless da Vercel!
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    fetchCloudSnapshot();
-    const interval = setInterval(fetchCloudSnapshot, 2500);
-    return () => clearInterval(interval);
+    void fetchCloudSnapshot();
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchCloudSnapshot();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+      void fetchCloudSnapshot();
+    }, 45000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      clearInterval(interval);
+    };
   }, [fetchCloudSnapshot]);
 
   // Motor de Cronômetro Preciso por Timestamp Real (`lastTickTimestamp` + `Date.now()`)
@@ -1680,7 +1699,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               const shouldBroadcastTick =
                 !isTestCollection &&
                 isActiveOperatorOnSheetRoute &&
-                (nextTimer.elapsedSeconds % 2 === 0 || !nextTimer.isRunning);
+                (nextTimer.elapsedSeconds % 10 === 0 || !nextTimer.isRunning);
 
               const nextSheetObj: MatchSheet = {
                 ...sheet,

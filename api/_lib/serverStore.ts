@@ -1796,8 +1796,8 @@ export async function ensureCloudStoreHydrated(force = false): Promise<CloudColl
   const lastHydratedMs = store.hydratedFromFirestoreAtIso
     ? new Date(store.hydratedFromFirestoreAtIso).getTime()
     : 0;
-  // Re-hidrata se forçado, se nunca hidratou ou se passou mais de 2s (garante tempo real entre múltiplas instâncias serverless)
-  if (!force && lastHydratedMs > 0 && Date.now() - lastHydratedMs < 2000) {
+  // Re-hidrata se forçado, se nunca hidratou ou a cada 30s (evita drenar CPU Serverless da Vercel com 14 leituras REST a cada 2s; clientes já recebem tempo real via Firebase onSnapshot)
+  if (!force && lastHydratedMs > 0 && Date.now() - lastHydratedMs < 30000) {
     return store;
   }
 

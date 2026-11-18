@@ -485,8 +485,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // GET: Retorna snapshot sincronizado (com suporte a ?since=updatedAtIso, ?force=true e projeção LGPD sem PII/senhas)
   if (req.method === 'GET') {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     const isForce = req.query.force === 'true';
+    if (!rawToken && !isForce) {
+      // Cache de borda curto (Vercel Edge CDN) para visitantes públicos: absorve picos de audiência sem consumir Function Invocations,
+      // enquanto o placar ao vivo continua atualizando em <100ms diretamente via Firebase Firestore `onSnapshot`!
+      res.setHeader('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=30');
+    } else {
+      res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+    }
     const sinceParam = typeof req.query.since === 'string' ? req.query.since : null;
     if (!isForce && sinceParam && sinceParam === store.updatedAtIso) {
       return res.status(200).json({
@@ -577,7 +583,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       {} as Record<string, any>
     );
 
-    const firestoreHealth = await checkFirestoreHealth(req.query.refreshDiagnostics === 'true');
+    const firestoreHealth =
+      isAdminRequest || req.query.refreshDiagnostics === 'true'
+        ? await checkFirestoreHealth(req.query.refreshDiagnostics === 'true')
+        : {
+            readOk: true,
+            writeOk: true,
+            checkedAtIso: store.hydratedFromFirestoreAtIso || store.updatedAtIso,
+          };
 
     return res.status(200).json({
       success: true,
