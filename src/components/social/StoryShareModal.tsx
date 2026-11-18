@@ -101,19 +101,32 @@ export async function generateStoryCardDataUrl(payload: StoryCardPayload): Promi
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, 1080, 900);
 
-  // 2. Topo: Emblema A.A.A. Cangaceira & INTRAMED IX
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-  drawRoundedRect(ctx, 260, 110, 560, 64, 32);
-  ctx.fill();
+  // 2. Topo: Escudo Oficial IX INTRAMED & A.A.A.M.U. Cangaceira
+  const eventCrestImg = await loadImageSafe('/assets/atletica/escudo-evento.png');
+  if (eventCrestImg) {
+    ctx.save();
+    drawRoundedRect(ctx, 470, 56, 140, 140, 32);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#FACC15';
+    ctx.stroke();
+    ctx.drawImage(eventCrestImg, 478, 64, 124, 124);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    drawRoundedRect(ctx, 260, 110, 560, 64, 32);
+    ctx.fill();
+    ctx.fillStyle = '#FACC15';
+    ctx.font = '800 24px Montserrat, Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('A.A.A. CANGACEIRA • MEDICINA UEMA', 540, 150);
+  }
 
-  ctx.fillStyle = '#FACC15';
-  ctx.font = '800 24px Montserrat, Inter, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('A.A.A. CANGACEIRA • MEDICINA UEMA', 540, 150);
-
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = '900 76px Montserrat, Inter, sans-serif';
-  ctx.fillText('INTRAMED IX', 540, 265);
+  ctx.font = '900 72px Montserrat, Inter, sans-serif';
+  ctx.fillText('IX INTRAMED', 540, 272);
 
   if (payload.type === 'match') {
     // CARD DE PARTIDA / PLACAR PARA STORIES

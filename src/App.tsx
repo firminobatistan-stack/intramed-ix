@@ -145,9 +145,14 @@ const CommunityDirectoryPage = lazy(() =>
 
 const RouteLoadingFallback: React.FC = () => (
   <div className="min-h-[60vh] flex items-center justify-center p-6">
-    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white border border-slate-200 shadow-sm text-xs font-display font-bold text-[#0B218A]">
-      <span className="w-2.5 h-2.5 rounded-full bg-brand-yellow animate-ping" />
-      <span>Carregando módulo INTRAMED IX...</span>
+    <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white shadow-card text-xs font-display font-bold text-[#0B218A]">
+      <img
+        src="/assets/atletica/escudo-evento.png"
+        alt=""
+        className="w-6 h-6 object-contain shrink-0"
+      />
+      <span>Carregando módulo IX INTRAMED...</span>
+      <span className="w-2 h-2 rounded-full bg-brand-yellow animate-ping" />
     </div>
   </div>
 );
@@ -274,7 +279,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 750);
+    }, 2150);
     return () => clearTimeout(timer);
   }, []);
 

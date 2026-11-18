@@ -521,15 +521,14 @@ export const LoginPage: React.FC = () => {
             className="pointer-events-none select-none absolute -right-8 -top-8 w-40 h-40 object-contain opacity-[0.04]"
           />
 
-          {/* Identidade Visual */}
+          {/* Identidade Visual Oficial IX INTRAMED */}
           <div className="relative z-10 flex flex-col items-center text-center">
             <img
-              src="/assets/atletica/logo.png"
-              alt="A.A.A. Cangaceira — Medicina UEMA"
-              className="w-16 h-16 object-contain drop-shadow-md mb-2"
+              src="/assets/atletica/logo-evento.png"
+              alt="IX INTRAMED — Desde 2017 — A.A.A.M.U. Cangaceira"
+              className="w-36 h-36 sm:w-40 sm:h-40 object-contain drop-shadow-sm mb-1"
             />
-            <BrandMark size="lg" showEmblem={false} />
-            <div className="mt-2 flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-surface-muted border border-brand-surface-border">
+            <div className="mt-1 flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-surface-muted border border-brand-surface-border">
               <span className="w-1.5 h-1.5 rounded-full bg-brand-yellow" aria-hidden="true" />
               <p className="text-[11px] font-bold uppercase tracking-wider text-brand-text-secondary">
                 Plataforma &amp; Comunidade Oficial

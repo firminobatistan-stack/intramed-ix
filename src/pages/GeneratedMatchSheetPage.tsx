@@ -494,8 +494,8 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-4 sm:p-6 print:p-1 text-black space-y-2 text-[10px] leading-tight">
       <div className="flex items-center justify-between border-b-2 border-black pb-2">
         <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-xl border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center shrink-0">
-            <img src="/assets/atletica/logo.png" alt="A.A.A. Cangaceira" className="w-full h-full object-contain" />
+          <div className="w-14 h-14 rounded-xl border-2 border-black bg-white p-1 flex items-center justify-center shrink-0">
+            <img src="/assets/atletica/escudo-evento.png" alt="IX INTRAMED — A.A.A. Cangaceira" className="w-full h-full object-contain" />
           </div>
           <div>
             <span className="text-[10px] font-black uppercase text-[#0B218A] tracking-wider block">
@@ -704,8 +704,8 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-4 sm:p-6 print:p-1 text-black space-y-2 text-[10px] leading-tight">
       <div className="flex items-center justify-between border-b-2 border-black pb-2">
         <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-xl border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center shrink-0">
-            <img src="/assets/atletica/logo.png" alt="A.A.A. Cangaceira" className="w-full h-full object-contain" />
+          <div className="w-14 h-14 rounded-xl border-2 border-black bg-white p-1 flex items-center justify-center shrink-0">
+            <img src="/assets/atletica/escudo-evento.png" alt="IX INTRAMED — A.A.A. Cangaceira" className="w-full h-full object-contain" />
           </div>
           <div>
             <span className="text-[10px] font-black uppercase text-[#0B218A] tracking-wider block">
@@ -874,8 +874,8 @@ export const GeneratedMatchSheetPage: React.FC = () => {
     <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-4 sm:p-6 print:p-1 text-black space-y-2 text-[10px] leading-tight">
       <div className="flex items-center justify-between border-b-2 border-black pb-2">
         <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded-xl border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center shrink-0">
-            <img src="/assets/atletica/logo.png" alt="A.A.A. Cangaceira" className="w-full h-full object-contain" />
+          <div className="w-14 h-14 rounded-xl border-2 border-black bg-white p-1 flex items-center justify-center shrink-0">
+            <img src="/assets/atletica/escudo-evento.png" alt="IX INTRAMED — A.A.A. Cangaceira" className="w-full h-full object-contain" />
           </div>
           <div>
             <span className="text-[10px] font-black uppercase text-[#0B218A] tracking-wider block">
@@ -1215,8 +1215,8 @@ export const GeneratedMatchSheetPage: React.FC = () => {
           <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-4 sm:p-6 print:p-1 text-black space-y-2 text-[10px] leading-tight">
             <div className="flex items-center justify-between border-b-2 border-black pb-2">
               <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-xl border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center shrink-0">
-                  <img src="/assets/atletica/logo.png" alt="A.A.A. Cangaceira" className="w-full h-full object-contain" />
+                <div className="w-14 h-14 rounded-xl border-2 border-black bg-white p-1 flex items-center justify-center shrink-0">
+                  <img src="/assets/atletica/escudo-evento.png" alt="IX INTRAMED — A.A.A. Cangaceira" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <span className="text-[10px] font-black uppercase text-[#0B218A] tracking-wider block">
@@ -1321,8 +1321,8 @@ export const GeneratedMatchSheetPage: React.FC = () => {
           <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-4 sm:p-6 print:p-1 text-black space-y-2 text-[10px] leading-tight">
             <div className="flex items-center justify-between border-b-2 border-black pb-2">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center shrink-0">
-                  <img src="/assets/atletica/logo.png" alt="A.A.A. Cangaceira" className="w-full h-full object-contain" />
+                <div className="w-12 h-12 rounded-xl border-2 border-black bg-white p-1 flex items-center justify-center shrink-0">
+                  <img src="/assets/atletica/escudo-evento.png" alt="IX INTRAMED — A.A.A. Cangaceira" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h2 className="text-lg font-black uppercase tracking-tight">SÚMULA DE HANDEBOL — FOLHA 2</h2>
@@ -1377,8 +1377,8 @@ export const GeneratedMatchSheetPage: React.FC = () => {
           <section className="cbhb-print-page bg-white border border-slate-300 print:border-none shadow-xl p-4 sm:p-6 print:p-1 text-black space-y-2 text-[10px] leading-tight">
             <div className="flex items-center justify-between border-b-2 border-black pb-2">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl border-2 border-black bg-[#0B218A] p-1 flex items-center justify-center shrink-0">
-                  <img src="/assets/atletica/logo.png" alt="A.A.A. Cangaceira" className="w-full h-full object-contain" />
+                <div className="w-12 h-12 rounded-xl border-2 border-black bg-white p-1 flex items-center justify-center shrink-0">
+                  <img src="/assets/atletica/escudo-evento.png" alt="IX INTRAMED — A.A.A. Cangaceira" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h2 className="text-lg font-black uppercase tracking-tight">SÚMULA DE HANDEBOL — FOLHA 3</h2>
@@ -1618,7 +1618,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
           <div className="bg-white rounded-3xl border border-brand-surface-border p-6 shadow-card space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-slate-200">
               <div className="flex items-center gap-3">
-                <img src="/assets/atletica/logo.png" alt="" className="w-12 h-12 object-contain" />
+                <img src="/assets/atletica/escudo-evento.png" alt="" className="w-12 h-12 object-contain" />
                 <div>
                   <h2 className="text-lg font-display font-extrabold text-slate-900">
                     {match.modalityName} • INTRAMED IX

@@ -159,13 +159,15 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="inline-flex items-center gap-2 text-left transition-transform duration-[150ms] ease-emil-out active:scale-[0.97]"
+              className="inline-flex items-center gap-2.5 text-left transition-transform duration-[150ms] ease-emil-out active:scale-[0.97]"
             >
-              <img
-                src="/assets/atletica/face.png"
-                alt=""
-                className="w-7 h-7 rounded-full object-contain bg-white/10 p-0.5 shrink-0"
-              />
+              <span className="w-8 h-8 rounded-xl bg-white/95 ring-1 ring-brand-yellow/70 p-0.5 flex items-center justify-center shadow-sm shrink-0">
+                <img
+                  src="/assets/atletica/escudo-evento.png"
+                  alt=""
+                  className="w-full h-full object-contain"
+                />
+              </span>
               <span className="text-sm sm:text-base font-display font-black tracking-tight text-white">
                 INTRAMED <span className="text-brand-yellow">IX</span>
               </span>

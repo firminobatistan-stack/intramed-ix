@@ -145,12 +145,16 @@ export const HomePage: React.FC = () => {
               </span>
             </div>
 
-            {/* Centro: Emblema / Troféu INTRAMED IX */}
+            {/* Centro: Escudo Oficial IX INTRAMED (Desde 2017 • 9 Estrelas) */}
             <div className="flex flex-col items-center justify-center">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-b from-white/25 to-white/5 border border-white/25 flex items-center justify-center shadow-inner">
-                <Trophy className="w-8 h-8 text-brand-yellow drop-shadow" />
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-white ring-2 ring-brand-yellow/85 p-1.5 flex items-center justify-center shadow-[0_12px_28px_rgba(0,0,0,0.28)]">
+                <img
+                  src="/assets/atletica/escudo-evento.png"
+                  alt="Escudo Oficial IX INTRAMED — Desde 2017"
+                  className="w-full h-full object-contain"
+                />
               </div>
-              <span className="mt-1.5 text-sm sm:text-base font-display font-black tracking-tight text-white">
+              <span className="mt-2 text-sm sm:text-base font-display font-black tracking-tight text-white">
                 INTRAMED <span className="text-brand-yellow">IX</span>
               </span>
             </div>

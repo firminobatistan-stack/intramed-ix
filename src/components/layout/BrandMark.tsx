@@ -52,16 +52,16 @@ export const BrandMark: React.FC<BrandMarkProps> = ({
     <div className={`inline-flex items-center gap-3 select-none ${className}`}>
       {showEmblem && (
         <div
-          className={`relative flex items-center justify-center rounded-full overflow-hidden shrink-0 ring-2 ${
+          className={`relative flex items-center justify-center rounded-xl overflow-hidden shrink-0 p-1 ring-2 ${
             inverted
-              ? 'ring-brand-yellow/80 bg-brand-blue-dark shadow-md'
-              : 'ring-brand-blue/15 bg-brand-blue shadow-sm'
+              ? 'ring-brand-yellow/80 bg-white shadow-md'
+              : 'ring-brand-blue/15 bg-white shadow-sm'
           } ${s.emblem}`}
         >
           <img
-            src="/assets/atletica/logo-alternativa.png"
-            alt="A.A.A. Cangaceira Medicina UEMA"
-            className="w-full h-full object-contain scale-105"
+            src="/assets/atletica/escudo-evento.png"
+            alt="IX INTRAMED — A.A.A. Cangaceira"
+            className="w-full h-full object-contain"
           />
         </div>
       )}
