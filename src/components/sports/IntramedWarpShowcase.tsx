@@ -366,6 +366,8 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
               unit: ev.matchClockDisplay || 'AO VIVO',
               footer: `${team?.name || 'Medicina UEMA'} • ${m.homeTeam.teamName} × ${m.awayTeam.teamName}`,
               imageUrl: photoUrl,
+              crestUrl: team?.crestUrl || null,
+              jerseyNumber: ath?.jerseyNumber != null ? String(ath.jerseyNumber) : null,
               stats: [
                 { label: 'PLACAR', value: `${m.homeTeam.score ?? 0}-${m.awayTeam.score ?? 0}` },
                 { label: 'LANCE', value: ev.matchClockDisplay || 'LIVE' },
@@ -419,6 +421,8 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
           unit: leader.unitLabel,
           footer: `${team?.name || 'Medicina UEMA'} • Ranking Oficial`,
           imageUrl: leader.avatarUrl || team?.crestUrl || null,
+          crestUrl: team?.crestUrl || null,
+          jerseyNumber: athObj?.jerseyNumber != null ? String(athObj.jerseyNumber) : null,
           stats: [
             { label: leader.unitLabel, value: String(leader.points) },
             { label: 'RANKING', value: `${idx + 1}º` },

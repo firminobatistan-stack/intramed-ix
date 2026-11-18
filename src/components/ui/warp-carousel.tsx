@@ -34,6 +34,10 @@ export interface WarpCard {
   imageUrl?: string | null;
   /** Optional second team crest URL for matchup cards (Home vs Away). */
   secondaryImageUrl?: string | null;
+  /** Optional team crest URL for athlete spotlight cards (top-right corner). */
+  crestUrl?: string | null;
+  /** Optional jersey/rank number rendered in outline typography on athlete cards. */
+  jerseyNumber?: string | null;
   /** Optional real individual stats strip (2-3 numeric indicators) for athlete spotlight cards. */
   stats?: Array<{ label: string; value: string }>;
 }
@@ -511,94 +515,137 @@ function paintCard(
   const secondaryImg =
     card.secondaryImageUrl && imgMap ? imgMap.get(card.secondaryImageUrl) : undefined;
 
-  // Pílula Superior de Categoria
-  ctx.font = fontStr(800, 9.5, family);
-  const tagTextW = Math.min(196, ctx.measureText(categoryTag).width);
-  const pillW = tagTextW + 18;
-  ctx.fillStyle = "rgba(255, 255, 255, 0.16)";
-  ctx.beginPath();
-  ctx.roundRect(18, 18, pillW, 20, 10);
-  ctx.fill();
-  ctx.strokeStyle = rgba(accent, 0.6);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  ctx.fillStyle = rgba(accent, 1);
-  ctx.beginPath();
-  ctx.arc(27, 28, 3, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(categoryTag, 34, 31.5, 184);
-
   // =========================================================================
-  // MODO A: Card de Retrato de Atleta (Presença Confirmada / Autor de Gol / Artilheiro)
+  // MODO A: Card Oficial de Atleta / Artilheiro / Destaque (estilo Trading Card)
   // =========================================================================
   if (primaryImg && !secondaryImg) {
-    const cx = CW / 2;
-    const cy = 114;
-    const radius = 48;
+    const crestImg = card.crestUrl && imgMap ? imgMap.get(card.crestUrl) : undefined;
 
-    // Halo luminoso atrás da foto do atleta
-    const halo = ctx.createRadialGradient(cx, cy, radius * 0.4, cx, cy, radius * 1.55);
-    halo.addColorStop(0, rgba(accent, 0.42));
-    halo.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = halo;
+    // Faceta diagonal metálica sutil no fundo (inspirada no card oficial de atleta)
+    ctx.save();
     ctx.beginPath();
-    ctx.arc(cx, cy, radius * 1.55, 0, Math.PI * 2);
+    ctx.moveTo(CW * 0.42, 0);
+    ctx.lineTo(CW, 0);
+    ctx.lineTo(CW, CH * 0.58);
+    ctx.lineTo(CW * 0.16, CH * 0.36);
+    ctx.closePath();
+    const shardGrad = ctx.createLinearGradient(CW * 0.2, 0, CW, CH * 0.55);
+    shardGrad.addColorStop(0, rgba(accent, 0.24));
+    shardGrad.addColorStop(1, "rgba(255, 255, 255, 0.03)");
+    ctx.fillStyle = shardGrad;
     ctx.fill();
+    ctx.restore();
 
-    drawCircularImage(ctx, primaryImg, cx, cy, radius, rgba(accent, 0.95));
+    // Borda externa luminosa na cor do destaque/equipe
+    ctx.strokeStyle = rgba(accent, 0.9);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.roundRect(1, 1, CW - 2, CH - 2, CR);
+    ctx.stroke();
 
-    // Pílula de destaque sobreposta na base da foto (ex: "2 GOLS", "CAMISA #11", "CONFIRMADO")
-    const badgeText = [card.value, card.unit].filter(Boolean).join(" ").trim().toUpperCase();
-    if (badgeText) {
-      ctx.font = fontStr(800, 10, family);
-      const bw = Math.min(180, ctx.measureText(badgeText).width);
-      const bPillW = bw + 20;
-      const bPillX = (CW - bPillW) / 2;
-      const bPillY = cy + radius - 10;
+    // Cabeçalho Superior Esquerdo: Subtítulo (categoria/destaque) + Nome em caixa alta
+    const headerMaxW = crestImg ? CW - 66 : CW - 32;
+    ctx.font = fontStr(700, 8.5, family);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.74)";
+    ctx.fillText(categoryTag, 16, 23, headerMaxW);
 
-      ctx.fillStyle = rgba(accent, 1);
-      ctx.beginPath();
-      ctx.roundRect(bPillX, bPillY, bPillW, 21, 10.5);
-      ctx.fill();
-      ctx.strokeStyle = "#091834";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      ctx.fillStyle = "#091834";
-      ctx.textAlign = "center";
-      ctx.fillText(badgeText, CW / 2, bPillY + 14, 176);
-      ctx.textAlign = "left";
-    }
-
-    // Nome do Atleta grande e centralizado abaixo da foto
     ctx.save();
     ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
-    ctx.shadowBlur = 6 * k;
-    ctx.font = fontStr(800, 16.5, family);
+    ctx.shadowBlur = 5 * k;
+    ctx.font = fontStr(900, 15.5, family);
     ctx.fillStyle = "#FFFFFF";
+    const nameLines = wrapCanvasLines(ctx, mainHeadline.toUpperCase(), headerMaxW, 1);
+    ctx.fillText(nameLines[0] || mainHeadline.toUpperCase(), 16, 41, headerMaxW);
+    ctx.restore();
+
+    // Número vazado (outline) abaixo do nome (camisa ou posição/valor)
+    const outlineNum = (card.jerseyNumber || "").trim();
+    if (outlineNum) {
+      ctx.save();
+      ctx.font = fontStr(900, 23, family);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.lineWidth = 1.25;
+      ctx.strokeText(outlineNum, 16, 66, 84);
+      ctx.restore();
+    }
+
+    // Brasão da equipe no canto superior direito
+    if (crestImg) {
+      drawCircularImage(ctx, crestImg, CW - 28, 30, 15.5, rgba(accent, 0.92));
+    }
+
+    // Foto Principal Retangular Arredondada (centro-topo, preservando o rosto)
+    const photoX = 12;
+    const photoY = outlineNum ? 74 : 52;
+    const photoW = CW - 24;
+    const hasStats = Array.isArray(card.stats) && card.stats.length > 0;
+    const photoBottom = hasStats ? CH - 58 : CH - 18;
+    const photoH = Math.max(110, photoBottom - photoY);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(photoX, photoY, photoW, photoH, 8);
+    ctx.clip();
+
+    const imgRatio = primaryImg.width / Math.max(1, primaryImg.height);
+    const boxRatio = photoW / photoH;
+    let sx = 0;
+    let sy = 0;
+    let sw = primaryImg.width;
+    let sh = primaryImg.height;
+    if (imgRatio > boxRatio) {
+      sw = primaryImg.height * boxRatio;
+      sx = (primaryImg.width - sw) / 2;
+    } else {
+      sh = primaryImg.width / boxRatio;
+      // Enquadramento superior (15% do topo) para nunca cortar a cabeça
+      sy = Math.max(0, (primaryImg.height - sh) * 0.15);
+    }
+    ctx.drawImage(primaryImg, sx, sy, sw, sh, photoX, photoY, photoW, photoH);
+    ctx.restore();
+
+    // Borda sutil ao redor da foto
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(photoX, photoY, photoW, photoH, 8);
+    ctx.stroke();
+
+    // Aba vertical na borda direita (ex: "★ ARTILHEIRO", "★ DESTAQUE", "★ ATLETA")
+    const rawBadge = [card.value, card.unit].filter(Boolean).join(" ").trim().toUpperCase();
+    const tabLabel = `★ ${rawBadge || "DESTAQUE"}`;
+    const tabW = 18;
+    const tabH = Math.min(96, Math.max(62, tabLabel.length * 5.2 + 16));
+    const tabX = CW - tabW;
+    const tabY = photoY + photoH - tabH - 8;
+
+    ctx.save();
+    ctx.fillStyle = rgba(accent, 1);
+    ctx.beginPath();
+    ctx.roundRect(tabX, tabY, tabW, tabH, [6, 0, 0, 6]);
+    ctx.fill();
+
+    ctx.translate(tabX + tabW / 2 + 2.5, tabY + tabH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = "#091834";
+    ctx.font = fontStr(900, 7.5, family);
     ctx.textAlign = "center";
-    const nameLines = wrapCanvasLines(ctx, mainHeadline, CW - 28, 2);
-    nameLines.forEach((ln, idx) => {
-      ctx.fillText(ln, CW / 2, 204 + idx * 19, CW - 28);
-    });
+    ctx.fillText(tabLabel, 0, 0, tabH - 10);
     ctx.restore();
     ctx.textAlign = "left";
 
-    // Faixa de Estatísticas Individuais Reais (quando disponível para destaques de atletas)
-    if (Array.isArray(card.stats) && card.stats.length > 0) {
-      const statsSlice = card.stats.slice(0, 3);
-      const barX = 18;
-      const barY = 236;
-      const barW = CW - 36;
-      const barH = 42;
-      ctx.fillStyle = "rgba(7, 17, 38, 0.72)";
+    // Barra inferior escura em 3 colunas com estatísticas reais
+    if (hasStats) {
+      const statsSlice = card.stats!.slice(0, 3);
+      const barX = 12;
+      const barY = CH - 52;
+      const barW = CW - 24;
+      const barH = 40;
+      ctx.fillStyle = "rgba(7, 12, 22, 0.86)";
       ctx.beginPath();
       ctx.roundRect(barX, barY, barW, barH, 10);
       ctx.fill();
-      ctx.strokeStyle = rgba(accent, 0.45);
+      ctx.strokeStyle = rgba(accent, 0.52);
       ctx.lineWidth = 1;
       ctx.stroke();
 
@@ -612,14 +659,14 @@ function paintCard(
           ctx.lineTo(barX + colW * sIdx, barY + barH - 8);
           ctx.stroke();
         }
-        ctx.fillStyle = rgba(n1, 1);
-        ctx.font = fontStr(800, 14, family);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.62)";
+        ctx.font = fontStr(700, 7, family);
         ctx.textAlign = "center";
-        ctx.fillText(String(st.value).toUpperCase(), colCx, barY + 21, colW - 8);
+        ctx.fillText(String(st.label).toUpperCase(), colCx, barY + 14, colW - 8);
 
-        ctx.fillStyle = "rgba(255, 255, 255, 0.68)";
-        ctx.font = fontStr(700, 7.5, family);
-        ctx.fillText(String(st.label).toUpperCase(), colCx, barY + 33, colW - 8);
+        ctx.fillStyle = sIdx === statsSlice.length - 1 ? rgba(accent, 1) : "#FFFFFF";
+        ctx.font = fontStr(900, 12.5, family);
+        ctx.fillText(String(st.value).toUpperCase(), colCx, barY + 30, colW - 8);
       });
       ctx.textAlign = "left";
     }
@@ -1290,7 +1337,8 @@ export function WarpCarousel({
     const cardSignature = (c: WarpCard) => {
       const imgLoaded = c.imageUrl ? (imgMap.has(c.imageUrl) ? "1" : "0") : "";
       const secLoaded = c.secondaryImageUrl ? (imgMap.has(c.secondaryImageUrl) ? "1" : "0") : "";
-      return `${c.title}|${c.value}|${c.unit || ""}|${c.footer || ""}|${c.imageUrl || ""}:${imgLoaded}|${c.secondaryImageUrl || ""}:${secLoaded}|${c.glow || ""}|${c.accent || ""}`;
+      const crestLoaded = c.crestUrl ? (imgMap.has(c.crestUrl) ? "1" : "0") : "";
+      return `${c.title}|${c.value}|${c.unit || ""}|${c.footer || ""}|${c.imageUrl || ""}:${imgLoaded}|${c.secondaryImageUrl || ""}:${secLoaded}|${c.crestUrl || ""}:${crestLoaded}|${c.glow || ""}|${c.accent || ""}`;
     };
 
     const paintAll = (w: number, forceAll = false) => {
@@ -1338,6 +1386,13 @@ export function WarpCarousel({
           !loadingUrls.has(c.secondaryImageUrl)
         ) {
           urlsToLoad.add(c.secondaryImageUrl);
+        }
+        if (
+          c.crestUrl &&
+          !imgMap.has(c.crestUrl) &&
+          !loadingUrls.has(c.crestUrl)
+        ) {
+          urlsToLoad.add(c.crestUrl);
         }
       });
       urlsToLoad.forEach((url) => {
