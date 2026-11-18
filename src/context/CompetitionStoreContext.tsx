@@ -151,6 +151,13 @@ interface CompetitionStoreContextValue {
     athleteId: string,
     field: 'isStarter' | 'isCaptain' | 'isGoalkeeper' | 'isPairMember'
   ) => void;
+  updateLineupPlayerPosition: (
+    matchId: string,
+    teamSide: 'home' | 'away',
+    athleteId: string,
+    courtX: number,
+    courtY: number
+  ) => void;
   addAthleteToMatchLineup: (
     matchId: string,
     teamSide: 'home' | 'away',
@@ -2832,6 +2839,40 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           }
           return item;
         });
+
+        return {
+          match,
+          sheet: {
+            ...sheet,
+            ...(teamSide === 'home'
+              ? { homeLineup: updated }
+              : { awayLineup: updated }),
+          },
+        };
+      });
+    },
+    [updateMatchAndSheet]
+  );
+
+  const updateLineupPlayerPosition = useCallback(
+    (
+      matchId: string,
+      teamSide: 'home' | 'away',
+      athleteId: string,
+      courtX: number,
+      courtY: number
+    ) => {
+      updateMatchAndSheet(matchId, (match, sheet) => {
+        const list =
+          teamSide === 'home' ? [...sheet.homeLineup] : [...sheet.awayLineup];
+        const safeX = Math.max(8, Math.min(92, Math.round(courtX * 10) / 10));
+        const safeY = Math.max(10, Math.min(90, Math.round(courtY * 10) / 10));
+
+        const updated = list.map((item) =>
+          item.athleteId === athleteId
+            ? { ...item, courtX: safeX, courtY: safeY }
+            : item
+        );
 
         return {
           match,
@@ -5698,6 +5739,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       dismissReleasedSuspension,
       cancelActiveTimeout,
       toggleLineupRole,
+      updateLineupPlayerPosition,
       addAthleteToMatchLineup,
       addMultipleAthletesToMatchLineup,
       removeAthleteFromMatchLineup,
@@ -5821,6 +5863,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       dismissReleasedSuspension,
       cancelActiveTimeout,
       toggleLineupRole,
+      updateLineupPlayerPosition,
       addAthleteToMatchLineup,
       addMultipleAthletesToMatchLineup,
       removeAthleteFromMatchLineup,

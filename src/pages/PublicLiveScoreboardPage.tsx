@@ -1078,170 +1078,107 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           </>
         )}
 
-        {/* ABA 2: ESCALAÇÕES & VISUALIZAÇÃO TÁTICA EM CAMPO/QUADRA */}
+        {/* ABA 2: ESCALAÇÕES (LISTA OFICIAL COM NOME, NÚMERO E FOTO) */}
         {activeTab === 'lineups' && (
           <section className="all-sports-card p-5 sm:p-6 space-y-5">
             <div className="all-sports-section-pill">
-              Posicionamento Tático &amp; Escalações
+              Atletas Registrados na Partida
             </div>
 
-            {/* Quadra / Campo Estilizado com Posicionamento Visual */}
-            <div className="relative rounded-3xl bg-gradient-to-b from-[#166534] via-[#15803D] to-[#166534] text-white p-5 sm:p-6 overflow-hidden shadow-inner border-4 border-white">
-              {/* Marcações da quadra/campo */}
-              <div className="pointer-events-none absolute inset-4 border-2 border-white/30 rounded-xl" />
-              <div className="pointer-events-none absolute inset-x-4 top-1/2 h-0.5 bg-white/30" />
-              <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 rounded-full border-2 border-white/30" />
+            {sheet &&
+            (sheet.homeLineup.length > 0 || sheet.awayLineup.length > 0) ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {(['home', 'away'] as const).map((side) => {
+                  const isHome = side === 'home';
+                  const list = isHome ? sheet.homeLineup : sheet.awayLineup;
+                  const tName = isHome ? homeName : awayName;
+                  const tCrest = isHome
+                    ? resolvedMatch?.homeTeam.crestUrl
+                    : resolvedMatch?.awayTeam.crestUrl;
+                  const tId = isHome
+                    ? resolvedMatch?.homeTeam.teamId
+                    : resolvedMatch?.awayTeam.teamId;
 
-              <div className="relative z-10 flex items-center justify-between text-xs font-display font-bold text-white/90 mb-6">
-                <span>{homeName}</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-black/25 text-brand-yellow">
-                  Quadra Oficial
-                </span>
-                <span>{awayName}</span>
+                  return (
+                    <div
+                      key={side}
+                      className="rounded-2xl bg-[#F8FAFC] border border-slate-200/80 p-3.5 space-y-2.5"
+                    >
+                      <div className="flex items-center gap-2 pb-2 border-b border-slate-200/70">
+                        <TeamCrest
+                          crestUrl={tCrest}
+                          teamName={tName}
+                          teamId={tId}
+                          size="sm"
+                        />
+                        <span className="text-xs sm:text-sm font-display font-extrabold text-slate-800 truncate">
+                          {tName}
+                        </span>
+                        <span className="ml-auto text-[10px] font-mono font-bold text-slate-500">
+                          {list.length} atletas
+                        </span>
+                      </div>
+
+                      {list.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {list.map((p) => {
+                            const ath = visibleAthletes.find(
+                              (a) => a.id === p.athleteId
+                            );
+                            return (
+                              <button
+                                key={p.athleteId}
+                                type="button"
+                                onClick={() => navigate(`/atleta/${p.athleteId}`)}
+                                className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-white hover:bg-blue-50/60 border border-slate-200/70 text-left transition-colors"
+                              >
+                                <div className="w-9 h-9 rounded-full bg-[#0B218A] text-white border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                                  {ath?.avatarUrl ? (
+                                    <img
+                                      src={ath.avatarUrl}
+                                      alt={p.athleteName}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <User className="w-4 h-4 text-white/85" />
+                                  )}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <span className="block text-xs font-display font-bold text-slate-800 truncate">
+                                    {p.athleteName}
+                                  </span>
+                                  {p.isCaptain && (
+                                    <span className="text-[10px] font-bold text-amber-600">
+                                      Capitão(ã)
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="px-2 py-0.5 rounded-lg bg-[#F3F4F9] border border-slate-200 text-xs font-mono font-extrabold text-[#0B218A] shrink-0">
+                                  {p.jerseyNumber != null ? `#${p.jerseyNumber}` : '•'}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 text-center py-4">
+                          Nenhum atleta escalado ainda.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-
-              {sheet &&
-              (sheet.homeLineup.length > 0 || sheet.awayLineup.length > 0) ? (
-                liveVolleyballRotation ? (
-                  <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
-                    {(['home', 'away'] as const).map((side) => {
-                      const court =
-                        side === 'home'
-                          ? liveVolleyballRotation.homeCourt
-                          : liveVolleyballRotation.awayCourt;
-                      const isServing =
-                        liveVolleyballRotation.currentServingSide === side;
-                      const tName = side === 'home' ? homeName : awayName;
-                      const frontRow = [
-                        { idx: 3, label: 'P4' },
-                        { idx: 2, label: 'P3' },
-                        { idx: 1, label: 'P2' },
-                      ];
-                      const backRow = [
-                        { idx: 4, label: 'P5' },
-                        { idx: 5, label: 'P6' },
-                        { idx: 0, label: 'P1 🏐' },
-                      ];
-                      return (
-                        <div
-                          key={side}
-                          className="rounded-2xl bg-black/25 border border-white/25 p-3 space-y-2"
-                        >
-                          <div className="flex items-center justify-between text-[11px] font-display font-extrabold">
-                            <span className="truncate">{tName}</span>
-                            {isServing && (
-                              <span className="px-2 py-0.5 rounded-full bg-brand-yellow text-[#0B218A] text-[10px]">
-                                🏐 No Saque
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[9px] font-mono text-center text-white/75 uppercase tracking-wider bg-black/30 rounded py-0.5">
-                            Rede (Zona de Ataque)
-                          </div>
-                          <div className="grid grid-cols-3 gap-1.5">
-                            {frontRow.map((slot) => {
-                              const p = court[slot.idx];
-                              return (
-                                <div
-                                  key={slot.label}
-                                  onClick={() => p && navigate(`/atleta/${p.athleteId}`)}
-                                  className="cursor-pointer rounded-xl bg-white/15 hover:bg-white/25 p-1.5 text-center border border-white/20"
-                                >
-                                  <span className="block text-[9px] font-mono text-brand-yellow font-bold">
-                                    {slot.label}
-                                  </span>
-                                  <span className="block text-xs font-mono font-extrabold text-white">
-                                    {p?.jerseyNumber != null ? `#${p.jerseyNumber}` : '•'}
-                                  </span>
-                                  <span className="block text-[10px] font-semibold truncate">
-                                    {p ? p.athleteName.split(' ')[0] : '—'}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-dashed border-white/25">
-                            {backRow.map((slot) => {
-                              const p = court[slot.idx];
-                              const activeServer = slot.idx === 0 && isServing;
-                              return (
-                                <div
-                                  key={slot.label}
-                                  onClick={() => p && navigate(`/atleta/${p.athleteId}`)}
-                                  className={`cursor-pointer rounded-xl p-1.5 text-center border ${
-                                    activeServer
-                                      ? 'bg-brand-yellow text-[#0B218A] border-white shadow-md'
-                                      : 'bg-white/15 hover:bg-white/25 border-white/20'
-                                  }`}
-                                >
-                                  <span
-                                    className={`block text-[9px] font-mono font-bold ${
-                                      activeServer ? 'text-[#0B218A]' : 'text-brand-yellow'
-                                    }`}
-                                  >
-                                    {slot.label}
-                                  </span>
-                                  <span className="block text-xs font-mono font-extrabold">
-                                    {p?.jerseyNumber != null ? `#${p.jerseyNumber}` : '•'}
-                                  </span>
-                                  <span className="block text-[10px] font-semibold truncate">
-                                    {p ? p.athleteName.split(' ')[0] : '—'}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                <div className="relative z-10 grid grid-cols-2 gap-6 py-4">
-                  <div className="flex flex-wrap items-center justify-center gap-4">
-                    {sheet.homeLineup.map((p) => (
-                      <div
-                        key={p.athleteId}
-                        onClick={() => navigate(`/atleta/${p.athleteId}`)}
-                        className="cursor-pointer hover:scale-105 transition-transform flex flex-col items-center text-center"
-                      >
-                        <div className="w-11 h-11 rounded-full bg-[#0B218A] border-2 border-white shadow-md flex items-center justify-center font-display font-extrabold text-xs text-brand-yellow">
-                          {p.jerseyNumber || '•'}
-                        </div>
-                        <span className="mt-1 px-2 py-0.5 rounded bg-black/40 text-[10px] font-semibold">
-                          {p.athleteName}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-4">
-                    {sheet.awayLineup.map((p) => (
-                      <div
-                        key={p.athleteId}
-                        onClick={() => navigate(`/atleta/${p.athleteId}`)}
-                        className="cursor-pointer hover:scale-105 transition-transform flex flex-col items-center text-center"
-                      >
-                        <div className="w-11 h-11 rounded-full bg-white text-[#0B218A] border-2 border-brand-yellow shadow-md flex items-center justify-center font-display font-extrabold text-xs">
-                          {p.jerseyNumber || '•'}
-                        </div>
-                        <span className="mt-1 px-2 py-0.5 rounded bg-black/40 text-[10px] font-semibold">
-                          {p.athleteName}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                )
-              ) : (
-                <div className="relative z-10 py-12 text-center space-y-2">
-                  <p className="text-sm font-display font-extrabold text-white">
-                    Escalações da Partida
-                  </p>
-                  <p className="text-xs text-white/80 max-w-md mx-auto">
-                    As escalações das equipes aparecerão posicionadas aqui assim que a partida iniciar.
-                  </p>
-                </div>
-              )}
-            </div>
+            ) : (
+              <div className="py-8 text-center space-y-1.5">
+                <p className="text-sm font-display font-extrabold text-slate-700">
+                  Escalações da Partida
+                </p>
+                <p className="text-xs text-slate-500 max-w-md mx-auto">
+                  Os atletas registrados na partida aparecerão em lista aqui assim que o mesário confirmar a escalação na súmula.
+                </p>
+              </div>
+            )}
           </section>
         )}
 

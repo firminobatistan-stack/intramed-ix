@@ -43,6 +43,10 @@ import {
   SwimmingStrokeType,
 } from '../types/domain';
 import { TeamCrest } from '../components/sports/TeamCrest';
+import {
+  isCollectiveOrBeachVolley,
+  ModalityCourtVisualizer,
+} from '../components/sports/ModalityCourtVisualizer';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Button } from '../components/ui/Button';
 import { Modal } from '../components/ui/Modal';
@@ -69,6 +73,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     getMatchById,
     getSheetByMatchId,
     getAthletesByTeam,
+    visibleAthletes,
     startOrResumeTimer,
     pauseTimer,
     resetPeriodTimer,
@@ -82,6 +87,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     dismissReleasedSuspension,
     cancelActiveTimeout,
     toggleLineupRole,
+    updateLineupPlayerPosition,
     addAthleteToMatchLineup,
     addMultipleAthletesToMatchLineup,
     removeAthleteFromMatchLineup,
@@ -840,6 +846,21 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
             </Button>
           </div>
         )}
+        {/* PRÉVIA AO VIVO DA QUADRA 3D (COLETIVOS & VÔLEI DE PRAIA) COM ARRASTE DE ATLETAS PELO MESÁRIO */}
+        {isCollectiveOrBeachVolley(match.modalityId) && (
+          <ModalityCourtVisualizer
+            match={match}
+            sheet={sheet}
+            athletes={visibleAthletes}
+            scoringEvents={sheet.events.filter((e) => !e.isDeleted)}
+            liveVolleyballRotation={liveVolleyballRotation}
+            editable={!sheet.isClosed}
+            onMovePlayer={(side, athleteId, xPct, yPct) =>
+              updateLineupPlayerPosition(match.id, side, athleteId, xPct, yPct)
+            }
+          />
+        )}
+
         {/* 4 & 5. PLACAR PRINCIPAL GIGANTE + CRONÔMETRO DA PARTIDA */}
         <section
           aria-label="Placar Principal e Cronômetro"

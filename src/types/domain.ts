@@ -340,6 +340,8 @@ export interface MatchLineupEntry {
   isGoalkeeper?: boolean;
   isPairMember?: boolean;
   isDisqualified?: boolean;
+  courtX?: number;
+  courtY?: number;
 }
 
 // 5. EVENTOS EM TEMPO REAL E AUDITORIA (CORREÇÃO / HISTÓRICO)

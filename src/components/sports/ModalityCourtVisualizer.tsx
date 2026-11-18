@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Athlete,
@@ -20,6 +20,13 @@ interface ModalityCourtVisualizerProps {
   liveVolleyballRotation?: DerivedVolleyballRotationState | null;
   onSelectPageTab?: (tab: 'details' | 'lineups' | 'standings' | 'statistics') => void;
   compact?: boolean;
+  editable?: boolean;
+  onMovePlayer?: (
+    side: 'home' | 'away',
+    athleteId: string,
+    xPct: number,
+    yPct: number
+  ) => void;
 }
 
 interface TurmaCourtTheme {
@@ -266,27 +273,38 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
   activePageTab = 'details',
   liveVolleyballRotation,
   compact = false,
+  editable = false,
+  onMovePlayer,
 }) => {
   const navigate = useNavigate();
   const modalityId = String(match.modalityId || 'futsal').toLowerCase();
+  const courtSurfaceRef = useRef<HTMLDivElement>(null);
+  const [dragState, setDragState] = useState<{
+    athleteId: string;
+    side: 'home' | 'away';
+    xPct: number;
+    yPct: number;
+  } | null>(null);
 
   // Verifica se o mesário realmente registrou escalação oficial na súmula desta partida
   const hasOfficialSheetLineup = Boolean(
-    (match.status === 'live' || match.status === 'halftime' || match.status === 'finished') &&
+    (editable || match.status === 'live' || match.status === 'halftime' || match.status === 'finished') &&
       sheet &&
       ((sheet.homeLineup && sheet.homeLineup.length > 0) ||
         (sheet.awayLineup && sheet.awayLineup.length > 0))
   );
 
-  const [focusMode, setFocusMode] = useState<CourtFocusMode>('overview');
+  const [focusMode, setFocusMode] = useState<CourtFocusMode>(
+    editable && hasOfficialSheetLineup ? 'lineup' : 'overview'
+  );
 
   useEffect(() => {
-    if (activePageTab === 'lineups' && hasOfficialSheetLineup) {
+    if ((activePageTab === 'lineups' || editable) && hasOfficialSheetLineup) {
       setFocusMode('lineup');
     } else if (focusMode === 'lineup' && !hasOfficialSheetLineup) {
       setFocusMode('overview');
     }
-  }, [activePageTab, hasOfficialSheetLineup, match.id, focusMode]);
+  }, [activePageTab, editable, hasOfficialSheetLineup, match.id, focusMode]);
 
   const homeTheme = useMemo(
     () =>
@@ -351,8 +369,8 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
           shortName: p.athleteName.split(' ')[0],
           jersey: p.jerseyNumber ?? idx + 1,
           avatarUrl: athObj?.avatarUrl || null,
-          xPct: pt.x,
-          yPct: pt.y,
+          xPct: typeof p.courtX === 'number' ? p.courtX : pt.x,
+          yPct: typeof p.courtY === 'number' ? p.courtY : pt.y,
           side,
         });
       });
@@ -503,7 +521,35 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
           />
 
           {/* SVG + Camada de Superfície Oficial da Modalidade */}
-          <div className="relative w-full h-full rounded-[14px] overflow-hidden shadow-inner border-2 border-white/90">
+          <div
+            ref={courtSurfaceRef}
+            onPointerMove={(e) => {
+              if (!editable || !dragState || !courtSurfaceRef.current) return;
+              const rect = courtSurfaceRef.current.getBoundingClientRect();
+              const xPct = Math.max(
+                8,
+                Math.min(92, ((e.clientX - rect.left) / rect.width) * 100)
+              );
+              const yPct = Math.max(
+                10,
+                Math.min(90, ((e.clientY - rect.top) / rect.height) * 100)
+              );
+              setDragState((prev) => (prev ? { ...prev, xPct, yPct } : null));
+            }}
+            onPointerUp={() => {
+              if (editable && dragState && onMovePlayer) {
+                onMovePlayer(
+                  dragState.side,
+                  dragState.athleteId,
+                  dragState.xPct,
+                  dragState.yPct
+                );
+              }
+              setDragState(null);
+            }}
+            onPointerCancel={() => setDragState(null)}
+            className="relative w-full h-full rounded-[14px] overflow-hidden shadow-inner border-2 border-white/90 touch-none"
+          >
             {/* 1. SUPERFÍCIE ESPECÍFICA POR MODALIDADE */}
             {modalityId === 'futsal' && (
               <div
@@ -883,23 +929,46 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
                 {officialLineupNodes.map((node, idx) => {
                   const isHome = node.side === 'home';
                   const theme = isHome ? homeTheme : awayTheme;
+                  const isDraggingThis =
+                    dragState?.athleteId === node.id && dragState?.side === node.side;
+                  const xPct = isDraggingThis ? dragState.xPct : node.xPct;
+                  const yPct = isDraggingThis ? dragState.yPct : node.yPct;
 
                   return (
                     <button
                       key={`${node.id}_${idx}`}
                       type="button"
+                      onPointerDown={(e) => {
+                        if (!editable) return;
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setDragState({
+                          athleteId: node.id,
+                          side: node.side,
+                          xPct: node.xPct,
+                          yPct: node.yPct,
+                        });
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/atleta/${node.id}`);
+                        if (!editable) {
+                          navigate(`/atleta/${node.id}`);
+                        }
                       }}
                       style={{
-                        left: `${node.xPct}%`,
-                        top: `${node.yPct}%`,
-                        transform: 'translate3d(-50%, -50%, 0)',
-                        transition: 'all 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-                        transitionDelay: `${(idx % 6) * 20}ms`,
+                        left: `${xPct}%`,
+                        top: `${yPct}%`,
+                        transform: `translate3d(-50%, -50%, 0) scale(${
+                          isDraggingThis ? 1.15 : 1
+                        })`,
+                        transition: isDraggingThis
+                          ? 'none'
+                          : 'all 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        transitionDelay: isDraggingThis ? '0ms' : `${(idx % 6) * 20}ms`,
                       }}
-                      className="group absolute z-20 flex flex-col items-center focus:outline-none"
+                      className={`group absolute z-20 flex flex-col items-center focus:outline-none ${
+                        editable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                      }`}
                     >
                       <div
                         style={{
@@ -938,75 +1007,33 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
         </div>
       </div>
 
-      {/* Rodapé Limpo Fora da Quadra: Turmas nas Duas Metades + Último Lance (sem poluir o meio da quadra!) */}
-      <div className="relative z-10 mt-3 pt-2.5 border-t border-white/10 space-y-2">
-        {lastScoringEvent && (
-          <div className="px-3 py-1.5 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-between gap-2 text-xs">
-            <span className="text-[10px] font-display font-extrabold uppercase tracking-wider text-brand-yellow shrink-0">
-              Último Lance • {lastScoringEvent.matchClockDisplay || 'Ao Vivo'}
-            </span>
-            <span className="font-display font-bold text-white truncate">
-              {lastScoringEvent.typeLabel}: {lastScoringEvent.athleteName || 'Equipe'}
-            </span>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-2.5">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setFocusMode(focusMode === 'home' ? 'overview' : 'home');
-            }}
-            className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all ${
-              focusMode === 'home'
-                ? 'bg-white/15 border-brand-yellow/70 shadow-sm'
-                : 'bg-white/[0.04] border-white/10 hover:bg-white/10'
-            }`}
-          >
-            <img
-              src={homeTheme.crestUrl}
-              alt={homeTheme.shortName}
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-white/40 shrink-0"
-            />
-            <div className="min-w-0">
-              <span className="block text-[9px] font-display font-extrabold uppercase tracking-wider text-brand-yellow truncate">
-                {homeTheme.turmaTag} • Esquerda
+      {/* Rodapé Limpo: Último Lance ou Dica de Arraste para o Mesário (sem botões duplicados!) */}
+      {(lastScoringEvent || editable) && (
+        <div className="relative z-10 mt-3 pt-2.5 border-t border-white/10 space-y-2">
+          {editable && (
+            <div className="px-3 py-1.5 rounded-xl bg-brand-yellow/15 border border-brand-yellow/35 flex items-center justify-between gap-2 text-[11px]">
+              <span className="font-display font-extrabold text-brand-yellow">
+                Prévia ao vivo do usuário • Modo Mesário
               </span>
-              <span className="block text-xs font-display font-bold text-white truncate">
-                {match.homeTeam.teamName || homeTheme.shortName}
+              <span className="font-semibold text-white/85">
+                {hasOfficialSheetLineup
+                  ? 'Arraste os atletas na quadra para ajustar a posição'
+                  : 'Escale os atletas para posicioná-los na quadra'}
               </span>
             </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setFocusMode(focusMode === 'away' ? 'overview' : 'away');
-            }}
-            className={`flex items-center justify-end gap-2 p-2 rounded-xl border text-right transition-all ${
-              focusMode === 'away'
-                ? 'bg-white/15 border-brand-yellow/70 shadow-sm'
-                : 'bg-white/[0.04] border-white/10 hover:bg-white/10'
-            }`}
-          >
-            <div className="min-w-0">
-              <span className="block text-[9px] font-display font-extrabold uppercase tracking-wider text-brand-yellow truncate">
-                Direita • {awayTheme.turmaTag}
+          )}
+          {lastScoringEvent && (
+            <div className="px-3 py-1.5 rounded-xl bg-white/[0.07] border border-white/10 flex items-center justify-between gap-2 text-xs">
+              <span className="text-[10px] font-display font-extrabold uppercase tracking-wider text-brand-yellow shrink-0">
+                Último Lance • {lastScoringEvent.matchClockDisplay || 'Ao Vivo'}
               </span>
-              <span className="block text-xs font-display font-bold text-white truncate">
-                {match.awayTeam.teamName || awayTheme.shortName}
+              <span className="font-display font-bold text-white truncate">
+                {lastScoringEvent.typeLabel}: {lastScoringEvent.athleteName || 'Equipe'}
               </span>
             </div>
-            <img
-              src={awayTheme.crestUrl}
-              alt={awayTheme.shortName}
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-white/40 shrink-0"
-            />
-          </button>
+          )}
         </div>
-      </div>
+      )}
     </section>
   );
 };
