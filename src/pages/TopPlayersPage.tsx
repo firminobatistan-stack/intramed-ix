@@ -6,6 +6,7 @@ import { ModalitySlug } from '../types/domain';
 import { SportIcon } from '../components/sports/SportIcon';
 import { StoryShareButton } from '../components/social/StoryShareModal';
 import { EmptyState } from '../components/ui/EmptyState';
+import { IntramedWarpShowcase } from '../components/sports/IntramedWarpShowcase';
 
 type RankingTab =
   | 'geral'
@@ -243,6 +244,9 @@ export const TopPlayersPage: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {/* Vitrine 3D de Artilheiros, Elencos & Estatísticas */}
+      <IntramedWarpShowcase initialMode="scorers" compact />
 
       {/* Abas de Modalidade */}
       <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">

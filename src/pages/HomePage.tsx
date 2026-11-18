@@ -22,6 +22,7 @@ import { useRegistrationStore } from '../context/RegistrationStoreContext';
 import { SportIcon } from '../components/sports/SportIcon';
 import { MatchCard } from '../components/sports/MatchCard';
 import { StandingsTable } from '../components/sports/StandingsTable';
+import { IntramedWarpShowcase } from '../components/sports/IntramedWarpShowcase';
 
 type HomeTimeFilter = 'all' | 'live' | 'upcoming' | 'finished';
 
@@ -323,6 +324,9 @@ export const HomePage: React.FC = () => {
           </div>
         </section>
       )}
+
+      {/* 1.8. RADAR 3D INTERATIVO (Próximos Jogos, Artilheiros & Estatísticas em WebGL2) */}
+      <IntramedWarpShowcase initialMode="upcoming" />
 
       {/* 2. SELETOR "MATCH DAY" COM SETAS LATERAIS (Idêntico ao topo da Imagem 3) */}
       <section className="flex flex-col items-center justify-center text-center pt-1">
