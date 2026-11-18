@@ -216,18 +216,21 @@ export const SportsTabTransition: React.FC<{ children: React.ReactNode }> = ({ c
         </div>
       )}
 
-      {/* Conteúdo da Aba com Spring Morph de 60fps */}
+      {/* Conteúdo da Aba com Spring Morph de 60fps (remove transform ao concluir para não prender modais fixed) */}
       <div
-        style={{
-          transform: contentEntered
-            ? 'translate3d(0, 0, 0) scale(1)'
-            : 'translate3d(0, 12px, 0) scale(0.986)',
-          opacity: contentEntered ? 1 : 0.35,
-          transitionProperty: 'transform, opacity',
-          transitionDuration: contentEntered ? '360ms' : '0ms',
-          transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
-        }}
-        className="will-change-transform"
+        style={
+          phase === 'idle' && contentEntered
+            ? undefined
+            : {
+                transform: contentEntered
+                  ? 'translate3d(0, 0, 0) scale(1)'
+                  : 'translate3d(0, 12px, 0) scale(0.986)',
+                opacity: contentEntered ? 1 : 0.35,
+                transitionProperty: 'transform, opacity',
+                transitionDuration: contentEntered ? '360ms' : '0ms',
+                transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+              }
+        }
       >
         {children}
       </div>
