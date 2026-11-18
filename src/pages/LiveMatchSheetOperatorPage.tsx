@@ -2800,8 +2800,11 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                         .trim()
                         .toLowerCase() === athEmail)
                 );
-                const cat = String(
-                  reg?.categoryName || ath.categoryName || ath.gender || ''
+                const explicitGender = String(ath.gender || '').trim();
+                const cat = (
+                  explicitGender && explicitGender.toLowerCase() !== 'geral'
+                    ? explicitGender
+                    : String(reg?.categoryName || ath.categoryName || '')
                 )
                   .trim()
                   .toLowerCase();
