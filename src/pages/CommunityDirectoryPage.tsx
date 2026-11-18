@@ -190,7 +190,11 @@ export const CommunityDirectoryPage: React.FC = () => {
         teamName: p.teamName || teamObj?.name || null,
         bio: p.bio || linkedAth?.bio || null,
         instagramHandle: p.instagramHandle || linkedAth?.instagramHandle || null,
-        isAthlete: Boolean(linkedAth),
+        isAthlete: Boolean(
+          linkedAth ||
+            p.linkedAthleteId ||
+            String((p as any).role || '').toLowerCase() === 'athlete'
+        ),
         linkedAthleteId: linkedAth?.id || p.linkedAthleteId || null,
         modalityCount:
           linkedAth?.modalityIds?.length || p.favoriteModalityIds?.length || 0,
