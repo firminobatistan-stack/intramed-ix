@@ -85,9 +85,9 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${current.bg} ${current.text} ${current.border} ${className}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tabular-nums select-none border ${current.bg} ${current.text} ${current.border} ${className}`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${current.dot}`} aria-hidden="true" />
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${current.dot}`} aria-hidden="true" />
       <span>{label || current.defaultLabel}</span>
     </span>
   );

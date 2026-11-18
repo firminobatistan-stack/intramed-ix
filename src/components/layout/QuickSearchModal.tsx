@@ -42,13 +42,39 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
     'Natação',
   ]);
 
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [dataState, setDataState] = useState<'entering' | 'open' | 'closed'>(
+    isOpen ? 'open' : 'closed'
+  );
+
   useEffect(() => {
+    let raf = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     if (isOpen) {
       setQuery('');
+      setShouldRender(true);
+      setDataState('entering');
+      raf = requestAnimationFrame(() => setDataState('open'));
+    } else if (shouldRender) {
+      setDataState('closed');
+      timer = setTimeout(() => setShouldRender(false), 110);
     }
-  }, [isOpen]);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (timer) clearTimeout(timer);
+    };
+  }, [isOpen, shouldRender]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!shouldRender) return null;
 
   const q = query.trim().toLowerCase();
 
@@ -82,38 +108,52 @@ export const QuickSearchModal: React.FC<QuickSearchModalProps> = ({
     onClose();
   };
 
+  const stateAttr = dataState === 'open' ? 'open' : dataState === 'closed' ? 'closed' : 'entering';
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-12 sm:pt-20 px-4 bg-brand-blue-dark/45 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-12 sm:pt-20 px-4"
       role="dialog"
       aria-modal="true"
       aria-label="Busca rápida INTRAMED IX"
     >
-      <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
+      <div
+        data-state={stateAttr}
+        className="emil-backdrop fixed inset-0 bg-brand-blue-dark/45 backdrop-blur-[2px]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
-      <div className="relative z-10 w-full max-w-lg bg-white rounded-3xl border border-brand-surface-border shadow-2xl overflow-hidden">
+      <div
+        data-state={stateAttr}
+        className="emil-command-panel relative z-10 w-full max-w-lg bg-white rounded-[24px] shadow-elevated overflow-hidden"
+      >
         {/* Barra de Pesquisa */}
-        <div className="px-4 py-3.5 border-b border-brand-surface-border flex items-center gap-3">
+        <div className="px-4 py-3.5 border-b border-brand-surface-border/80 flex items-center gap-3">
           <Search className="w-5 h-5 text-brand-blue shrink-0" />
           <input
-            type="text"
+            type="search"
+            enterKeyHint="search"
+            autoComplete="off"
+            spellCheck={false}
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar modalidade, equipe, atleta ou jogo..."
-            className="w-full text-sm text-brand-text-primary placeholder:text-brand-text-muted focus:outline-none"
+            className="w-full text-sm text-brand-text-primary placeholder:text-brand-text-muted focus:outline-none bg-transparent"
           />
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-brand-text-muted hover:text-brand-text-primary hover:bg-brand-surface-muted"
+            aria-label="Fechar busca"
+            className="p-1.5 rounded-xl text-brand-text-muted can-hover:hover:text-brand-text-primary can-hover:hover:bg-brand-surface-muted transition-[transform,color,background-color] duration-[140ms] ease-emil-out active:scale-[0.95]"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Resultados Rápidos e Estados de Busca (Seção 12 do Master Prompt) */}
-        <div className="max-h-[70vh] overflow-y-auto p-4 space-y-5">
+        <div className="max-h-[70dvh] overflow-y-auto overscroll-contain p-4 space-y-5">
           {/* Sugestões e Histórico Recente quando o campo está vazio */}
           {!q && (
             <div className="space-y-2">

@@ -185,7 +185,7 @@ export const HomePage: React.FC = () => {
                         : '/placar'
                     )
                   }
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FACC15] hover:bg-[#EAB308] text-[#0F172A] font-display font-extrabold text-xs sm:text-sm shadow-[0_8px_20px_rgba(250,204,21,0.35)] transition-all hover:scale-105"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#FACC15] can-hover:hover:bg-[#EAB308] can-hover:hover:scale-[1.03] active:scale-[0.97] text-[#0F172A] font-display font-extrabold text-xs sm:text-sm shadow-[0_8px_20px_rgba(250,204,21,0.35)] transition-[transform,background-color,box-shadow] duration-[160ms] ease-emil-out"
                 >
                   <Radio className="w-4 h-4 text-[#0F172A] animate-pulse" />
                   <span>Acompanhar Ao Vivo</span>
@@ -196,7 +196,7 @@ export const HomePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => navigate('/admin')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-display font-bold text-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full bg-white/10 can-hover:hover:bg-white/20 active:scale-[0.97] border border-white/20 text-white font-display font-bold text-xs transition-[transform,background-color] duration-[150ms] ease-emil-out"
                 >
                   <ClipboardList className="w-3.5 h-3.5 text-brand-yellow" />
                   <span>Operar Súmula</span>
@@ -333,12 +333,12 @@ export const HomePage: React.FC = () => {
               setDayIndex((prev) => (prev === 0 ? MATCH_DAYS.length - 1 : prev - 1))
             }
             aria-label="Dia anterior"
-            className="w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[#0B218A] hover:bg-blue-50 transition-colors shadow-sm"
+            className="w-8 h-8 rounded-full bg-white shadow-[0_0_0_1px_rgba(15,42,86,0.08),0_2px_6px_rgba(15,42,86,0.05)] flex items-center justify-center text-[#0B218A] can-hover:hover:bg-blue-50 active:scale-[0.93] transition-[transform,background-color] duration-[150ms] ease-emil-out"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <div className="flex items-center gap-2 text-xs sm:text-sm font-display font-extrabold text-[#0B218A]">
+          <div className="flex items-center gap-2 text-xs sm:text-sm font-display font-extrabold text-[#0B218A] tabular-nums">
             <span>{currentDay.label}</span>
             <CircleDot className="w-4 h-4 text-[#0B218A]" />
           </div>
@@ -347,7 +347,7 @@ export const HomePage: React.FC = () => {
             type="button"
             onClick={() => setDayIndex((prev) => (prev + 1) % MATCH_DAYS.length)}
             aria-label="Próximo dia"
-            className="w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[#0B218A] hover:bg-blue-50 transition-colors shadow-sm"
+            className="w-8 h-8 rounded-full bg-white shadow-[0_0_0_1px_rgba(15,42,86,0.08),0_2px_6px_rgba(15,42,86,0.05)] flex items-center justify-center text-[#0B218A] can-hover:hover:bg-blue-50 active:scale-[0.93] transition-[transform,background-color] duration-[150ms] ease-emil-out"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -359,14 +359,14 @@ export const HomePage: React.FC = () => {
 
       {/* 3. FAIXA HORIZONTAL DE PÍLULAS DE MODALIDADES + FILTRO DE STATUS */}
       <section className="space-y-3">
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 px-0.5">
           <button
             type="button"
             onClick={() => setSelectedSportFilter('todas')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-display font-bold whitespace-nowrap transition-all shrink-0 ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-display font-bold whitespace-nowrap transition-[transform,background-color,color,box-shadow] duration-[160ms] ease-emil-out active:scale-[0.97] shrink-0 ${
               selectedSportFilter === 'todas'
-                ? 'bg-[#0B218A] text-white shadow-md'
-                : 'bg-white text-slate-600 border border-slate-200/80 hover:border-[#0B218A]/40'
+                ? 'bg-[#0B218A] text-white shadow-[0_4px_12px_rgba(11,33,138,0.22)]'
+                : 'bg-white text-slate-600 shadow-[0_0_0_1px_rgba(15,42,86,0.07),0_1px_3px_rgba(15,42,86,0.03)] can-hover:hover:shadow-[0_0_0_1px_rgba(11,33,138,0.28)]'
             }`}
           >
             <span>Todas as Modalidades</span>
@@ -379,10 +379,10 @@ export const HomePage: React.FC = () => {
                 key={modality.id}
                 type="button"
                 onClick={() => setSelectedSportFilter(modality.id)}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-display font-bold whitespace-nowrap transition-all shrink-0 ${
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-display font-bold whitespace-nowrap transition-[transform,background-color,color,box-shadow] duration-[160ms] ease-emil-out active:scale-[0.97] shrink-0 ${
                   active
-                    ? 'bg-[#0B218A] text-white shadow-md'
-                    : 'bg-white text-slate-600 border border-slate-200/80 hover:border-[#0B218A]/40'
+                    ? 'bg-[#0B218A] text-white shadow-[0_4px_12px_rgba(11,33,138,0.22)]'
+                    : 'bg-white text-slate-600 shadow-[0_0_0_1px_rgba(15,42,86,0.07),0_1px_3px_rgba(15,42,86,0.03)] can-hover:hover:shadow-[0_0_0_1px_rgba(11,33,138,0.28)]'
                 }`}
               >
                 <span
@@ -400,7 +400,7 @@ export const HomePage: React.FC = () => {
 
         {/* Sub-filtro Rápido (Todos / Em Andamento / Próximos / Encerrados) */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="inline-flex items-center gap-1.5 bg-white p-1 rounded-full border border-slate-200/80 shadow-sm">
+          <div className="inline-flex items-center gap-1 bg-white p-1 rounded-full shadow-[0_0_0_1px_rgba(15,42,86,0.07),0_2px_6px_rgba(15,42,86,0.04)]">
             {[
               { id: 'all', label: 'Todos' },
               ...(hasActiveLiveMatch ? [{ id: 'live', label: 'Ao Vivo' }] : []),
@@ -413,10 +413,10 @@ export const HomePage: React.FC = () => {
                   key={tab.id}
                   type="button"
                   onClick={() => setTimeFilter(tab.id as HomeTimeFilter)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-display font-bold transition-all ${
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-display font-bold transition-[transform,background-color,color,box-shadow] duration-[160ms] ease-emil-out active:scale-[0.96] ${
                     active
                       ? 'bg-[#0B218A] text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                      : 'text-slate-600 can-hover:hover:text-slate-900'
                   }`}
                 >
                   {tab.label}

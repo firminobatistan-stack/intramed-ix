@@ -65,7 +65,60 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
     isRegistrationPaid || (currentUser?.role === 'atleta' && activeMyRegs.length === 0);
 
   const [isSportsExpanded, setIsSportsExpanded] = useState(false);
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [dataState, setDataState] = useState<'entering' | 'open' | 'closed'>(
+    isOpen ? 'open' : 'closed'
+  );
+  const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const backdropRef = React.useRef<HTMLDivElement | null>(null);
+  const swipeRef = React.useRef<{
+    active: boolean;
+    lockedAxis: 'x' | 'y' | null;
+    startX: number;
+    startY: number;
+    lastX: number;
+    startTime: number;
+  }>({
+    active: false,
+    lockedAxis: null,
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    startTime: 0,
+  });
   const prevPathRef = React.useRef(location.pathname);
+
+  useEffect(() => {
+    let raf1 = 0;
+    let raf2 = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    if (isOpen) {
+      setShouldRender(true);
+      setDataState('entering');
+      raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          if (panelRef.current) {
+            panelRef.current.style.transform = '';
+            panelRef.current.style.transition = '';
+          }
+          if (backdropRef.current) {
+            backdropRef.current.style.opacity = '';
+          }
+          setDataState('open');
+        });
+      });
+    } else if (shouldRender) {
+      setDataState('closed');
+      timer = setTimeout(() => setShouldRender(false), 220);
+    }
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      if (timer) clearTimeout(timer);
+    };
+  }, [isOpen, shouldRender]);
 
   // Fecha o drawer EXCLUSIVAMENTE quando o pathname da URL mudar
   useEffect(() => {
@@ -98,7 +151,76 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    swipeRef.current = {
+      active: true,
+      lockedAxis: null,
+      startX: t.clientX,
+      startY: t.clientY,
+      lastX: t.clientX,
+      startTime: performance.now(),
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const st = swipeRef.current;
+    if (!st.active || e.touches.length !== 1 || !panelRef.current) return;
+    const t = e.touches[0];
+    const dx = t.clientX - st.startX;
+    const dy = t.clientY - st.startY;
+
+    if (!st.lockedAxis) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      st.lockedAxis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y';
+      if (st.lockedAxis === 'x') {
+        panelRef.current.style.transition = 'none';
+      }
+    }
+
+    if (st.lockedAxis !== 'x') return;
+    st.lastX = t.clientX;
+
+    // 1:1 swipe left with rubber-band resistance when pulling right past 0
+    const offsetX = dx <= 0 ? dx : Math.sqrt(dx) * 2.2;
+    panelRef.current.style.transform = `translate3d(${offsetX}px, 0, 0)`;
+    if (backdropRef.current && dx < 0) {
+      const progress = Math.min(1, Math.abs(dx) / 280);
+      backdropRef.current.style.opacity = String(Math.max(0.15, 1 - progress * 0.8));
+    }
+  };
+
+  const handleTouchEnd = () => {
+    const st = swipeRef.current;
+    if (!st.active) return;
+    const wasHorizontal = st.lockedAxis === 'x';
+    const dx = st.lastX - st.startX;
+    const elapsed = Math.max(1, performance.now() - st.startTime);
+    const velocity = Math.abs(dx) / elapsed;
+    st.active = false;
+    st.lockedAxis = null;
+
+    if (!wasHorizontal) return;
+
+    if (panelRef.current) {
+      panelRef.current.style.transition = '';
+    }
+    if (backdropRef.current) {
+      backdropRef.current.style.opacity = '';
+    }
+
+    if (dx <= -76 || (dx < -18 && velocity > 0.11)) {
+      if (panelRef.current) {
+        panelRef.current.style.transform = 'translate3d(-100%, 0, 0)';
+      }
+      onClose();
+    } else if (panelRef.current) {
+      panelRef.current.style.transform = '';
+    }
+  };
 
   const triggerHaptic = () => {
     try {
@@ -116,6 +238,8 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
     onClose();
   };
 
+  const stateAttr = dataState === 'open' ? 'open' : dataState === 'closed' ? 'closed' : 'entering';
+
   return (
     <div
       role="dialog"
@@ -125,7 +249,9 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
     >
       {/* Backdrop com desfoque e escurecimento */}
       <div
-        className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity duration-300"
+        ref={backdropRef}
+        data-state={stateAttr}
+        className="emil-backdrop fixed inset-0 bg-black/75 backdrop-blur-sm"
         onClick={(e) => {
           e.stopPropagation();
           onClose();
@@ -133,19 +259,24 @@ export const MobileNavDrawer: React.FC<MobileNavDrawerProps> = ({ isOpen, onClos
         aria-hidden="true"
       />
 
-      {/* Painel do Drawer Lateral */}
+      {/* Painel do Drawer Lateral com curva Vaul e suporte a swipe-left 1:1 */}
       <div
-        style={{ WebkitTransform: 'translate3d(0,0,0)' }}
-        className="relative w-full max-w-[310px] sm:max-w-xs bg-[#091834] text-white h-full flex flex-col shadow-2xl z-10 border-r border-white/10 animate-in slide-in-from-left duration-200 pointer-events-auto"
+        ref={panelRef}
+        data-state={stateAttr}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
+        className="emil-drawer-left relative w-full max-w-[310px] sm:max-w-xs bg-[#091834] text-white h-[100dvh] flex flex-col shadow-2xl z-10 border-r border-white/10 pointer-events-auto"
       >
         {/* Cabeçalho do Drawer */}
-        <div className="h-16 px-4 bg-[#0B218A] border-b border-white/10 flex items-center justify-between shrink-0">
+        <div className="min-h-[64px] pt-[env(safe-area-inset-top,0px)] px-4 bg-[#0B218A] border-b border-white/10 flex items-center justify-between shrink-0">
           <BrandMark size="sm" inverted />
           <button
             type="button"
             onClick={onClose}
             aria-label="Fechar menu"
-            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 flex items-center justify-center text-white transition-all"
+            className="w-9 h-9 rounded-xl bg-white/10 can-hover:hover:bg-white/20 active:scale-[0.95] flex items-center justify-center text-white transition-[transform,background-color] duration-[150ms] ease-emil-out"
           >
             <X className="w-5 h-5" />
           </button>

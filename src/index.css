@@ -2,9 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Emil Kowalski Design Engineering — Custom Easing Curves */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
   }
 
@@ -12,10 +21,40 @@
     font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
     background-color: #F4F6FB;
     color: #0F172A;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tipografia óptica: títulos equilibrados com tracking ajustado, parágrafos sem órfãs */
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Mobile-Native Touch Craft: elimina delay de 300ms e seleção acidental de rótulos em controles */
+  button,
+  a,
+  [role="button"],
+  [role="tab"],
+  summary {
+    touch-action: manipulation;
+  }
+
+  button,
+  [role="button"],
+  [role="tab"] {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 }
 
-/* Textura Hexagonal Esportiva Azul Royal (Referência All Sports Header) */
+/* Textura Hexagonal Esportiva Azul Royal (Referência All Sports Header — Paleta Oficial Preservada) */
 .all-sports-header {
   background-color: #0B218A;
   background-image:
@@ -25,24 +64,141 @@
   background-size: 100% 100%, 100% 100%, 54px 54px;
 }
 
-/* Superfície Branca Premium dos Cards (Referência All Sports Match Card) */
+/* Superfície Branca Premium dos Cards com Shadow-as-Border Semitransparente (Emil Kowalski Craft) */
 .all-sports-card {
   background: #FFFFFF;
-  border-radius: 26px;
-  border: 1px solid rgba(226, 232, 240, 0.85);
-  box-shadow: 0 10px 30px -5px rgba(11, 33, 138, 0.06), 0 4px 12px -2px rgba(15, 23, 42, 0.03);
+  border-radius: 24px;
+  border: none;
+  box-shadow:
+    0 0 0 1px rgba(15, 42, 86, 0.065),
+    0 10px 28px -6px rgba(11, 33, 138, 0.06),
+    0 2px 8px -2px rgba(15, 23, 42, 0.03);
 }
 
-/* Pílula de Título Cinza-Lavanda no Topo dos Cards (ex: UEFA Champions League / Who Will Win?) */
+/* Elevação sutil no hover restrita a dispositivos com ponteiro preciso (evita hover preso no celular) */
+@media (hover: hover) and (pointer: fine) {
+  .emil-card-hover {
+    transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
+  }
+  .emil-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px rgba(11, 33, 138, 0.12),
+      0 16px 34px -8px rgba(11, 33, 138, 0.10),
+      0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  }
+}
+
+/* Feedback tátil imediato no pointer-down (:active) */
+.emil-press {
+  transition: transform 150ms var(--ease-out), background-color 150ms ease, box-shadow 150ms var(--ease-out), color 150ms ease, opacity 150ms ease;
+}
+.emil-press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.emil-press-card {
+  transition: transform 150ms var(--ease-out);
+}
+.emil-press-card:active {
+  transform: scale(0.985);
+}
+
+/* Pílula de Título Cinza-Lavanda no Topo dos Cards (Raio concêntrico: 24px externo - 12px padding = 12px interno) */
 .all-sports-section-pill {
   background-color: #F3F4F9;
   color: #334155;
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 0.5rem 1rem;
   font-weight: 700;
   font-size: 0.78rem;
   text-align: center;
   letter-spacing: -0.01em;
+  box-shadow: inset 0 0 0 1px rgba(15, 42, 86, 0.04);
+}
+
+/* Números tabulares anti-jitter em placares, cronômetros, contadores e estatísticas */
+.tabular-nums,
+[data-tabular="true"] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Transições assimétricas Vaul / Sheet & Modal (GPU compositor: transform + opacity apenas) */
+.emil-backdrop {
+  opacity: 0;
+  transition: opacity 220ms var(--ease-out);
+}
+.emil-backdrop[data-state="open"] {
+  opacity: 1;
+}
+.emil-backdrop[data-state="closed"] {
+  opacity: 0;
+  transition: opacity 160ms var(--ease-out);
+}
+
+/* Bottom Sheet no Mobile (translateY 100%) e Modal Centrado no Desktop (scale 0.96, nunca scale 0) */
+.emil-sheet-panel {
+  transform: translate3d(0, 100%, 0);
+  opacity: 1;
+  transition: transform 340ms var(--ease-drawer), opacity 200ms var(--ease-out);
+  will-change: transform;
+}
+.emil-sheet-panel[data-state="open"] {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+}
+.emil-sheet-panel[data-state="closed"] {
+  transform: translate3d(0, 100%, 0);
+  transition: transform 200ms var(--ease-drawer), opacity 150ms var(--ease-out);
+}
+
+@media (min-width: 640px) {
+  .emil-sheet-panel {
+    transform: scale(0.96) translate3d(0, 6px, 0);
+    opacity: 0;
+    transform-origin: center;
+    transition: transform 210ms var(--ease-out), opacity 180ms var(--ease-out);
+  }
+  .emil-sheet-panel[data-state="open"] {
+    transform: scale(1) translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  .emil-sheet-panel[data-state="closed"] {
+    transform: scale(0.97) translate3d(0, 4px, 0);
+    opacity: 0;
+    transition: transform 140ms var(--ease-out), opacity 130ms var(--ease-out);
+  }
+}
+
+/* Drawer Lateral Mobile com curva Vaul/iOS */
+.emil-drawer-left {
+  transform: translate3d(-100%, 0, 0);
+  transition: transform 320ms var(--ease-drawer);
+  will-change: transform;
+}
+.emil-drawer-left[data-state="open"] {
+  transform: translate3d(0, 0, 0);
+}
+.emil-drawer-left[data-state="closed"] {
+  transform: translate3d(-100%, 0, 0);
+  transition: transform 210ms var(--ease-drawer);
+}
+
+/* Command Palette (Ctrl+K): resposta ultra-rápida <140ms estilo Raycast */
+.emil-command-panel {
+  transform: scale(0.98) translate3d(0, -4px, 0);
+  opacity: 0;
+  transform-origin: top center;
+  transition: transform 130ms var(--ease-out), opacity 120ms var(--ease-out);
+}
+.emil-command-panel[data-state="open"] {
+  transform: scale(1) translate3d(0, 0, 0);
+  opacity: 1;
+}
+.emil-command-panel[data-state="closed"] {
+  transform: scale(0.985);
+  opacity: 0;
+  transition: transform 100ms var(--ease-out), opacity 95ms var(--ease-out);
 }
 
 /* Utilitário para esconder barra de rolagem horizontal em abas mantendo toque fluido */
@@ -62,13 +218,34 @@
   padding-top: max(env(safe-area-inset-top, 0px), 8px);
 }
 
-/* Otimização de toque e fluidez mobile */
-@media (max-width: 768px) {
-  * {
-    -webkit-tap-highlight-color: transparent;
-  }
+/* Evita zoom automático no iOS/Android em dispositivos de toque sem bloquear pinch-to-zoom */
+@media (pointer: coarse) {
   input, select, textarea {
-    font-size: 16px !important; /* Evita zoom automático no iOS ao focar em inputs */
+    font-size: 16px !important;
+  }
+}
+
+/* Acessibilidade: respeita prefers-reduced-motion mantendo apenas crossfade suave sem deslocamento espacial */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .emil-card-hover,
+  .emil-press,
+  .emil-press-card {
+    transition: opacity 150ms ease, background-color 150ms ease !important;
+    transform: none !important;
+  }
+  .emil-sheet-panel,
+  .emil-drawer-left,
+  .emil-command-panel {
+    transform: none !important;
+    transition: opacity 150ms ease !important;
+  }
+  .emil-sheet-panel[data-state="closed"],
+  .emil-drawer-left[data-state="closed"],
+  .emil-command-panel[data-state="closed"] {
+    opacity: 0 !important;
   }
 }
 

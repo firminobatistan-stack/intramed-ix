@@ -22,21 +22,21 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseStyles =
-    'inline-flex items-center justify-center font-medium transition-all duration-150 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 active:scale-[0.99] disabled:opacity-55 disabled:pointer-events-none select-none';
+    'inline-flex items-center justify-center font-medium rounded-xl touch-manipulation select-none transition-[transform,background-color,box-shadow,color,border-color,opacity] duration-[150ms] ease-emil-out active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 disabled:opacity-55 disabled:pointer-events-none';
 
   const variantStyles = {
     primary:
-      'bg-brand-blue text-white hover:bg-brand-blue-medium shadow-sm',
+      'bg-brand-blue text-white can-hover:hover:bg-brand-blue-medium shadow-[0_1px_2px_rgba(9,24,52,0.18),inset_0_1px_0_rgba(255,255,255,0.12)]',
     secondary:
-      'bg-brand-surface-muted text-brand-text-primary border border-brand-surface-border hover:bg-brand-blue-light/60',
+      'bg-brand-surface-muted text-brand-text-primary shadow-[0_0_0_1px_rgba(15,42,86,0.08),0_1px_2px_rgba(15,42,86,0.03)] can-hover:hover:bg-brand-blue-light/60',
     outline:
-      'bg-transparent text-brand-blue border border-brand-blue/25 hover:border-brand-blue hover:bg-brand-blue-light/40',
+      'bg-transparent text-brand-blue border border-brand-blue/25 can-hover:hover:border-brand-blue can-hover:hover:bg-brand-blue-light/40',
     ghost:
-      'bg-transparent text-brand-text-secondary hover:text-brand-text-primary hover:bg-brand-surface-muted',
+      'bg-transparent text-brand-text-secondary can-hover:hover:text-brand-text-primary can-hover:hover:bg-brand-surface-muted',
     accent:
-      'bg-brand-yellow text-brand-blue-dark font-semibold hover:bg-brand-yellow-dark/90 shadow-sm',
+      'bg-brand-yellow text-brand-blue-dark font-semibold can-hover:hover:bg-brand-yellow-dark/90 shadow-[0_1px_2px_rgba(15,42,86,0.12),inset_0_1px_0_rgba(255,255,255,0.35)]',
     danger:
-      'bg-rose-600 text-white font-semibold hover:bg-rose-700 shadow-sm',
+      'bg-rose-600 text-white font-semibold can-hover:hover:bg-rose-700 shadow-[0_1px_2px_rgba(159,18,57,0.22),inset_0_1px_0_rgba(255,255,255,0.15)]',
   };
 
   const sizeStyles = {

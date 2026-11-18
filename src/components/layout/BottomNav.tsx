@@ -97,15 +97,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
               to={item.to}
               onClick={triggerHaptic}
               title={item.label}
-              className="group relative flex flex-col items-center justify-center py-1 px-2 select-none focus:outline-none transition-transform active:scale-95"
+              className="group relative flex flex-col items-center justify-center py-1 px-2 select-none touch-manipulation focus:outline-none transition-transform duration-[150ms] ease-emil-out active:scale-[0.94]"
             >
               <div
-                className={`relative flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 ${
+                className={`relative flex items-center justify-center w-10 h-10 rounded-full transition-[transform,background-color,color,box-shadow] duration-[200ms] ease-emil-out ${
                   isActive
                     ? 'bg-brand-yellow text-[#0B218A] shadow-[0_0_16px_rgba(250,204,21,0.55)] scale-105'
                     : item.highlight
                     ? 'bg-amber-400/20 text-brand-yellow'
-                    : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
+                    : 'bg-white/10 text-white/80 can-hover:hover:bg-white/20 can-hover:hover:text-white'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -117,7 +117,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
                 )}
               </div>
               <span
-                className={`text-[9px] font-black tracking-tight mt-0.5 block transition-colors leading-none ${
+                className={`text-[9px] font-black tracking-tight mt-0.5 block transition-colors duration-[150ms] leading-none ${
                   isActive ? 'text-brand-yellow' : 'text-white/70'
                 }`}
               >
@@ -136,9 +136,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenMenu }) => {
           }}
           title="Mais opções e modalidades"
           aria-label="Abrir menu completo"
-          className="group relative flex flex-col items-center justify-center py-1 px-2 select-none focus:outline-none transition-transform active:scale-95"
+          className="group relative flex flex-col items-center justify-center py-1 px-2 select-none touch-manipulation focus:outline-none transition-transform duration-[150ms] ease-emil-out active:scale-[0.94]"
         >
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-all">
+          <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-white/10 text-white/80 can-hover:hover:bg-white/20 can-hover:hover:text-white transition-[background-color,color] duration-[150ms]">
             <Menu className="w-4 h-4" />
           </div>
           <span className="text-[9px] font-black tracking-tight mt-0.5 block text-white/70 leading-none">

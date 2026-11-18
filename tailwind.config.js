@@ -37,12 +37,22 @@ export default {
         montserrat: ['Montserrat', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
-        'card': '0 2px 10px rgba(15, 42, 86, 0.05), 0 1px 3px rgba(10, 22, 41, 0.03)',
-        'card-hover': '0 10px 25px rgba(15, 42, 86, 0.10), 0 4px 10px rgba(15, 42, 86, 0.04)',
-        'elevated': '0 16px 36px rgba(9, 24, 52, 0.22), 0 6px 14px rgba(9, 24, 52, 0.12)',
-        'nav': '0 -4px 20px rgba(15, 42, 86, 0.07)',
-      }
+        'card': '0 0 0 1px rgba(15, 42, 86, 0.065), 0 8px 24px -6px rgba(11, 33, 138, 0.055), 0 2px 6px -1px rgba(15, 23, 42, 0.03)',
+        'card-hover': '0 0 0 1px rgba(11, 33, 138, 0.12), 0 14px 32px -8px rgba(15, 42, 86, 0.11), 0 4px 10px -2px rgba(15, 42, 86, 0.04)',
+        'elevated': '0 0 0 1px rgba(15, 42, 86, 0.08), 0 20px 44px -10px rgba(9, 24, 52, 0.22), 0 8px 16px -4px rgba(9, 24, 52, 0.10)',
+        'nav': '0 -1px 0 rgba(255, 255, 255, 0.12), 0 -8px 24px rgba(15, 42, 86, 0.08)',
+      },
+      transitionTimingFunction: {
+        'emil-out': 'cubic-bezier(0.23, 1, 0.32, 1)',
+        'emil-quart': 'cubic-bezier(0.165, 0.84, 0.44, 1)',
+        'emil-in-out': 'cubic-bezier(0.77, 0, 0.175, 1)',
+        'emil-drawer': 'cubic-bezier(0.32, 0.72, 0, 1)',
+      },
     },
   },
-  plugins: [],
+  plugins: [
+    function ({ addVariant }) {
+      addVariant('can-hover', '@media (hover: hover) and (pointer: fine)');
+    },
+  ],
 }

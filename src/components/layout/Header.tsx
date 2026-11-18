@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -100,19 +100,45 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const activeTopTab = getActiveTopTab();
+  const topTabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [navIndicator, setNavIndicator] = useState<{ left: number; width: number; ready: boolean }>({
+    left: 0,
+    width: 0,
+    ready: false,
+  });
+  const [enableNavMotion, setEnableNavMotion] = useState(false);
+
+  useLayoutEffect(() => {
+    const update = () => {
+      const el = topTabRefs.current[activeTopTab];
+      if (!el) return;
+      setNavIndicator({
+        left: el.offsetLeft,
+        width: el.offsetWidth,
+        ready: true,
+      });
+    };
+    update();
+    const raf = requestAnimationFrame(() => setEnableNavMotion(true));
+    window.addEventListener('resize', update);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', update);
+    };
+  }, [activeTopTab, topMenuTabs.length]);
 
   return (
     <>
       <header className="sticky top-0 z-30 all-sports-header text-white shadow-lg border-b border-white/10">
         {/* Linha Superior do Cabeçalho (Menu/Back + Sports Category Pill + Calendar/Search & Notification) */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-3.5 pb-2.5 flex items-center justify-between gap-3">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-[max(env(safe-area-inset-top,0px),14px)] pb-2.5 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             {isSubRoute ? (
               <button
                 type="button"
                 onClick={() => navigate(-1)}
                 aria-label="Voltar"
-                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-colors"
+                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 can-hover:hover:bg-white/20 active:scale-[0.95] border border-white/15 text-white transition-[transform,background-color] duration-[150ms] ease-emil-out"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -124,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
                   onOpenMobileNav?.();
                 }}
                 aria-label="Abrir menu de navegação"
-                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/15 text-white transition-all lg:hidden cursor-pointer touch-manipulation select-none"
+                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 can-hover:hover:bg-white/20 active:scale-[0.95] border border-white/15 text-white transition-[transform,background-color] duration-[150ms] ease-emil-out lg:hidden cursor-pointer touch-manipulation select-none"
               >
                 <Menu className="w-5 h-5 pointer-events-none" />
               </button>
@@ -133,12 +159,12 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="inline-flex items-center gap-2 text-left"
+              className="inline-flex items-center gap-2 text-left transition-transform duration-[150ms] ease-emil-out active:scale-[0.97]"
             >
               <img
                 src="/assets/atletica/face.png"
                 alt=""
-                className="w-7 h-7 rounded-full object-contain bg-white/10 p-0.5"
+                className="w-7 h-7 rounded-full object-contain bg-white/10 p-0.5 shrink-0"
               />
               <span className="text-sm sm:text-base font-display font-black tracking-tight text-white">
                 INTRAMED <span className="text-brand-yellow">IX</span>
@@ -178,7 +204,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => setIsSearchOpen(true)}
               aria-label="Buscar partidas ou abrir calendário"
               title="Buscar partidas e modalidades (Ctrl+K)"
-              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-colors"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 can-hover:hover:bg-white/20 active:scale-[0.95] border border-white/15 text-white transition-[transform,background-color] duration-[150ms] ease-emil-out"
             >
               <Search className="w-4 h-4 text-white" />
             </button>
@@ -188,7 +214,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => navigate('/jogos')}
               aria-label="Calendário de Jogos"
               title="Calendário de Jogos"
-              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-colors"
+              className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 can-hover:hover:bg-white/20 active:scale-[0.95] border border-white/15 text-white transition-[transform,background-color] duration-[150ms] ease-emil-out"
             >
               <Calendar className="w-4 h-4 text-white" />
             </button>
@@ -198,11 +224,11 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => navigate('/notificacoes')}
               aria-label="Notificações"
               title="Central de Alertas"
-              className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-colors"
+              className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 can-hover:hover:bg-white/20 active:scale-[0.95] border border-white/15 text-white transition-[transform,background-color] duration-[150ms] ease-emil-out"
             >
               <Bell className="w-4 h-4 text-white" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-brand-yellow text-[#0B218A] text-[10px] font-extrabold flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-brand-yellow text-[#0B218A] text-[10px] font-extrabold tabular-nums flex items-center justify-center">
                   {unreadCount}
                 </span>
               )}
@@ -212,7 +238,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => navigate('/admin')}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-extrabold text-[#0B218A] bg-brand-yellow hover:bg-brand-yellow-dark transition-colors shadow-sm"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-extrabold text-[#0B218A] bg-brand-yellow can-hover:hover:bg-brand-yellow-dark active:scale-[0.97] transition-[transform,background-color] duration-[150ms] ease-emil-out shadow-sm"
               >
                 <ClipboardList className="w-3.5 h-3.5" />
                 <span>Súmula &amp; Admin</span>
@@ -221,7 +247,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => navigate(currentUser ? '/perfil' : '/login')}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-bold text-white bg-white/10 hover:bg-white/20 border border-white/15 transition-colors"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-bold text-white bg-white/10 can-hover:hover:bg-white/20 active:scale-[0.97] border border-white/15 transition-[transform,background-color] duration-[150ms] ease-emil-out"
               >
                 <span>{currentUser ? currentUser.name.split(' ')[0] : 'Entrar'}</span>
               </button>
@@ -229,27 +255,30 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Menu Bar Integrada na Base do Header Azul com Indicador Amarelo (#FACC15) — Visível apenas no Desktop (lg:block) pois no Mobile usamos o BottomNav */}
+        {/* Menu Bar Integrada na Base do Header Azul com Indicador Amarelo (#FACC15) deslizante — Visível apenas no Desktop (lg:block) */}
         <div className="hidden lg:block max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <nav
             aria-label="Menu principal do topo"
-            className="flex items-center justify-start gap-8 overflow-x-auto no-scrollbar pt-1"
+            className="relative flex items-center justify-start gap-8 overflow-x-auto no-scrollbar pt-1"
           >
             {topMenuTabs.map((tab: { id: string; label: string; path: string }) => {
               const isActive = activeTopTab === tab.id;
               return (
                 <button
                   key={tab.id}
+                  ref={(node) => {
+                    topTabRefs.current[tab.id] = node;
+                  }}
                   type="button"
                   onClick={() => navigate(tab.path)}
-                  className={`relative pb-2.5 pt-1 text-xs sm:text-sm font-display transition-colors whitespace-nowrap ${
+                  className={`relative pb-2.5 pt-1 text-xs sm:text-sm font-display transition-[transform,color] duration-[150ms] ease-emil-out active:scale-[0.97] whitespace-nowrap ${
                     isActive
                       ? 'font-extrabold text-white'
-                      : 'font-medium text-white/70 hover:text-white'
+                      : 'font-medium text-white/70 can-hover:hover:text-white'
                   }`}
                 >
                   <span>{tab.label}</span>
-                  {isActive && (
+                  {isActive && !navIndicator.ready && (
                     <span
                       className="absolute bottom-0 left-0 right-0 h-1 rounded-t-full bg-brand-yellow shadow-[0_0_10px_rgba(250,204,21,0.7)]"
                       aria-hidden="true"
@@ -258,6 +287,20 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               );
             })}
+            {navIndicator.ready && navIndicator.width > 0 && (
+              <span
+                aria-hidden="true"
+                style={{
+                  transform: `translate3d(${navIndicator.left}px, 0, 0)`,
+                  width: `${navIndicator.width}px`,
+                }}
+                className={`pointer-events-none absolute bottom-0 left-0 h-1 rounded-t-full bg-brand-yellow shadow-[0_0_10px_rgba(250,204,21,0.7)] ${
+                  enableNavMotion
+                    ? 'transition-[transform,width] duration-[220ms] ease-emil-in-out'
+                    : ''
+                }`}
+              />
+            )}
           </nav>
         </div>
       </header>

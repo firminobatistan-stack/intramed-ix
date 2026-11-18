@@ -356,9 +356,9 @@ export const PublicLiveScoreboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Menu Bar de 4 Abas na Base do Header Azul (Details | Lineups | Standings | Statistics) */}
+        {/* Menu Bar de 4 Abas na Base do Header Azul (Details | Lineups | Standings | Statistics) com indicador amarelo deslizante */}
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
-          <nav className="grid grid-cols-4 text-center pt-1">
+          <nav className="relative grid grid-cols-4 text-center pt-1">
             {tabs.map((tab) => {
               const active = activeTab === tab.id;
               return (
@@ -366,19 +366,28 @@ export const PublicLiveScoreboardPage: React.FC = () => {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative pb-3 pt-1.5 text-xs sm:text-sm font-display transition-colors ${
+                  className={`relative pb-3 pt-1.5 text-xs sm:text-sm font-display transition-[transform,color] duration-[150ms] ease-emil-out active:scale-[0.97] ${
                     active
                       ? 'font-extrabold text-white'
-                      : 'font-medium text-white/70 hover:text-white'
+                      : 'font-medium text-white/70 can-hover:hover:text-white'
                   }`}
                 >
                   <span>{tab.label}</span>
-                  {active && (
-                    <span className="absolute bottom-0 left-3 right-3 h-1 rounded-t-full bg-brand-yellow shadow-[0_0_10px_rgba(250,204,21,0.75)]" />
-                  )}
                 </button>
               );
             })}
+            <span
+              aria-hidden="true"
+              style={{
+                transform: `translate3d(${Math.max(
+                  0,
+                  tabs.findIndex((t) => t.id === activeTab)
+                ) * 100}%, 0, 0)`,
+              }}
+              className="pointer-events-none absolute bottom-0 left-0 w-1/4 px-3 transition-transform duration-[220ms] ease-emil-in-out"
+            >
+              <span className="block h-1 rounded-t-full bg-brand-yellow shadow-[0_0_10px_rgba(250,204,21,0.75)]" />
+            </span>
           </nav>
         </div>
       </header>
