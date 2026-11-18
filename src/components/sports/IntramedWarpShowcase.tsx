@@ -541,7 +541,7 @@ export const IntramedWarpShowcase: React.FC<IntramedWarpShowcaseProps> = ({
           title: `Delegação Oficial\n${team.name}`,
           value: hasPoints ? String(standingRow.points) : String(Math.max(1, teamAthCount)),
           unit: hasPoints ? 'PTS' : 'ATLETAS',
-          footer: `${team.courseOrPeriod || getTurmaShortLabel(team.id)} • Medicina UEMA`,
+          footer: `${getTurmaShortLabel(team.id)} • Medicina UEMA`,
           imageUrl: team.crestUrl || null,
           ...pal,
         },
