@@ -2787,3 +2787,138 @@ export async function handleNonApprovedPaymentStatusOnServer(params: {
   await MirrorDocumentToFirestoreRest('registrations', params.registrationId, updated);
   return updated;
 }
+
+const SERVER_MODALITY_PASSWORD_PREFIX: Record<string, string> = {
+  futsal: 'futsal',
+  basquete: 'basquete',
+  handebol: 'handebol',
+  volei: 'volei',
+  'volei-de-praia': 'voleidepraia',
+  'tenis-de-mesa': 'tenisdemesa',
+  sinuca: 'sinuca',
+  truco: 'truco',
+};
+
+const SERVER_TEAM_TO_TURMA: Record<string, number> = {
+  sanguinaria: 21,
+  predadora: 22,
+  tormenta: 23,
+  colossal: 24,
+  soberana: 25,
+};
+
+function resolveServerTeamTurma(team: unknown): number | null {
+  if (!team || typeof team !== 'object') return null;
+  const t = team as Record<string, unknown>;
+  const rawName = String(t.teamName || '').trim().toLowerCase();
+  if (
+    !rawName ||
+    rawName.includes('vencedor') ||
+    rawName.includes('vj1') ||
+    rawName.includes('a definir') ||
+    rawName.includes('semifinal') ||
+    rawName.includes('quartas')
+  ) {
+    return null;
+  }
+  const cleanId = String(t.teamId || '').trim().toLowerCase();
+  if (cleanId && SERVER_TEAM_TO_TURMA[cleanId]) {
+    return SERVER_TEAM_TO_TURMA[cleanId];
+  }
+  for (const [id, turma] of Object.entries(SERVER_TEAM_TO_TURMA)) {
+    if (rawName.includes(id) || (id === 'sanguinaria' && rawName.includes('sanguin'))) {
+      return turma;
+    }
+  }
+  return null;
+}
+
+export function computeOfficialMatchMesarioPasswordOnServer(
+  match: Record<string, unknown> | undefined | null
+): string | null {
+  if (!match) return null;
+  const modId = String(match.modalityId || '').trim().toLowerCase();
+  if (!modId || modId === 'natacao') return null;
+  const prefix = SERVER_MODALITY_PASSWORD_PREFIX[modId];
+  if (!prefix) return null;
+
+  const homeTurma = resolveServerTeamTurma(match.homeTeam);
+  const awayTurma = resolveServerTeamTurma(match.awayTeam);
+  if (!homeTurma || !awayTurma || homeTurma === awayTurma) {
+    return null;
+  }
+  const [tMin, tMax] = [homeTurma, awayTurma].sort((a, b) => a - b);
+  const catHint = `${match.categoryId || ''} ${match.categoryName || ''} ${match.id || ''}`.toLowerCase();
+  const genderSuffix = catHint.includes('fem') ? 'f' : catHint.includes('masc') ? 'm' : null;
+  if (!genderSuffix) return null;
+
+  return `${prefix}${tMin}${tMax}${genderSuffix}`;
+}
+
+export async function advanceWinnerOnServerIfFinished(
+  store: CloudCollectionMap,
+  finishedMatch: Record<string, unknown>
+): Promise<void> {
+  if (!finishedMatch || finishedMatch.status !== 'finished') return;
+  const mId = String(finishedMatch.id || '');
+  if (!mId) return;
+
+  const home = (finishedMatch.homeTeam || {}) as Record<string, unknown>;
+  const away = (finishedMatch.awayTeam || {}) as Record<string, unknown>;
+  const homeWin = Boolean(home.isWinner) || Number(home.setsWon ?? home.score ?? 0) > Number(away.setsWon ?? away.score ?? 0);
+  const awayWin = Boolean(away.isWinner) || Number(away.setsWon ?? away.score ?? 0) > Number(home.setsWon ?? home.score ?? 0);
+  if (!homeWin && !awayWin) return;
+
+  const winner = homeWin ? home : away;
+  const winnerTeamId = String(winner.teamId || '');
+  const winnerTeamName = String(winner.teamName || '');
+  if (!winnerTeamId || !winnerTeamName) return;
+
+  const nowIso = new Date().toISOString();
+  let nextMatchId = '';
+  let targetSlot: 'homeTeam' | 'awayTeam' = 'awayTeam';
+
+  if (mId.endsWith('_qf')) {
+    nextMatchId = mId.replace(/_qf$/, '_sf1');
+    targetSlot = 'awayTeam';
+  } else if (mId.endsWith('_sf1')) {
+    nextMatchId = mId.replace(/_sf1$/, '_final');
+    targetSlot = 'homeTeam';
+  } else if (mId.endsWith('_sf2')) {
+    nextMatchId = mId.replace(/_sf2$/, '_final');
+    targetSlot = 'awayTeam';
+  }
+
+  if (!nextMatchId || !store.matches?.[nextMatchId]) return;
+
+  const nextMatch = { ...store.matches[nextMatchId] };
+  const prevSlot = (nextMatch[targetSlot] || {}) as Record<string, unknown>;
+  if (prevSlot.teamId === winnerTeamId && prevSlot.teamName === winnerTeamName) {
+    return;
+  }
+
+  nextMatch[targetSlot] = {
+    teamId: winnerTeamId,
+    teamName: winnerTeamName,
+    crestUrl: winner.crestUrl || prevSlot.crestUrl || '',
+    score: prevSlot.score ?? 0,
+  };
+  nextMatch.revision = Number(nextMatch.revision || 0) + 1;
+  nextMatch.updatedAtIso = nowIso;
+
+  // Atualiza automaticamente a senha dinâmica quando os 2 times da próxima fase ficam definidos
+  const nextPin = computeOfficialMatchMesarioPasswordOnServer(nextMatch);
+  if (nextPin) {
+    nextMatch.tableOfficialPassword = nextPin;
+    if (store.match_secrets) {
+      store.match_secrets[nextMatchId] = {
+        pinHash: hashSecretPin(nextPin),
+        pinDisplay: nextPin,
+        updatedAtIso: nowIso,
+      };
+    }
+  }
+
+  store.matches[nextMatchId] = nextMatch;
+  await MirrorDocumentToFirestoreRest('matches', nextMatchId, nextMatch);
+}

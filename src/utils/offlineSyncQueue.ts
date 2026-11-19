@@ -92,13 +92,48 @@ export function enqueueOfflineMutation(
 }
 
 let isFlushing = false;
+let pendingReflush = false;
+
+function removeFlushedItemsPreservingNewer(
+  flushedSnapshots: Map<string, string>,
+  failedIds: Set<string>,
+  updatedFailedMap: Map<string, QueuedSyncItem>
+): number {
+  const liveQueue = loadQueueFromStorage();
+  const nextQueue: QueuedSyncItem[] = [];
+
+  for (const liveItem of liveQueue) {
+    const key = `${liveItem.collectionName}/${liveItem.docId}`;
+    if (!flushedSnapshots.has(key)) {
+      // Added while flush was in progress — preserve!
+      nextQueue.push(liveItem);
+      continue;
+    }
+    const serializedLive = JSON.stringify(liveItem.data);
+    if (serializedLive !== flushedSnapshots.get(key)) {
+      // Updated while flush was in progress — preserve latest version!
+      nextQueue.push(liveItem);
+      continue;
+    }
+    if (failedIds.has(key) && updatedFailedMap.has(key)) {
+      nextQueue.push(updatedFailedMap.get(key)!);
+    }
+  }
+
+  saveQueueToStorage(nextQueue);
+  return nextQueue.length;
+}
 
 export async function flushOfflineQueue(operatorToken?: string | null): Promise<{
   flushedCount: number;
   remainingCount: number;
   errors: string[];
 }> {
-  if (typeof window === 'undefined' || isFlushing) {
+  if (typeof window === 'undefined') {
+    return { flushedCount: 0, remainingCount: 0, errors: [] };
+  }
+  if (isFlushing) {
+    pendingReflush = true;
     return { flushedCount: 0, remainingCount: getPendingQueueCount(), errors: [] };
   }
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -111,8 +146,13 @@ export async function flushOfflineQueue(operatorToken?: string | null): Promise<
   }
 
   isFlushing = true;
+  pendingReflush = false;
+  const flushedSnapshots = new Map<string, string>(
+    queue.map((item) => [`${item.collectionName}/${item.docId}`, JSON.stringify(item.data)])
+  );
+  const failedIds = new Set<string>();
+  const updatedFailedMap = new Map<string, QueuedSyncItem>();
   const errors: string[] = [];
-  const remainingQueue: QueuedSyncItem[] = [];
   let flushedCount = 0;
 
   try {
@@ -130,6 +170,7 @@ export async function flushOfflineQueue(operatorToken?: string | null): Promise<
     }
 
     // Se houver mais de 1 item, tenta sincronização em lote (Batch)
+    let batchSucceeded = false;
     if (queue.length > 1) {
       const batchPayload = queue.map((item) => ({
         collectionName: item.collectionName,
@@ -145,67 +186,83 @@ export async function flushOfflineQueue(operatorToken?: string | null): Promise<
         });
 
         if (res.ok) {
-          saveQueueToStorage([]);
-          isFlushing = false;
-          return { flushedCount: queue.length, remainingCount: 0, errors: [] };
+          flushedCount = queue.length;
+          batchSucceeded = true;
         }
       } catch (batchErr) {
-        // Fallback para envio individual se batch falhar
         console.warn('[Offline Queue] Batch falhou, tentando envio individual...', batchErr);
       }
     }
 
-    // Envio individual item a item
-    for (const item of queue) {
-      try {
-        const res = await fetch('/api/cloud-sync', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            collectionName: item.collectionName,
-            docId: item.docId,
-            data: item.data,
-          }),
-        });
+    if (!batchSucceeded) {
+      // Envio individual item a item
+      for (const item of queue) {
+        const key = `${item.collectionName}/${item.docId}`;
+        try {
+          const res = await fetch('/api/cloud-sync', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              collectionName: item.collectionName,
+              docId: item.docId,
+              data: item.data,
+            }),
+          });
 
-        if (res.ok) {
-          flushedCount++;
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          const errMsg = typeof errData?.error === 'string' ? errData.error : `HTTP ${res.status}`;
-          // Se for erro definitivo de autorização ou documento inválido após 5 tentativas, descarta
-          if (res.status === 403 || res.status === 400) {
-            item.attempts++;
-            item.lastError = errMsg;
-            if (item.attempts < 4) {
-              remainingQueue.push(item);
-            }
+          if (res.ok) {
+            flushedCount++;
           } else {
-            item.attempts++;
-            item.lastAttemptIso = new Date().toISOString();
-            item.lastError = errMsg;
-            remainingQueue.push(item);
+            const errData = await res.json().catch(() => ({}));
+            const errMsg = typeof errData?.error === 'string' ? errData.error : `HTTP ${res.status}`;
+            if (res.status === 403 || res.status === 400) {
+              item.attempts++;
+              item.lastError = errMsg;
+              if (item.attempts < 4) {
+                failedIds.add(key);
+                updatedFailedMap.set(key, item);
+              }
+            } else {
+              item.attempts++;
+              item.lastAttemptIso = new Date().toISOString();
+              item.lastError = errMsg;
+              failedIds.add(key);
+              updatedFailedMap.set(key, item);
+            }
+            errors.push(`${key}: ${errMsg}`);
           }
-          errors.push(`${item.collectionName}/${item.docId}: ${errMsg}`);
+        } catch {
+          item.attempts++;
+          item.lastAttemptIso = new Date().toISOString();
+          item.lastError = 'Falha de conexão com o servidor';
+          failedIds.add(key);
+          updatedFailedMap.set(key, item);
+          errors.push(`${key}: Sem rede`);
+          break;
         }
-      } catch (networkErr) {
-        item.attempts++;
-        item.lastAttemptIso = new Date().toISOString();
-        item.lastError = 'Falha de conexão com o servidor';
-        remainingQueue.push(item);
-        errors.push(`${item.collectionName}/${item.docId}: Sem rede`);
-        break; // Interrompe para não spammar se estiver sem rede
       }
     }
 
-    saveQueueToStorage(remainingQueue);
+    const remaining = removeFlushedItemsPreservingNewer(
+      flushedSnapshots,
+      failedIds,
+      updatedFailedMap
+    );
+    if (remaining > 0 && errors.length === 0) {
+      pendingReflush = true;
+    }
   } finally {
     isFlushing = false;
+    if (pendingReflush || (errors.length === 0 && getPendingQueueCount() > 0)) {
+      pendingReflush = false;
+      setTimeout(() => {
+        void flushOfflineQueue();
+      }, 25);
+    }
   }
 
   return {
     flushedCount,
-    remainingCount: remainingQueue.length,
+    remainingCount: getPendingQueueCount(),
     errors,
   };
 }

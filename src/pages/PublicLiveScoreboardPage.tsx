@@ -9,12 +9,14 @@ import {
   Clock,
   FileText,
   FlaskConical,
+  Lock,
   Maximize2,
   Minimize2,
   Play,
   RefreshCw,
   ThumbsUp,
   User,
+  X,
 } from 'lucide-react';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { formatSecondsToClock, MODALITY_RULE_ENGINE } from '../data/sportRulesConfig';
@@ -83,6 +85,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
     getModalityStandings,
     canOperateOfficialData,
     canOperateMatch,
+    unlockMatchAsTableOfficial,
     currentUser,
     castMatchFanVote,
   } = useCompetitionStore();
@@ -90,6 +93,11 @@ export const PublicLiveScoreboardPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<MatchInfoTab>('details');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showMesarioModal, setShowMesarioModal] = useState(false);
+  const [mesarioName, setMesarioName] = useState('');
+  const [mesarioPassword, setMesarioPassword] = useState('');
+  const [mesarioError, setMesarioError] = useState<string | null>(null);
+  const [mesarioSubmitting, setMesarioSubmitting] = useState(false);
 
   const nonSwimmingMatches = visibleMatches.filter(
     (m) => m.modalityId !== 'natacao' && m.id !== 'match_natacao_geral_final'
@@ -1299,7 +1307,155 @@ export const PublicLiveScoreboardPage: React.FC = () => {
             })}
           </section>
         )}
+        {resolvedMatch && resolvedMatch.modalityId !== 'natacao' && (
+          <div className="pt-8 pb-6 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                if (canOperateMatch(resolvedMatch.id)) {
+                  navigate(`/sumula/${resolvedMatch.id}`);
+                  return;
+                }
+                setMesarioName(currentUser?.name || '');
+                setMesarioPassword('');
+                setMesarioError(null);
+                setShowMesarioModal(true);
+              }}
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400/75 hover:text-slate-600 transition-colors py-1.5 px-3 rounded-lg"
+            >
+              <Lock className="w-3 h-3 opacity-60" />
+              <span>
+                {canOperateMatch(resolvedMatch.id)
+                  ? 'Abrir Súmula do Jogo'
+                  : 'Ser mesário do jogo'}
+              </span>
+            </button>
+          </div>
+        )}
       </main>
+
+      {showMesarioModal && resolvedMatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white border border-slate-200 shadow-2xl p-5 space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-base font-display font-extrabold text-slate-900">
+                  Acesso do Mesário
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {resolvedMatch.modalityName} • {resolvedMatch.homeTeam.teamName} ×{' '}
+                  {resolvedMatch.awayTeam.teamName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMesarioModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {!currentUser?.id ? (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Para operar a súmula como mesário desta partida, você precisa estar conectado à sua conta no aplicativo.
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMesarioModal(false)}
+                    className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/login')}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-[#0B218A] text-white text-xs font-display font-bold hover:bg-[#08196b]"
+                  >
+                    Entrar na Conta
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setMesarioError(null);
+                  setMesarioSubmitting(true);
+                  const res = await unlockMatchAsTableOfficial(
+                    resolvedMatch.id,
+                    mesarioPassword,
+                    mesarioName
+                  );
+                  setMesarioSubmitting(false);
+                  if (res.ok) {
+                    setShowMesarioModal(false);
+                    navigate(`/sumula/${resolvedMatch.id}`);
+                  } else {
+                    setMesarioError(res.error || 'Senha incorreta.');
+                  }
+                }}
+                className="space-y-3"
+              >
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                    Nome do Mesário
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={mesarioName}
+                    onChange={(e) => setMesarioName(e.target.value)}
+                    placeholder="Seu nome completo"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B218A]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wide mb-1">
+                    Senha da Partida
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={mesarioPassword}
+                    onChange={(e) => setMesarioPassword(e.target.value)}
+                    placeholder="Digite a senha desta partida"
+                    autoComplete="off"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B218A]"
+                  />
+                </div>
+
+                {mesarioError && (
+                  <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+                    {mesarioError}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowMesarioModal(false)}
+                    className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={mesarioSubmitting}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-[#0B218A] text-white text-xs font-display font-bold hover:bg-[#08196b] disabled:opacity-60"
+                  >
+                    {mesarioSubmitting ? 'Verificando...' : 'Liberar Súmula'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

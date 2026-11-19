@@ -59,7 +59,7 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
 
   const targetMatch = matchIdFromPath ? getMatchById(matchIdFromPath) : undefined;
 
-  const [officialName, setOfficialName] = useState('');
+  const [officialName, setOfficialName] = useState(currentUser?.name || '');
   const [adminEmail, setAdminEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -78,10 +78,10 @@ export const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({
     setError(null);
 
     if (isMatchSheetRoute && matchIdFromPath) {
-      const result = unlockMatchAsTableOfficial(
+      const result = await unlockMatchAsTableOfficial(
         matchIdFromPath,
         password,
-        officialName
+        officialName || currentUser?.name
       );
       if (!result.ok) {
         setError(result.error || 'Senha incorreta para esta partida.');

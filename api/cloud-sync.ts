@@ -1,7 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
+  advanceWinnerOnServerIfFinished,
   appendServerSyncLog,
   checkFirestoreHealth,
+  computeOfficialMatchMesarioPasswordOnServer,
   FirestoreHealthReport,
   CloudCollectionMap,
   computeAuthorizedServerPrice,
@@ -786,37 +788,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // 1b. Senha individual do Mesário da Partida
+      // 1b. Senha individual do Mesário da Partida (dinâmica: modalidade + turmaMenor + turmaMaior + m|f)
       if (matchId) {
         const secretEntry = store.match_secrets[matchId];
         const matchDoc = store.matches[matchId];
-        const fallbackPin = String(
-          matchDoc?.tableOfficialPassword || body.expectedClientPin || ''
-        ).trim();
+        const dynamicPin = computeOfficialMatchMesarioPasswordOnServer(matchDoc);
+        const explicitPin = String(matchDoc?.tableOfficialPassword || '').trim();
 
         const inputHash = hashSecretPin(passwordInput);
-        const matchesStoredSecret =
-          secretEntry && secretEntry.pinHash === inputHash;
-        const matchesFallbackPin =
-          fallbackPin &&
-          fallbackPin.toLowerCase() === passwordInput.toLowerCase();
+        const inputLower = passwordInput.toLowerCase();
+        const matchesDynamicPin = Boolean(dynamicPin && dynamicPin.toLowerCase() === inputLower);
+        const matchesStoredSecret = Boolean(secretEntry && secretEntry.pinHash === inputHash);
+        const matchesExplicitPin = Boolean(explicitPin && explicitPin.toLowerCase() === inputLower);
 
-        if (matchesStoredSecret || matchesFallbackPin) {
-          // Se estava apenas no fallback, promove para hash secreto
-          if (!secretEntry && fallbackPin) {
+        if (matchesDynamicPin || matchesStoredSecret || matchesExplicitPin) {
+          const pinToPersist = dynamicPin || explicitPin;
+          if (!secretEntry && pinToPersist) {
             store.match_secrets[matchId] = {
-              pinHash: hashSecretPin(fallbackPin),
-              pinDisplay: fallbackPin,
+              pinHash: hashSecretPin(pinToPersist),
+              pinDisplay: pinToPersist,
               updatedAtIso: new Date().toISOString(),
             };
           }
 
           if (officialName && store.match_sheets[matchId]) {
-            store.match_sheets[matchId] = {
+            const updatedSheetForOfficial = {
               ...store.match_sheets[matchId],
               tableOfficialName: officialName,
               lastUpdatedIso: new Date().toISOString(),
+              revision: Number(store.match_sheets[matchId]?.revision || 0) + 1,
             };
+            store.match_sheets[matchId] = updatedSheetForOfficial;
+            await MirrorDocumentToFirestoreRest('match_sheets', matchId, updatedSheetForOfficial);
           }
 
           saveCloudStore(store);
@@ -835,9 +838,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
 
+        const isPendingTeams = !dynamicPin && matchDoc?.modalityId !== 'natacao' && !explicitPin;
         return res.status(401).json({
           ok: false,
-          error: 'Senha da partida incorreta. Confira o código com a comissão organizadora.',
+          error: isPendingTeams
+            ? 'Esta partida ainda aguarda a definição das duas equipes vencedoras da fase anterior para liberar a senha.'
+            : 'Senha da partida incorreta. Confira o código com a comissão organizadora.',
         });
       }
 
@@ -3654,6 +3660,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (check.allowed) {
             store[targetCol][id] = check.sanitizedData;
             await MirrorDocumentToFirestoreRest(col, id, check.sanitizedData);
+            if (col === 'matches' && check.sanitizedData.status === 'finished') {
+              await advanceWinnerOnServerIfFinished(store, check.sanitizedData);
+            }
             if (col === 'matches' && typeof payload.tableOfficialPassword === 'string' && payload.tableOfficialPassword.trim()) {
               const cleanPin = payload.tableOfficialPassword.trim().toUpperCase();
               store.match_secrets[id] = {
@@ -3710,6 +3719,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       await MirrorDocumentToFirestoreRest(colStr, idStr, check.sanitizedData);
+      if (colStr === 'matches' && check.sanitizedData.status === 'finished') {
+        await advanceWinnerOnServerIfFinished(store, check.sanitizedData);
+      }
       await deduplicateAndLinkCloudEntities(store);
       saveCloudStore(store);
 

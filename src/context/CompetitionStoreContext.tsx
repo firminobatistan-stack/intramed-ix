@@ -74,6 +74,7 @@ import {
   CURRENT_APP_CACHE_VERSION,
   isPurgedTestEntity,
 } from '../utils/cacheManager';
+import { computeOfficialMatchMesarioPassword } from '../utils/matchOfficialPassword';
 
 interface NewEventPayload {
   type: MatchEvent['type'];
@@ -263,7 +264,7 @@ interface CompetitionStoreContextValue {
     matchId: string,
     passwordInput: string,
     officialName?: string
-  ) => { ok: boolean; error?: string };
+  ) => Promise<{ ok: boolean; error?: string }>;
   updateMatchTablePassword: (matchId: string, newPassword: string) => boolean;
   updateAthleteAvatar: (athleteId: string, avatarDataUrl: string) => boolean;
   updateTeamCrest: (teamId: string, crestDataUrl: string) => void;
@@ -4215,11 +4216,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   );
 
   const unlockMatchAsTableOfficial = useCallback(
-    (
+    async (
       matchId: string,
       passwordInput: string,
       officialName?: string
-    ): { ok: boolean; error?: string } => {
+    ): Promise<{ ok: boolean; error?: string }> => {
       const cleanPass = passwordInput.trim();
       if (!cleanPass) {
         return {
@@ -4232,34 +4233,27 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         state.officialMatches.find((m) => m.id === matchId) ||
         state.testMatches.find((m) => m.id === matchId);
 
-      // Solicita token assinado no servidor em background para autorizar escritas em /api/cloud-sync
-      if (typeof window !== 'undefined') {
-        fetch('/api/cloud-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'verify_operator_pin',
-            matchId,
-            password: cleanPass,
-            officialName: officialName?.trim() || undefined,
-            expectedClientPin: match?.tableOfficialPassword || undefined,
-          }),
-        })
-          .then((r) => r.json())
-          .then((resData) => {
-            if (resData?.ok && resData?.token) {
-              setStoredOperatorToken(resData.token);
-              void flushOfflineQueue(resData.token).then((res) => {
-                setState((prev) => ({ ...prev, pendingSyncCount: res.remainingCount }));
-              });
-            }
-          })
-          .catch(() => {});
-      }
-
       // 1. Senha mestra da Comissão desbloqueia o modo Admin completo
       if (cleanPass.toLowerCase() === 'bicoduro') {
         if (typeof window !== 'undefined') {
+          try {
+            const res = await fetch('/api/cloud-sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'verify_operator_pin',
+                matchId,
+                password: cleanPass,
+                officialName: officialName?.trim() || undefined,
+              }),
+            });
+            const resData = await res.json().catch(() => null);
+            if (resData?.ok && resData?.token) {
+              setStoredOperatorToken(resData.token);
+            }
+          } catch {
+            // Fallback offline
+          }
           sessionStorage.setItem('intramed_admin_session', 'true');
         }
         setCurrentUser({
@@ -4278,26 +4272,79 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         return { ok: true };
       }
 
-      // 2. Verifica a senha exclusiva do mesário cadastrada para esta partida
+      // Para acesso como mesário por senha da partida, exige estar logado no aplicativo
+      if (!state.currentUser?.id) {
+        return {
+          ok: false,
+          error: 'Faça login na sua conta para acessar a súmula como mesário.',
+        };
+      }
+
       if (!match) {
         return { ok: false, error: 'Partida não localizada.' };
       }
 
-      const expectedPin = (match.tableOfficialPassword || '').trim();
-      if (!expectedPin) {
+      const cleanOfficial = (officialName || state.currentUser.name || '').trim();
+      if (!cleanOfficial) {
         return {
           ok: false,
-          error:
-            'A senha de mesário desta partida ainda não foi definida pela comissão. Use a senha geral da organização.',
+          error: 'Informe o nome completo do mesário para registrar na súmula.',
         };
       }
 
-      if (cleanPass.toLowerCase() !== expectedPin.toLowerCase()) {
-        return {
-          ok: false,
-          error:
-            'Senha da partida incorreta. Confira o código com a comissão organizadora.',
-        };
+      // 2. Valida no servidor e obtém o token assinado antes de liberar a súmula
+      let serverValidated = false;
+      if (typeof window !== 'undefined' && navigator.onLine) {
+        try {
+          const res = await fetch('/api/cloud-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'verify_operator_pin',
+              matchId,
+              password: cleanPass,
+              officialName: cleanOfficial,
+            }),
+          });
+          const resData = await res.json().catch(() => null);
+          if (res.ok && resData?.ok && resData?.token) {
+            setStoredOperatorToken(resData.token);
+            serverValidated = true;
+            void flushOfflineQueue(resData.token).then((flushRes) => {
+              setState((prev) => ({ ...prev, pendingSyncCount: flushRes.remainingCount }));
+            });
+          } else if (res.status === 401 || res.status === 400 || res.status === 403) {
+            return {
+              ok: false,
+              error:
+                resData?.error ||
+                'Senha da partida incorreta. Confira o código com a comissão organizadora.',
+            };
+          }
+        } catch {
+          // Offline fallback handled below
+        }
+      }
+
+      if (!serverValidated) {
+        const dynamicPin = computeOfficialMatchMesarioPassword(match);
+        const explicitPin = (match.tableOfficialPassword || '').trim();
+        const validPin = dynamicPin || explicitPin;
+        if (!validPin) {
+          return {
+            ok: false,
+            error:
+              match.modalityId === 'natacao'
+                ? 'Provas de natação são operadas exclusivamente pela comissão organizadora.'
+                : 'Esta partida ainda aguarda a definição das duas equipes vencedoras da fase anterior.',
+          };
+        }
+        if (cleanPass.toLowerCase() !== validPin.toLowerCase()) {
+          return {
+            ok: false,
+            error: 'Senha da partida incorreta. Confira o código com a comissão organizadora.',
+          };
+        }
       }
 
       setUnlockedMatchIds((prev) => {
@@ -4316,8 +4363,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         return next;
       });
 
-      if (officialName && officialName.trim()) {
-        const cleanOfficial = officialName.trim();
+      if (cleanOfficial) {
         setState((prev) => {
           const isTest = matchId.startsWith('test-');
           const sheetsMap = isTest
@@ -4344,7 +4390,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       return { ok: true };
     },
-    [state.officialMatches, state.testMatches, setCurrentUser, enqueueCloudSync]
+    [state.officialMatches, state.testMatches, state.currentUser, setCurrentUser, enqueueCloudSync]
   );
 
   const updateMatchTablePassword = useCallback(
