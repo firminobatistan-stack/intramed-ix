@@ -925,6 +925,67 @@ export function protectMasterAccount(targetEmail: string, actionDesc: string): v
   }
 }
 
+export function isGenericAthleteName(name: unknown): boolean {
+  if (typeof name !== 'string') return true;
+  const clean = name.trim();
+  if (!clean) return true;
+  return /^(atleta(\s+intramed)?|participante(\s+intramed)?|usu[aá]rio(\s+intramed)?)$/i.test(
+    clean
+  );
+}
+
+export function inferCategoryFromAthleteName(
+  name: unknown,
+  currentCategory?: unknown
+): 'Masculino' | 'Feminino' {
+  const cur = String(currentCategory || '').trim().toLowerCase();
+  if (cur === 'feminino' || cur === 'fem' || cur === 'female' || cur === 'f') {
+    return 'Feminino';
+  }
+  if (cur === 'masculino' || cur === 'masc' || cur === 'male' || cur === 'm') {
+    return 'Masculino';
+  }
+  const first = String(name || '')
+    .trim()
+    .split(/\s+/)[0]
+    ?.toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') || '';
+
+  const knownFemaleNames = new Set([
+    'ana', 'beatriz', 'thayssa', 'luana', 'dalyla', 'noemi', 'lara', 'larinha',
+    'rafaela', 'caroline', 'maria', 'iza', 'gabriela', 'gabi', 'julia', 'leticia',
+    'camila', 'amanda', 'bruna', 'fernanda', 'mariana', 'isabela', 'isabella',
+    'natalia', 'bianca', 'alice', 'laura', 'valentina', 'helena', 'manuela',
+    'sofia', 'sophia', 'giovanna', 'vitoria', 'clara', 'cecilia', 'rebeca',
+    'rayssa', 'raissa', 'yasmin', 'iasmin', 'thais', 'tais', ' Lorena', 'lorena',
+    'debora', 'eduarda', 'duda', 'emilly', 'emily', 'evelyn', 'flavia', 'geovana',
+    'ingrid', 'jessica', 'joana', 'jordana', 'juliana', 'kamila', 'karina',
+    'karoline', 'kelly', 'larissa', 'livia', 'luiza', 'luisa', 'maisa', 'marcela',
+    'mayara', 'maiara', 'milena', 'mirella', 'monique', 'nathalia', 'nicole',
+    'paloma', 'paula', 'priscila', 'raquel', 'renata', 'roberta', 'sabrina',
+    'samara', 'sara', 'sarah', 'silvia', 'stella', 'stephanie', 'talita', 'tatiana',
+    'vanessa', 'viviane', 'vivian',
+  ]);
+  const knownMaleNames = new Set([
+    'luca', 'lucas', 'nikolas', 'nicolas', 'messias', 'elias', 'matias', 'tobias',
+    'jonas', 'josias', 'isaias', 'jeremias', 'zacarias', 'davi', 'david', 'uelison',
+    'alex', 'paulo', 'nalbert', 'alcides', 'pedro', 'firmino', 'samu', 'samuel',
+    'gabilu', 'nenel', 'rolwylson', 'joao', 'gabriel', 'matheus', 'mateus',
+    'gustavo', 'guilherme', 'rafael', 'felipe', 'bruno', 'rodrigo', 'daniel',
+    'thiago', 'tiago', 'leonardo', 'eduardo', 'henrique', 'vitor', 'victor',
+    'caio', 'igor', 'marcos', 'marcelo', 'andre', 'carlos', 'diego', 'diogo',
+    'fabio', 'fernando', 'flavio', 'leandro', 'luiz', 'luis', 'miguel', 'arthur',
+    'artur', 'bernardo', 'heitor', 'enzo', 'murilo', 'otavio', 'renan', 'ricardo',
+    'vinicius', 'wellington', 'wesley', 'yuri',
+  ]);
+
+  if (knownFemaleNames.has(first)) return 'Feminino';
+  if (knownMaleNames.has(first)) return 'Masculino';
+  if (first.endsWith('a') && !knownMaleNames.has(first)) return 'Feminino';
+  return 'Masculino';
+}
+
 export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap): Promise<void> {
   const nowIso = new Date().toISOString();
   if (!store.registrations) store.registrations = {};
@@ -934,7 +995,7 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
 
   const mutationPromises: Array<Promise<unknown>> = [];
 
-  // 0. Reconstrói campos ausentes de registrations (ex: quando o webhook do Mercado Pago confirmou pagamento antes do doc completo da inscrição chegar) a partir do athlete/profile vinculado
+  // 0. Reconstrói campos ausentes de registrations (ex: quando o webhook do Mercado Pago confirmou pagamento antes do doc completo da inscrição chegar) a partir do athlete/profile/user vinculado
   for (const [regId, reg] of Object.entries(store.registrations)) {
     if (!reg || isPurgedTestRecord(reg)) continue;
     const linkedAthId = String(reg.linkedAthleteId || `ath-${regId}`);
@@ -944,7 +1005,60 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         (a) => a && (a.id === linkedAthId || a.registrationId === regId)
       );
 
+    const regEmail = String(reg.athleteEmail || linkedAth?.email || '').trim().toLowerCase();
+    const linkedUser = Object.values(store.users).find(
+      (u) =>
+        u &&
+        ((reg.userId && u.id === reg.userId) ||
+          (u.registrationId && u.registrationId === regId) ||
+          (u.linkedAthleteId && u.linkedAthleteId === linkedAthId) ||
+          (regEmail && String(u.email || '').trim().toLowerCase() === regEmail))
+    );
+    const linkedProf = Object.values(store.profiles).find(
+      (p) =>
+        p &&
+        ((reg.userId && (p.id === reg.userId || p.userId === reg.userId)) ||
+          (linkedUser?.id && (p.id === linkedUser.id || p.userId === linkedUser.id)) ||
+          (p.linkedAthleteId && p.linkedAthleteId === linkedAthId) ||
+          (regEmail && String(p.email || '').trim().toLowerCase() === regEmail))
+    );
+
     let regRepaired = false;
+
+    // Auto-repara inscrições que já possuem pagamento aprovado (paidAtIso + paidAmount > 0), mas tiveram paymentStatus sobrescrito para 'pendente' (ex: Dalyla)
+    const lastGw = String(reg.mpLastGatewayStatus || '').toLowerCase();
+    const wasRefundedOrRejected =
+      lastGw === 'refunded' ||
+      lastGw === 'charged_back' ||
+      lastGw === 'cancelled' ||
+      lastGw === 'rejected';
+    if (
+      reg.paymentStatus !== 'pago' &&
+      reg.paymentStatus !== 'cancelado' &&
+      !wasRefundedOrRejected &&
+      reg.paidAtIso &&
+      Number(reg.paidAmount) > 0
+    ) {
+      reg.paymentStatus = 'pago';
+      if (!reg.qrValidationToken) {
+        reg.qrValidationToken = `INTRAMED-IX-${regId.toUpperCase()}-VERIFIED`;
+      }
+      regRepaired = true;
+    }
+
+    // Auto-repara nome "Atleta IntraMed" ou vazio buscando o nome real no profile/user/athlete vinculado
+    const realNameCandidate = [
+      !isGenericAthleteName(reg.athleteName) ? String(reg.athleteName).trim() : '',
+      !isGenericAthleteName(linkedAth?.name) ? String(linkedAth?.name).trim() : '',
+      !isGenericAthleteName(linkedProf?.displayName) ? String(linkedProf?.displayName).trim() : '',
+      !isGenericAthleteName(linkedUser?.name) ? String(linkedUser?.name).trim() : '',
+    ].find(Boolean);
+
+    if (realNameCandidate && isGenericAthleteName(reg.athleteName)) {
+      reg.athleteName = realNameCandidate;
+      regRepaired = true;
+    }
+
     if (linkedAth) {
       if (!reg.athleteName && linkedAth.name) {
         reg.athleteName = linkedAth.name;
@@ -1028,8 +1142,11 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
       reg.modalityName = 'Passaporte Geral (Todas as 16 Modalidades)';
       regRepaired = true;
     }
-    if (!reg.categoryName) {
-      reg.categoryName = 'Geral';
+    if (!reg.categoryName || reg.categoryName === 'Geral') {
+      reg.categoryName = inferCategoryFromAthleteName(
+        reg.athleteName,
+        linkedAth?.categoryName !== 'Geral' ? linkedAth?.categoryName || linkedAth?.gender : undefined
+      );
       regRepaired = true;
     }
     if (!reg.memberStatus) {
@@ -1264,7 +1381,12 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         primaryAth.status = expectedStatus;
         athChanged = true;
       }
-      if (matchingReg.athleteName && String(matchingReg.athleteName).length > String(primaryAth.name || '').length) {
+      if (
+        matchingReg.athleteName &&
+        !isGenericAthleteName(matchingReg.athleteName) &&
+        (isGenericAthleteName(primaryAth.name) ||
+          String(matchingReg.athleteName).length > String(primaryAth.name || '').length)
+      ) {
         primaryAth.name = matchingReg.athleteName;
         athChanged = true;
       }
@@ -2306,6 +2428,43 @@ export async function markRegistrationPaidOnServer(params: {
       ? existing.qrValidationToken
       : `INTRAMED-IX-${params.registrationId.toUpperCase()}-VERIFIED`;
 
+  const candidateEmail = String(existing.athleteEmail || fallbackAth?.email || '')
+    .trim()
+    .toLowerCase();
+  const fallbackUser = Object.values(store.users || {}).find(
+    (u) =>
+      u &&
+      ((existing.userId && u.id === existing.userId) ||
+        u.registrationId === params.registrationId ||
+        u.linkedAthleteId === linkedAthIdInitial ||
+        (candidateEmail && String(u.email || '').trim().toLowerCase() === candidateEmail))
+  );
+  const fallbackProf = Object.values(store.profiles || {}).find(
+    (p) =>
+      p &&
+      ((existing.userId && (p.id === existing.userId || p.userId === existing.userId)) ||
+        (fallbackUser?.id && (p.id === fallbackUser.id || p.userId === fallbackUser.id)) ||
+        p.linkedAthleteId === linkedAthIdInitial ||
+        (candidateEmail && String(p.email || '').trim().toLowerCase() === candidateEmail))
+  );
+
+  const resolvedAthleteName =
+    [
+      !isGenericAthleteName(existing.athleteName) ? String(existing.athleteName).trim() : '',
+      !isGenericAthleteName(fallbackAth?.name) ? String(fallbackAth?.name).trim() : '',
+      !isGenericAthleteName(fallbackProf?.displayName) ? String(fallbackProf?.displayName).trim() : '',
+      !isGenericAthleteName(fallbackUser?.name) ? String(fallbackUser?.name).trim() : '',
+    ].find(Boolean) || 'Atleta IntraMed';
+
+  const resolvedCategoryName = inferCategoryFromAthleteName(
+    resolvedAthleteName,
+    existing.categoryName !== 'Geral'
+      ? existing.categoryName
+      : fallbackAth?.categoryName !== 'Geral'
+      ? fallbackAth?.categoryName || fallbackAth?.gender
+      : undefined
+  );
+
   const updated: Record<string, unknown> = {
     ...existing,
     id: params.registrationId,
@@ -2313,9 +2472,9 @@ export async function markRegistrationPaidOnServer(params: {
     lotId: existing.lotId || 'lote-1-cangaceira',
     modalityId: existing.modalityId || 'todas',
     modalityName: existing.modalityName || 'Passaporte Geral (Todas as 16 Modalidades)',
-    categoryName: existing.categoryName || 'Geral',
-    athleteName: existing.athleteName || fallbackAth?.name || 'Atleta IntraMed',
-    athleteEmail: existing.athleteEmail || fallbackAth?.email || '',
+    categoryName: resolvedCategoryName,
+    athleteName: resolvedAthleteName,
+    athleteEmail: candidateEmail || String(fallbackUser?.email || ''),
     athletePhone: existing.athletePhone || '',
     athleteDocument: existing.athleteDocument || '',
     memberStatus: existing.memberStatus || 'nao_solicitado',
@@ -2356,13 +2515,13 @@ export async function markRegistrationPaidOnServer(params: {
   const athleteRecord: Record<string, unknown> = {
     ...(store.athletes[linkedAthId] || {}),
     id: linkedAthId,
-    name: String(existing.athleteName || 'Atleta IntraMed'),
-    email: String(existing.athleteEmail || ''),
-    teamId: String(existing.teamId || ''),
-    turma: String(existing.turma || ''),
-    turmaLabel: String(existing.turmaLabel || ''),
-    categoryName: String(existing.categoryName || 'Geral'),
-    gender: String(existing.categoryName || 'Geral'),
+    name: resolvedAthleteName,
+    email: String(updated.athleteEmail || ''),
+    teamId: String(existing.teamId || fallbackProf?.teamId || ''),
+    turma: String(existing.turma || fallbackProf?.turma || ''),
+    turmaLabel: String(existing.turmaLabel || fallbackProf?.turmaLabel || ''),
+    categoryName: resolvedCategoryName,
+    gender: resolvedCategoryName,
     modalityIds:
       Array.isArray(existing.selectedModalities) && existing.selectedModalities.length > 0
         ? existing.selectedModalities

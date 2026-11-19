@@ -318,6 +318,15 @@ function canClientWriteDocument(
     }
 
     // Atualização de inscrição já existente:
+    const isGenericIncomingName =
+      typeof incoming.athleteName !== 'string' ||
+      !incoming.athleteName.trim() ||
+      /^atleta(\s+intramed)?$/i.test(incoming.athleteName.trim());
+    const safeAthleteName =
+      !isGenericIncomingName
+        ? String(incoming.athleteName).trim()
+        : existing.athleteName || incoming.athleteName;
+
     if (isAdmin) {
       const nextMemberStatus = String(incoming.memberStatus || existing.memberStatus || 'nao_solicitado');
       const isGuest = Boolean(incoming.isGuestAthlete ?? existing.isGuestAthlete);
@@ -328,12 +337,23 @@ function canClientWriteDocument(
         isGuest
       );
 
+      // Nunca permite que um sync de navegador Admin desatualizado rebaixe uma inscrição já paga ('pago' ou com paidAtIso + paidAmount > 0) de volta para 'pendente'
+      const wasAlreadyPaid =
+        existing.paymentStatus === 'pago' ||
+        (Boolean(existing.paidAtIso) && Number(existing.paidAmount) > 0);
+      const safeAdminPaymentStatus =
+        wasAlreadyPaid && incoming.paymentStatus === 'pendente'
+          ? 'pago'
+          : incoming.paymentStatus || existing.paymentStatus || 'pendente';
+
       return {
         allowed: true,
         sanitizedData: {
           ...existing,
           ...incoming,
           id: docId,
+          athleteName: safeAthleteName,
+          paymentStatus: safeAdminPaymentStatus,
           isGuestAthlete: isGuest,
           authorizedPrice: serverPrice,
           revision: Math.max(prevRevision + 1, incomingRevision),
@@ -356,7 +376,11 @@ function canClientWriteDocument(
       allowed: true,
       sanitizedData: {
         ...existing,
-        athleteName: incoming.athleteName ?? existing.athleteName,
+        athleteName: safeAthleteName,
+        ...(existing.categoryName === 'Geral' &&
+        (incoming.categoryName === 'Masculino' || incoming.categoryName === 'Feminino')
+          ? { categoryName: incoming.categoryName }
+          : {}),
         athleteEmail: claimedEmail,
         ...(wasUnclaimedPrepaid && incoming.athletePhone ? { athletePhone: incoming.athletePhone } : {}),
         ...(wasUnclaimedPrepaid && incoming.athleteDocument ? { athleteDocument: incoming.athleteDocument } : {}),
@@ -401,9 +425,25 @@ function canClientWriteDocument(
           )
         : undefined);
 
+    const linkedRegPaid =
+      linkedReg &&
+      (linkedReg.paymentStatus === 'pago' ||
+        (Boolean(linkedReg.paidAtIso) && Number(linkedReg.paidAmount) > 0));
     const realPaymentStatus = linkedReg
-      ? linkedReg.paymentStatus
+      ? linkedRegPaid
+        ? 'pago'
+        : linkedReg.paymentStatus
       : existing?.paymentStatus ?? (isAdmin ? incoming.paymentStatus : 'pendente');
+
+    const isGenericIncomingAthName =
+      typeof incoming.name !== 'string' ||
+      !incoming.name.trim() ||
+      /^atleta(\s+intramed)?$/i.test(incoming.name.trim());
+    const safeAthName = !isGenericIncomingAthName
+      ? String(incoming.name).trim()
+      : existing?.name && !/^atleta(\s+intramed)?$/i.test(String(existing.name).trim())
+      ? existing.name
+      : linkedReg?.athleteName || incoming.name;
 
     return {
       allowed: true,
@@ -411,6 +451,7 @@ function canClientWriteDocument(
         ...(existing || {}),
         ...incoming,
         id: docId,
+        name: safeAthName,
         paymentStatus: realPaymentStatus,
         memberStatus: linkedReg?.memberStatus ?? existing?.memberStatus ?? incoming.memberStatus,
         status: realPaymentStatus === 'pago' ? 'confirmado' : 'pendente',
@@ -532,6 +573,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         saveCloudStore(store);
         void MirrorDocumentToFirestoreRest('match_sheets', sKey, healedSheet);
       }
+    }
+
+    const needsEntityHeal =
+      Boolean(req.query.heal) ||
+      Object.values(store.registrations || {}).some(
+        (r) =>
+          r &&
+          (/^atleta(\s+intramed)?$/i.test(String(r.athleteName || '').trim()) ||
+            r.categoryName === 'Geral' ||
+            (r.paymentStatus !== 'pago' && r.paymentStatus !== 'cancelado' && Boolean(r.paidAtIso) && Number(r.paidAmount) > 0))
+      );
+    if (needsEntityHeal) {
+      await deduplicateAndLinkCloudEntities(store);
+      saveCloudStore(store);
     }
 
     if (isDeltaPoll) {
