@@ -24,6 +24,10 @@ import {
 } from 'lucide-react';
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
 import {
+  isRegistrationHardClosed,
+  useRegistrationCountdown,
+} from '../utils/registrationDeadline';
+import {
   useCompetitionStore,
   setStoredOperatorToken,
 } from '../context/CompetitionStoreContext';
@@ -99,6 +103,7 @@ export const RegistrationPage: React.FC = () => {
     launchConfig,
   } = useCompetitionStore();
   const isAdmin = canOperateOfficialData();
+  const regCountdown = useRegistrationCountdown();
   const [isGoogleAuthLoading, setIsGoogleAuthLoading] = useState(false);
 
   const handleQuickGoogleLogin = async () => {
@@ -325,6 +330,13 @@ export const RegistrationPage: React.FC = () => {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isRegistrationHardClosed() && !isAdmin) {
+      alert(
+        'O prazo para novas inscrições de atletas encerrou às 18:00. Acesse "Minhas Inscrições" para concluir o pagamento se você já se inscreveu.'
+      );
+      setActiveTab('minhas_inscricoes');
+      return;
+    }
     const finalName = athleteName.trim() || currentUser?.name || '';
     const finalEmail = athleteEmail.trim() || currentUser?.email || '';
     const finalDoc = athleteDocument.trim();
@@ -966,16 +978,47 @@ export const RegistrationPage: React.FC = () => {
                 </div>
               </div>
             </div>
+          ) : regCountdown.isHardClosed && !isAdmin ? (
+            <div className="bg-white rounded-3xl border border-amber-200 p-6 sm:p-8 shadow-card max-w-xl mx-auto text-center space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+                <Clock className="w-6 h-6" />
+              </div>
+              <h2 className="text-xl font-display font-extrabold text-brand-text-primary">
+                Inscrições de Atletas Encerradas (18:00)
+              </h2>
+              <p className="text-sm text-brand-text-secondary leading-relaxed">
+                O prazo para novas inscrições de atletas encerrou às 18:00. Se você já realizou sua inscrição, acesse a aba <strong>Minhas Inscrições</strong> para concluir seu pagamento via Pix ou Cartão.
+              </p>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => setActiveTab('minhas_inscricoes')}
+                className="justify-center mx-auto"
+              >
+                Ir para Minhas Inscrições e Pagamento
+              </Button>
+            </div>
           ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             <form
               onSubmit={handleRegisterSubmit}
               className="lg:col-span-8 bg-white rounded-3xl border border-brand-surface-border p-6 shadow-card space-y-6"
             >
-              <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-lg font-display font-extrabold text-brand-text-primary">
                   1. Sua Turma
                 </h2>
+                {!regCountdown.isDisplayClosed ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950 text-amber-300 text-[11px] font-display font-extrabold">
+                    <Clock className="w-3.5 h-3.5 text-brand-yellow animate-pulse" />
+                    <span>Encerra às 18:00 ({regCountdown.formatted})</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-[11px] font-display font-bold">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Encerrando às 18:00</span>
+                  </span>
+                )}
               </div>
 
               {/* Seletor das 5 Turmas Oficiais (Limpo, sem cores ou números repetidos) */}

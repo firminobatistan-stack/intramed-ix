@@ -204,6 +204,15 @@ function canClientWriteDocument(
   // 3. Inscrições: criação pública ou edição de perfil social; campos financeiros protegidos!
   if (collectionName === 'registrations') {
     if (!existing) {
+      const HARD_REGISTRATION_CUTOFF_MS = new Date('2026-11-19T18:10:00-03:00').getTime();
+      if (!isAdmin && Date.now() >= HARD_REGISTRATION_CUTOFF_MS) {
+        return {
+          allowed: false,
+          sanitizedData: {},
+          reason:
+            'O prazo para novas inscrições de atletas encerrou às 18:00. Quem já se inscreveu pode concluir o pagamento em Minhas Inscrições.',
+        };
+      }
       // Validação de Atleta Convidado (R$ 65,00): restrito à Turma 21, máx 1 Masculino e 1 Feminino
       const isGuestAthlete = Boolean(incoming.isGuestAthlete);
       if (isGuestAthlete) {

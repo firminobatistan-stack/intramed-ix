@@ -14,11 +14,13 @@ import {
   CreditCard,
   ArrowRight,
   CheckCircle2,
+  Clock,
   GitBranch,
 } from 'lucide-react';
 import { OFFICIAL_MODALITIES } from '../data/officialData';
 import { useCompetitionStore } from '../context/CompetitionStoreContext';
 import { useRegistrationStore } from '../context/RegistrationStoreContext';
+import { useRegistrationCountdown } from '../utils/registrationDeadline';
 import { SportIcon } from '../components/sports/SportIcon';
 import { MatchCard } from '../components/sports/MatchCard';
 import { StandingsTable } from '../components/sports/StandingsTable';
@@ -58,6 +60,7 @@ export const HomePage: React.FC = () => {
     activeLiveMatches,
   } = useCompetitionStore();
   const { hasCompletedRegistration, myRegistrations } = useRegistrationStore();
+  const regCountdown = useRegistrationCountdown();
   const isAdmin = canOperateOfficialData();
   const [selectedSportFilter, setSelectedSportFilter] = useState<string>('todas');
   const [timeFilter, setTimeFilter] = useState<HomeTimeFilter>('all');
@@ -243,6 +246,22 @@ export const HomePage: React.FC = () => {
                 </span>
               )}
             </p>
+            <div className="pt-1 flex justify-center sm:justify-start">
+              {!regCountdown.isDisplayClosed ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950 text-amber-300 text-[11px] font-display font-extrabold shadow-sm">
+                  <Clock className="w-3.5 h-3.5 text-brand-yellow animate-pulse" />
+                  <span>Inscrições de atletas até 18:00</span>
+                  <span className="font-mono text-white bg-white/15 px-1.5 py-0.5 rounded-md">
+                    {regCountdown.formatted}
+                  </span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-950 text-amber-200 text-[11px] font-display font-bold shadow-sm">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Inscrições encerradas às 18:00 • Pagamentos liberados para quem já se cadastrou</span>
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center gap-2.5 shrink-0 z-10 w-full sm:w-auto">
