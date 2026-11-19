@@ -934,9 +934,6 @@ export function isGenericAthleteName(name: unknown): boolean {
   );
 }
 
-export function inferCategoryFromAthleteName(
-  name: unknown,
-  currentCategory?: unknown
 const KNOWN_FEMALE_FIRST_NAMES = new Set([
   'ana', 'anna', 'beatriz', 'thayssa', 'luana', 'dalyla', 'noemi', 'lara', 'larinha',
   'rafaela', 'caroline', 'maria', 'iza', 'gabriela', 'gabi', 'julia', 'leticia',
@@ -1068,17 +1065,27 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
     mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', francoRegId, francoReg));
   }
 
-  // - Luan Kildare: correção de equipe de Sanguinária (T21) para Tormenta (T23)
+  // - Luan Kildare: correção de equipe para Tormenta (T23) e confirmação do Pix (R$ 60,00) que chegou durante a falha de webhook
   const luanRegId = 'reg-b5bba181-6468-49c7-b66f-574beb9eae89';
   const luanReg = store.registrations[luanRegId];
   if (
     luanReg &&
-    (luanReg.teamId !== 'tormenta' || String(luanReg.turma || '') !== '23')
+    (luanReg.teamId !== 'tormenta' ||
+      String(luanReg.turma || '') !== '23' ||
+      luanReg.paymentStatus !== 'pago')
   ) {
     luanReg.teamId = 'tormenta';
     luanReg.teamName = 'Tormenta';
     luanReg.turma = '23';
     luanReg.turmaLabel = 'Tormenta • T23';
+    luanReg.paymentStatus = 'pago';
+    luanReg.paymentMethod = 'pix';
+    luanReg.authorizedPrice = 60;
+    luanReg.paidAmount = 60;
+    luanReg.paidAtIso = luanReg.paidAtIso || nowIso;
+    luanReg.qrValidationToken =
+      luanReg.qrValidationToken || `INTRAMED-IX-${luanRegId.toUpperCase()}-VERIFIED`;
+    luanReg.mpPaymentId = luanReg.mpPaymentId || 'PIX-RECONCILIADO-LUAN-KILDARE';
     luanReg.revision = Number(luanReg.revision || 1) + 1;
     luanReg.updatedAtIso = nowIso;
     store.registrations[luanRegId] = luanReg;
