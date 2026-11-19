@@ -585,7 +585,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const needsEntityHeal =
       Boolean(req.query.heal) ||
-      Object.keys(store.match_sheets || {}).some((k) => k.startsWith('sheet_match_')) ||
       Object.values(store.matches || {}).some(
         (m) => m && !m.isTestOnly && m.scheduleSyncVersion !== '2026-11-19-pdf-v2'
       ) ||
@@ -596,7 +595,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             r.categoryName === 'Geral' ||
             (r.id === 'reg-0b9011c5-a321-4a29-9b82-586af1867318' && r.categoryName !== 'Feminino') ||
             (r.id === 'reg-3ef623cc-e004-4529-85b8-0ada0a75fcdf' && r.categoryName !== 'Feminino') ||
-            (r.modalityId === 'todas' && (!Array.isArray(r.selectedModalities) || r.selectedModalities.length < 10)) ||
             (r.id === 'reg-3cb1367e-7075-4d4e-816a-e088793b5c66' &&
               (r.paymentStatus !== 'pago' || Number(r.authorizedPrice) !== 65)) ||
             (r.id === 'reg-b6d5c1e8-1777-4602-b3d4-14c05b3aa78f' &&

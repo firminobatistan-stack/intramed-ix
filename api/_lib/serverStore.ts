@@ -1277,7 +1277,6 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         reg.selectedModalities.length < ALL_GENERAL_PASSPORT_MODALITIES.length)
     ) {
       reg.selectedModalities = ALL_GENERAL_PASSPORT_MODALITIES;
-      regRepaired = true;
     }
     const inferredCategory = inferCategoryFromAthleteName(
       reg.athleteName,
@@ -1566,7 +1565,6 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
           (Array.isArray(primaryAth.modalityIds) ? primaryAth.modalityIds.length : 0)
       ) {
         primaryAth.modalityIds = matchingReg.selectedModalities;
-        athChanged = true;
       }
     }
 
@@ -1803,139 +1801,143 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
   }
 
   // 4. Deduplica e higieniza súmulas (match_sheets): remove chaves legadas "sheet_match_*", repara IDs órfãos e remove atletas de gênero trocado nas escalações
-  if (store.match_sheets) {
-    const allAthletesList = Object.values(store.athletes || {}).filter(
-      (a) => a && a.id && a.status === 'confirmado'
-    );
-    const findConfirmedAthleteForEntry = (
-      entry: Record<string, unknown>,
-      teamIdHint?: string
-    ): Record<string, unknown> | undefined => {
-      const direct = store.athletes[String(entry.athleteId || '')];
-      if (direct && direct.status === 'confirmado') return direct;
-      const entryName = String(entry.athleteName || '')
-        .trim()
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '');
-      if (!entryName) return undefined;
-      return allAthletesList.find((a) => {
-        if (teamIdHint && a.teamId && a.teamId !== teamIdHint) return false;
-        const aName = String(a.name || '')
+  try {
+    if (store.match_sheets) {
+      const allAthletesList = Object.values(store.athletes || {}).filter(
+        (a) => a && a.id && a.status === 'confirmado'
+      );
+      const findConfirmedAthleteForEntry = (
+        entry: Record<string, unknown>,
+        teamIdHint?: string
+      ): Record<string, unknown> | undefined => {
+        const direct = store.athletes[String(entry.athleteId || '')];
+        if (direct && direct.status === 'confirmado') return direct;
+        const entryName = String(entry.athleteName || '')
           .trim()
           .toLowerCase()
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '');
-        return aName === entryName || aName.startsWith(entryName) || entryName.startsWith(aName);
-      });
-    };
-
-    for (const [sKey, sVal] of Object.entries({ ...store.match_sheets })) {
-      if (!sVal || typeof sVal !== 'object') continue;
-      if (sKey.startsWith('sheet_match_')) {
-        const canonicalId = String(sVal.matchId || sKey.replace(/^sheet_/, ''));
-        const existingCanonical = store.match_sheets[canonicalId];
-        if (!existingCanonical) {
-          store.match_sheets[canonicalId] = {
-            ...sVal,
-            id: canonicalId,
-            matchId: canonicalId,
-          };
-        } else {
-          // Mescla escalações ou votos caso o canônico esteja vazio
-          const canHome = Array.isArray(existingCanonical.homeLineup) ? existingCanonical.homeLineup : [];
-          const canAway = Array.isArray(existingCanonical.awayLineup) ? existingCanonical.awayLineup : [];
-          const legHome = Array.isArray(sVal.homeLineup) ? sVal.homeLineup : [];
-          const legAway = Array.isArray(sVal.awayLineup) ? sVal.awayLineup : [];
-          store.match_sheets[canonicalId] = {
-            ...sVal,
-            ...existingCanonical,
-            id: canonicalId,
-            matchId: canonicalId,
-            homeLineup: canHome.length > 0 ? canHome : legHome,
-            awayLineup: canAway.length > 0 ? canAway : legAway,
-          };
-        }
-        delete store.match_sheets[sKey];
-        mutationPromises.push(DeleteDocumentFromFirestoreRest('match_sheets', sKey));
-      }
-    }
-
-    for (const [mId, sheet] of Object.entries(store.match_sheets)) {
-      if (!sheet || typeof sheet !== 'object' || sheet.isClosed) continue;
-      const matchObj = store.matches?.[mId];
-      const hint = `${mId} ${matchObj?.categoryName || ''} ${matchObj?.categoryId || ''}`.toLowerCase();
-      const isFemMatch = hint.includes('-fem') || hint.includes('feminino');
-      const isMascMatch = hint.includes('-masc') || hint.includes('masculino');
-      const homeTeamId = String((matchObj?.homeTeam as Record<string, unknown> | undefined)?.teamId || '');
-      const awayTeamId = String((matchObj?.awayTeam as Record<string, unknown> | undefined)?.teamId || '');
-
-      const sanitizeLineupSide = (
-        rawList: unknown,
-        teamIdHint: string
-      ): { list: Array<Record<string, unknown>>; changed: boolean } => {
-        if (!Array.isArray(rawList)) return { list: [], changed: false };
-        let sideChanged = false;
-        const seenAthIds = new Set<string>();
-        const cleaned: Array<Record<string, unknown>> = [];
-
-        for (const item of rawList) {
-          if (!item || typeof item !== 'object') {
-            sideChanged = true;
-            continue;
-          }
-          const entry = item as Record<string, unknown>;
-          const resolvedAth = findConfirmedAthleteForEntry(entry, teamIdHint);
-          if (!resolvedAth) {
-            sideChanged = true;
-            continue;
-          }
-          const athGender = String(resolvedAth.gender || resolvedAth.categoryName || '').toLowerCase();
-          if (isFemMatch && athGender.startsWith('m')) {
-            sideChanged = true;
-            continue;
-          }
-          if (isMascMatch && athGender.startsWith('f')) {
-            sideChanged = true;
-            continue;
-          }
-          const realId = String(resolvedAth.id);
-          if (seenAthIds.has(realId)) {
-            sideChanged = true;
-            continue;
-          }
-          seenAthIds.add(realId);
-          const realName = String(resolvedAth.name || entry.athleteName || '');
-          if (entry.athleteId !== realId || entry.athleteName !== realName) {
-            sideChanged = true;
-          }
-          cleaned.push({
-            ...entry,
-            athleteId: realId,
-            athleteName: realName,
-            jerseyNumber: resolvedAth.jerseyNumber ?? entry.jerseyNumber ?? null,
-          });
-        }
-        return { list: cleaned, changed: sideChanged };
+        if (!entryName) return undefined;
+        return allAthletesList.find((a) => {
+          if (teamIdHint && a.teamId && a.teamId !== teamIdHint) return false;
+          const aName = String(a.name || '')
+            .trim()
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+          return aName === entryName || aName.startsWith(entryName) || entryName.startsWith(aName);
+        });
       };
 
-      const homeRes = sanitizeLineupSide(sheet.homeLineup, homeTeamId);
-      const awayRes = sanitizeLineupSide(sheet.awayLineup, awayTeamId);
-      if (homeRes.changed || awayRes.changed || sheet.id !== mId) {
-        sheet.id = mId;
-        sheet.matchId = mId;
-        sheet.homeLineup = homeRes.list;
-        sheet.awayLineup = awayRes.list;
-        sheet.revision = Number(sheet.revision || 1) + 1;
-        sheet.lastUpdatedIso = nowIso;
-        store.match_sheets[mId] = sheet;
-        mutationPromises.push(MirrorDocumentToFirestoreRest('match_sheets', mId, sheet));
+      for (const [sKey, sVal] of Object.entries({ ...store.match_sheets })) {
+        if (!sVal || typeof sVal !== 'object') continue;
+        if (sKey.startsWith('sheet_match_')) {
+          const canonicalId = String(sVal.matchId || sKey.replace(/^sheet_/, ''));
+          const existingCanonical = store.match_sheets[canonicalId];
+          if (!existingCanonical) {
+            store.match_sheets[canonicalId] = {
+              ...sVal,
+              id: canonicalId,
+              matchId: canonicalId,
+            };
+          } else {
+            const canHome = Array.isArray(existingCanonical.homeLineup) ? existingCanonical.homeLineup : [];
+            const canAway = Array.isArray(existingCanonical.awayLineup) ? existingCanonical.awayLineup : [];
+            const legHome = Array.isArray(sVal.homeLineup) ? sVal.homeLineup : [];
+            const legAway = Array.isArray(sVal.awayLineup) ? sVal.awayLineup : [];
+            store.match_sheets[canonicalId] = {
+              ...sVal,
+              ...existingCanonical,
+              id: canonicalId,
+              matchId: canonicalId,
+              homeLineup: canHome.length > 0 ? canHome : legHome,
+              awayLineup: canAway.length > 0 ? canAway : legAway,
+            };
+          }
+          delete store.match_sheets[sKey];
+        }
+      }
+
+      for (const [mId, sheet] of Object.entries(store.match_sheets)) {
+        if (!sheet || typeof sheet !== 'object' || sheet.isClosed) continue;
+        const matchObj = store.matches?.[mId];
+        const hint = `${mId} ${matchObj?.categoryName || ''} ${matchObj?.categoryId || ''}`.toLowerCase();
+        const isFemMatch = hint.includes('-fem') || hint.includes('feminino');
+        const isMascMatch = hint.includes('-masc') || hint.includes('masculino');
+        const homeTeamId = String((matchObj?.homeTeam as Record<string, unknown> | undefined)?.teamId || '');
+        const awayTeamId = String((matchObj?.awayTeam as Record<string, unknown> | undefined)?.teamId || '');
+
+        const sanitizeLineupSide = (
+          rawList: unknown,
+          teamIdHint: string
+        ): { list: Array<Record<string, unknown>>; changed: boolean } => {
+          if (!Array.isArray(rawList)) return { list: [], changed: false };
+          let sideChanged = false;
+          const seenAthIds = new Set<string>();
+          const cleaned: Array<Record<string, unknown>> = [];
+
+          for (const item of rawList) {
+            if (!item || typeof item !== 'object') {
+              sideChanged = true;
+              continue;
+            }
+            const entry = item as Record<string, unknown>;
+            const resolvedAth = findConfirmedAthleteForEntry(entry, teamIdHint);
+            if (!resolvedAth) {
+              sideChanged = true;
+              continue;
+            }
+            const athGender = String(resolvedAth.gender || resolvedAth.categoryName || '').toLowerCase();
+            if (isFemMatch && athGender.startsWith('m')) {
+              sideChanged = true;
+              continue;
+            }
+            if (isMascMatch && athGender.startsWith('f')) {
+              sideChanged = true;
+              continue;
+            }
+            const realId = String(resolvedAth.id);
+            if (seenAthIds.has(realId)) {
+              sideChanged = true;
+              continue;
+            }
+            seenAthIds.add(realId);
+            const realName = String(resolvedAth.name || entry.athleteName || '');
+            if (entry.athleteId !== realId || entry.athleteName !== realName) {
+              sideChanged = true;
+            }
+            cleaned.push({
+              ...entry,
+              athleteId: realId,
+              athleteName: realName,
+              jerseyNumber: resolvedAth.jerseyNumber ?? entry.jerseyNumber ?? null,
+            });
+          }
+          return { list: cleaned, changed: sideChanged };
+        };
+
+        const homeRes = sanitizeLineupSide(sheet.homeLineup, homeTeamId);
+        const awayRes = sanitizeLineupSide(sheet.awayLineup, awayTeamId);
+        if (homeRes.changed || awayRes.changed || sheet.id !== mId) {
+          sheet.id = mId;
+          sheet.matchId = mId;
+          sheet.homeLineup = homeRes.list;
+          sheet.awayLineup = awayRes.list;
+          sheet.revision = Number(sheet.revision || 1) + 1;
+          sheet.lastUpdatedIso = nowIso;
+          store.match_sheets[mId] = sheet;
+        }
       }
     }
+  } catch {
+    // Non-blocking best-effort sheet sanitization
   }
 
   if (mutationPromises.length > 0) {
-    await Promise.allSettled(mutationPromises);
+    await Promise.race([
+      Promise.allSettled(mutationPromises.slice(0, 16)),
+      new Promise((resolve) => setTimeout(resolve, 2500)),
+    ]);
   }
 }
 
