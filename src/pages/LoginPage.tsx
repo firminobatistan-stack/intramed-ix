@@ -79,6 +79,7 @@ export const LoginPage: React.FC = () => {
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [registerTurma, setRegisterTurma] = useState('');
+  const [registerGender, setRegisterGender] = useState<'Masculino' | 'Feminino' | ''>('');
   const [registerBio, setRegisterBio] = useState('');
 
   // Estados de Login Administrativo (Comissão / Master)
@@ -369,10 +370,18 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
+    if (registerGender !== 'Masculino' && registerGender !== 'Feminino') {
+      setErrorMessage('Selecione obrigatoriamente sua categoria: Masculino ou Feminino.');
+      return;
+    }
+
     setIsSubmitting(true);
     const selectedTurmaObj = TURMAS_MEDICINA.find((t) => t.turma === registerTurma);
 
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('intramed_user_gender', registerGender);
+      }
       const res = await fetch('/api/cloud-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -381,6 +390,8 @@ export const LoginPage: React.FC = () => {
           name,
           email,
           password: pass,
+          gender: registerGender,
+          categoryName: registerGender,
           turma: registerTurma || null,
           turmaLabel: selectedTurmaObj ? selectedTurmaObj.fullName : null,
           teamId: selectedTurmaObj ? selectedTurmaObj.teamId : null,
@@ -775,6 +786,28 @@ export const LoginPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Categoria / Gênero <span className="text-rose-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['Masculino', 'Feminino'] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setRegisterGender(cat)}
+                      className={`py-2.5 px-3 rounded-xl text-xs font-display font-bold border transition-all ${
+                        registerGender === cat
+                          ? 'bg-[#0B218A] text-white border-[#0B218A] shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:border-[#0B218A]/40'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <Input

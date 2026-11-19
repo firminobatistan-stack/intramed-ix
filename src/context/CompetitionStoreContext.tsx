@@ -4052,10 +4052,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   );
 
   const getAthletesByTeam = useCallback(
-    (teamId: string, modalityId?: ModalitySlug): Athlete[] => {
+    (teamId: string, _modalityId?: ModalitySlug): Athlete[] => {
       return visibleAthletes.filter((a) => {
         if (a.teamId !== teamId) return false;
-        if (modalityId && !a.modalityIds.includes(modalityId)) return false;
         return true;
       });
     },
@@ -4758,7 +4757,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             const s = updatedSheets[m.id];
             if (!s || s.isClosed) continue;
 
-            if (!isEligibleForLineup || !athleteRecord.modalityIds.includes(m.modalityId)) {
+            if (!isEligibleForLineup) {
               const inHome = s.homeLineup.some((l) => l.athleteId === athleteRecord.id);
               const inAway = s.awayLineup.some((l) => l.athleteId === athleteRecord.id);
               if (inHome || inAway) {

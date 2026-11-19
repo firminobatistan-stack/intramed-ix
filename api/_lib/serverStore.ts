@@ -937,14 +937,51 @@ export function isGenericAthleteName(name: unknown): boolean {
 export function inferCategoryFromAthleteName(
   name: unknown,
   currentCategory?: unknown
+const KNOWN_FEMALE_FIRST_NAMES = new Set([
+  'ana', 'anna', 'beatriz', 'thayssa', 'luana', 'dalyla', 'noemi', 'lara', 'larinha',
+  'rafaela', 'caroline', 'maria', 'iza', 'gabriela', 'gabi', 'julia', 'leticia',
+  'camila', 'camilla', 'amanda', 'bruna', 'fernanda', 'mariana', 'isabela', 'isabella',
+  'natalia', 'bianca', 'byanca', 'alice', 'laura', 'valentina', 'helena', 'manuela',
+  'sofia', 'sophia', 'giovanna', 'vitoria', 'clara', 'cecilia', 'rebeca',
+  'rayssa', 'raissa', 'rayna', 'yasmin', 'iasmin', 'thais', 'tais', 'lorena',
+  'debora', 'eduarda', 'duda', 'emilly', 'emily', 'evelyn', 'flavia', 'francy', 'geovana',
+  'ingrid', 'jessica', 'joana', 'jordana', 'juliana', 'kamila', 'karina',
+  'karoline', 'kelly', 'kesia', 'lais', 'larissa', 'lisnia', 'livia', 'ludmila',
+  'luiza', 'luisa', 'maisa', 'maju', 'marcela', 'mayara', 'maiara', 'milena',
+  'mirella', 'monique', 'nathalia', 'nicole', 'paloma', 'paula', 'priscila',
+  'ramyri', 'raquel', 'renata', 'roberta', 'sabrina', 'samara', 'sanzylly',
+  'sara', 'sarah', 'silvia', 'stella', 'stephanie', 'talita', 'tatiana',
+  'vanessa', 'viviane', 'vivian', 'andressa', 'andrezza', 'angelica', 'cynthia', 'dani',
+]);
+
+const KNOWN_MALE_FIRST_NAMES = new Set([
+  'luca', 'lucas', 'nikolas', 'nicolas', 'messias', 'elias', 'matias', 'tobias',
+  'jonas', 'josias', 'isaias', 'jeremias', 'zacarias', 'davi', 'david', 'uelison',
+  'alex', 'paulo', 'nalbert', 'alcides', 'pedro', 'firmino', 'samu', 'samuel',
+  'gabilu', 'nenel', 'rolwylson', 'joao', 'gabriel', 'matheus', 'mateus',
+  'gustavo', 'guilherme', 'rafael', 'felipe', 'bruno', 'rodrigo', 'daniel',
+  'thiago', 'tiago', 'leonardo', 'eduardo', 'henrique', 'vitor', 'victor',
+  'caio', 'igor', 'marcos', 'marcelo', 'andre', 'carlos', 'diego', 'diogo',
+  'fabio', 'fernando', 'flavio', 'franco', 'leandro', 'luan', 'luiz', 'luis',
+  'miguel', 'arthur', 'artur', 'bernardo', 'heitor', 'enzo', 'murilo', 'otavio',
+  'renan', 'renzo', 'ricardo', 'vinicius', 'wellington', 'wesley', 'yuri',
+  'allysson', 'antonio', 'derick', 'devis', 'edgar', 'manuel', 'naby', 'ploks', 'rhuan',
+]);
+
+export function isUnambiguouslyFemaleFirstName(name: unknown): boolean {
+  const first = String(name || '')
+    .trim()
+    .split(/\s+/)[0]
+    ?.toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') || '';
+  return KNOWN_FEMALE_FIRST_NAMES.has(first);
+}
+
+export function inferCategoryFromAthleteName(
+  name: unknown,
+  currentCategory?: unknown
 ): 'Masculino' | 'Feminino' {
-  const cur = String(currentCategory || '').trim().toLowerCase();
-  if (cur === 'feminino' || cur === 'fem' || cur === 'female' || cur === 'f') {
-    return 'Feminino';
-  }
-  if (cur === 'masculino' || cur === 'masc' || cur === 'male' || cur === 'm') {
-    return 'Masculino';
-  }
   const first = String(name || '')
     .trim()
     .split(/\s+/)[0]
@@ -952,37 +989,18 @@ export function inferCategoryFromAthleteName(
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') || '';
 
-  const knownFemaleNames = new Set([
-    'ana', 'beatriz', 'thayssa', 'luana', 'dalyla', 'noemi', 'lara', 'larinha',
-    'rafaela', 'caroline', 'maria', 'iza', 'gabriela', 'gabi', 'julia', 'leticia',
-    'camila', 'amanda', 'bruna', 'fernanda', 'mariana', 'isabela', 'isabella',
-    'natalia', 'bianca', 'alice', 'laura', 'valentina', 'helena', 'manuela',
-    'sofia', 'sophia', 'giovanna', 'vitoria', 'clara', 'cecilia', 'rebeca',
-    'rayssa', 'raissa', 'yasmin', 'iasmin', 'thais', 'tais', ' Lorena', 'lorena',
-    'debora', 'eduarda', 'duda', 'emilly', 'emily', 'evelyn', 'flavia', 'geovana',
-    'ingrid', 'jessica', 'joana', 'jordana', 'juliana', 'kamila', 'karina',
-    'karoline', 'kelly', 'larissa', 'livia', 'luiza', 'luisa', 'maisa', 'marcela',
-    'mayara', 'maiara', 'milena', 'mirella', 'monique', 'nathalia', 'nicole',
-    'paloma', 'paula', 'priscila', 'raquel', 'renata', 'roberta', 'sabrina',
-    'samara', 'sara', 'sarah', 'silvia', 'stella', 'stephanie', 'talita', 'tatiana',
-    'vanessa', 'viviane', 'vivian',
-  ]);
-  const knownMaleNames = new Set([
-    'luca', 'lucas', 'nikolas', 'nicolas', 'messias', 'elias', 'matias', 'tobias',
-    'jonas', 'josias', 'isaias', 'jeremias', 'zacarias', 'davi', 'david', 'uelison',
-    'alex', 'paulo', 'nalbert', 'alcides', 'pedro', 'firmino', 'samu', 'samuel',
-    'gabilu', 'nenel', 'rolwylson', 'joao', 'gabriel', 'matheus', 'mateus',
-    'gustavo', 'guilherme', 'rafael', 'felipe', 'bruno', 'rodrigo', 'daniel',
-    'thiago', 'tiago', 'leonardo', 'eduardo', 'henrique', 'vitor', 'victor',
-    'caio', 'igor', 'marcos', 'marcelo', 'andre', 'carlos', 'diego', 'diogo',
-    'fabio', 'fernando', 'flavio', 'leandro', 'luiz', 'luis', 'miguel', 'arthur',
-    'artur', 'bernardo', 'heitor', 'enzo', 'murilo', 'otavio', 'renan', 'ricardo',
-    'vinicius', 'wellington', 'wesley', 'yuri',
-  ]);
+  if (KNOWN_FEMALE_FIRST_NAMES.has(first)) return 'Feminino';
+  if (KNOWN_MALE_FIRST_NAMES.has(first)) return 'Masculino';
 
-  if (knownFemaleNames.has(first)) return 'Feminino';
-  if (knownMaleNames.has(first)) return 'Masculino';
-  if (first.endsWith('a') && !knownMaleNames.has(first)) return 'Feminino';
+  const cur = String(currentCategory || '').trim().toLowerCase();
+  if (cur === 'feminino' || cur === 'fem' || cur === 'female' || cur === 'f') {
+    return 'Feminino';
+  }
+  if (cur === 'masculino' || cur === 'masc' || cur === 'male' || cur === 'm') {
+    return 'Masculino';
+  }
+
+  if (first.endsWith('a') && !KNOWN_MALE_FIRST_NAMES.has(first)) return 'Feminino';
   return 'Masculino';
 }
 
@@ -1241,11 +1259,32 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
       reg.modalityName = 'Passaporte Geral (Todas as 16 Modalidades)';
       regRepaired = true;
     }
-    if (!reg.categoryName || reg.categoryName === 'Geral') {
-      reg.categoryName = inferCategoryFromAthleteName(
-        reg.athleteName,
-        linkedAth?.categoryName !== 'Geral' ? linkedAth?.categoryName || linkedAth?.gender : undefined
-      );
+    const ALL_GENERAL_PASSPORT_MODALITIES = [
+      'futsal',
+      'basquete',
+      'handebol',
+      'volei',
+      'volei-de-praia',
+      'truco',
+      'sinuca',
+      'natacao',
+      'poker',
+      'tenis-de-mesa',
+    ];
+    if (
+      reg.modalityId === 'todas' &&
+      (!Array.isArray(reg.selectedModalities) ||
+        reg.selectedModalities.length < ALL_GENERAL_PASSPORT_MODALITIES.length)
+    ) {
+      reg.selectedModalities = ALL_GENERAL_PASSPORT_MODALITIES;
+      regRepaired = true;
+    }
+    const inferredCategory = inferCategoryFromAthleteName(
+      reg.athleteName,
+      linkedAth?.categoryName !== 'Geral' ? linkedAth?.categoryName || linkedAth?.gender : reg.categoryName
+    );
+    if (!reg.categoryName || reg.categoryName === 'Geral' || reg.categoryName !== inferredCategory) {
+      reg.categoryName = inferredCategory;
       regRepaired = true;
     }
     if (!reg.memberStatus) {
@@ -1521,6 +1560,14 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         primaryAth.turmaLabel = matchingReg.turmaLabel;
         athChanged = true;
       }
+      if (
+        Array.isArray(matchingReg.selectedModalities) &&
+        matchingReg.selectedModalities.length >
+          (Array.isArray(primaryAth.modalityIds) ? primaryAth.modalityIds.length : 0)
+      ) {
+        primaryAth.modalityIds = matchingReg.selectedModalities;
+        athChanged = true;
+      }
     }
 
     for (let i = 1; i < group.length; i++) {
@@ -1751,6 +1798,138 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         prof.updatedAtIso = nowIso;
         store.profiles[profId] = prof;
         mutationPromises.push(MirrorDocumentToFirestoreRest('profiles', profId, prof));
+      }
+    }
+  }
+
+  // 4. Deduplica e higieniza súmulas (match_sheets): remove chaves legadas "sheet_match_*", repara IDs órfãos e remove atletas de gênero trocado nas escalações
+  if (store.match_sheets) {
+    const allAthletesList = Object.values(store.athletes || {}).filter(
+      (a) => a && a.id && a.status === 'confirmado'
+    );
+    const findConfirmedAthleteForEntry = (
+      entry: Record<string, unknown>,
+      teamIdHint?: string
+    ): Record<string, unknown> | undefined => {
+      const direct = store.athletes[String(entry.athleteId || '')];
+      if (direct && direct.status === 'confirmado') return direct;
+      const entryName = String(entry.athleteName || '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      if (!entryName) return undefined;
+      return allAthletesList.find((a) => {
+        if (teamIdHint && a.teamId && a.teamId !== teamIdHint) return false;
+        const aName = String(a.name || '')
+          .trim()
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+        return aName === entryName || aName.startsWith(entryName) || entryName.startsWith(aName);
+      });
+    };
+
+    for (const [sKey, sVal] of Object.entries({ ...store.match_sheets })) {
+      if (!sVal || typeof sVal !== 'object') continue;
+      if (sKey.startsWith('sheet_match_')) {
+        const canonicalId = String(sVal.matchId || sKey.replace(/^sheet_/, ''));
+        const existingCanonical = store.match_sheets[canonicalId];
+        if (!existingCanonical) {
+          store.match_sheets[canonicalId] = {
+            ...sVal,
+            id: canonicalId,
+            matchId: canonicalId,
+          };
+        } else {
+          // Mescla escalações ou votos caso o canônico esteja vazio
+          const canHome = Array.isArray(existingCanonical.homeLineup) ? existingCanonical.homeLineup : [];
+          const canAway = Array.isArray(existingCanonical.awayLineup) ? existingCanonical.awayLineup : [];
+          const legHome = Array.isArray(sVal.homeLineup) ? sVal.homeLineup : [];
+          const legAway = Array.isArray(sVal.awayLineup) ? sVal.awayLineup : [];
+          store.match_sheets[canonicalId] = {
+            ...sVal,
+            ...existingCanonical,
+            id: canonicalId,
+            matchId: canonicalId,
+            homeLineup: canHome.length > 0 ? canHome : legHome,
+            awayLineup: canAway.length > 0 ? canAway : legAway,
+          };
+        }
+        delete store.match_sheets[sKey];
+        mutationPromises.push(DeleteDocumentFromFirestoreRest('match_sheets', sKey));
+      }
+    }
+
+    for (const [mId, sheet] of Object.entries(store.match_sheets)) {
+      if (!sheet || typeof sheet !== 'object' || sheet.isClosed) continue;
+      const matchObj = store.matches?.[mId];
+      const hint = `${mId} ${matchObj?.categoryName || ''} ${matchObj?.categoryId || ''}`.toLowerCase();
+      const isFemMatch = hint.includes('-fem') || hint.includes('feminino');
+      const isMascMatch = hint.includes('-masc') || hint.includes('masculino');
+      const homeTeamId = String((matchObj?.homeTeam as Record<string, unknown> | undefined)?.teamId || '');
+      const awayTeamId = String((matchObj?.awayTeam as Record<string, unknown> | undefined)?.teamId || '');
+
+      const sanitizeLineupSide = (
+        rawList: unknown,
+        teamIdHint: string
+      ): { list: Array<Record<string, unknown>>; changed: boolean } => {
+        if (!Array.isArray(rawList)) return { list: [], changed: false };
+        let sideChanged = false;
+        const seenAthIds = new Set<string>();
+        const cleaned: Array<Record<string, unknown>> = [];
+
+        for (const item of rawList) {
+          if (!item || typeof item !== 'object') {
+            sideChanged = true;
+            continue;
+          }
+          const entry = item as Record<string, unknown>;
+          const resolvedAth = findConfirmedAthleteForEntry(entry, teamIdHint);
+          if (!resolvedAth) {
+            sideChanged = true;
+            continue;
+          }
+          const athGender = String(resolvedAth.gender || resolvedAth.categoryName || '').toLowerCase();
+          if (isFemMatch && athGender.startsWith('m')) {
+            sideChanged = true;
+            continue;
+          }
+          if (isMascMatch && athGender.startsWith('f')) {
+            sideChanged = true;
+            continue;
+          }
+          const realId = String(resolvedAth.id);
+          if (seenAthIds.has(realId)) {
+            sideChanged = true;
+            continue;
+          }
+          seenAthIds.add(realId);
+          const realName = String(resolvedAth.name || entry.athleteName || '');
+          if (entry.athleteId !== realId || entry.athleteName !== realName) {
+            sideChanged = true;
+          }
+          cleaned.push({
+            ...entry,
+            athleteId: realId,
+            athleteName: realName,
+            jerseyNumber: resolvedAth.jerseyNumber ?? entry.jerseyNumber ?? null,
+          });
+        }
+        return { list: cleaned, changed: sideChanged };
+      };
+
+      const homeRes = sanitizeLineupSide(sheet.homeLineup, homeTeamId);
+      const awayRes = sanitizeLineupSide(sheet.awayLineup, awayTeamId);
+      if (homeRes.changed || awayRes.changed || sheet.id !== mId) {
+        sheet.id = mId;
+        sheet.matchId = mId;
+        sheet.homeLineup = homeRes.list;
+        sheet.awayLineup = awayRes.list;
+        sheet.revision = Number(sheet.revision || 1) + 1;
+        sheet.lastUpdatedIso = nowIso;
+        store.match_sheets[mId] = sheet;
+        mutationPromises.push(MirrorDocumentToFirestoreRest('match_sheets', mId, sheet));
       }
     }
   }

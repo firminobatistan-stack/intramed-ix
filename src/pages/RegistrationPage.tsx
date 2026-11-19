@@ -176,7 +176,13 @@ export const RegistrationPage: React.FC = () => {
 
   // Formulário de Nova Inscrição + Conta de Acesso + Perfil Social
   const [selectedTurma, setSelectedTurma] = useState<TurmaMedicina>('21');
-  const [categoryName, setCategoryName] = useState<'Masculino' | 'Feminino'>('Masculino');
+  const [categoryName, setCategoryName] = useState<'Masculino' | 'Feminino' | ''>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('intramed_user_gender');
+      if (saved === 'Masculino' || saved === 'Feminino') return saved;
+    }
+    return '';
+  });
   const [athleteName, setAthleteName] = useState(currentUser?.name || '');
   const [athleteEmail, setAthleteEmail] = useState(currentUser?.email || '');
   const [athletePhone, setAthletePhone] = useState('');
@@ -242,7 +248,11 @@ export const RegistrationPage: React.FC = () => {
   );
 
   const isCurrentGenderGuestTaken =
-    categoryName === 'Masculino' ? t21GuestMascTaken : t21GuestFemTaken;
+    categoryName === 'Feminino'
+      ? t21GuestFemTaken
+      : categoryName === 'Masculino'
+      ? t21GuestMascTaken
+      : t21GuestMascTaken && t21GuestFemTaken;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -322,6 +332,15 @@ export const RegistrationPage: React.FC = () => {
     if (!finalName || !finalEmail || !finalDoc) {
       alert('Por favor, preencha Nome, E-mail e CPF/Matrícula.');
       return;
+    }
+
+    if (categoryName !== 'Masculino' && categoryName !== 'Feminino') {
+      alert('Por favor, selecione obrigatoriamente sua categoria: Masculino ou Feminino.');
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('intramed_user_gender', categoryName);
     }
 
     if (!currentUser) {
@@ -997,7 +1016,7 @@ export const RegistrationPage: React.FC = () => {
               {/* Categoria: Masculino vs Feminino */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-brand-text-primary block">
-                  Categoria
+                  Categoria <span className="text-rose-500">*</span>
                 </label>
                 <div className="grid grid-cols-2 gap-3 max-w-xs">
                   {(['Masculino', 'Feminino'] as const).map((cat) => (
