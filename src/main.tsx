@@ -7,10 +7,11 @@ const RELOAD_GUARD_KEY = 'intramed_chunk_reload_at';
 
 function tryAutoReloadOnce(): boolean {
   try {
+    localStorage.removeItem('intramed_ix_live_engine_v3');
     const last = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) || '0');
     if (Date.now() - last > 15_000) {
       sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
-      window.location.reload();
+      window.location.replace(`${window.location.pathname}?v=${Date.now()}`);
       return true;
     }
   } catch {
@@ -39,15 +40,8 @@ class GlobalErrorBoundary extends React.Component<
     return { hasError: true, message: msg };
   }
 
-  componentDidCatch(error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error || '');
-    const isChunkError =
-      /dynamically imported module|Loading chunk|Importing a module script failed|Failed to fetch/i.test(
-        msg
-      );
-    if (isChunkError) {
-      tryAutoReloadOnce();
-    }
+  componentDidCatch() {
+    tryAutoReloadOnce();
   }
 
   render() {
@@ -63,11 +57,12 @@ class GlobalErrorBoundary extends React.Component<
               type="button"
               onClick={() => {
                 try {
+                  localStorage.removeItem('intramed_ix_live_engine_v3');
                   sessionStorage.clear();
                 } catch {
                   // Ignore
                 }
-                window.location.reload();
+                window.location.replace(`${window.location.pathname}?v=${Date.now()}`);
               }}
               className="w-full py-2.5 px-4 rounded-xl bg-amber-400 text-slate-950 font-bold text-sm hover:bg-amber-300 transition"
             >

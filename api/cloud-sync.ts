@@ -509,6 +509,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Em chamadas incrementais (?since=...) quando algo mudou (ex: ponto ao vivo na súmula),
     // retorna APENAS partidas, súmulas e configurações (~100 KB em vez de 3.040 KB de fotos base64 repetidas),
     // reduzindo o Fast Origin Transfer da Vercel em ~97% mesmo durante jogos ao vivo!
+    // Auto-heal any match_sheet missing a valid timer object (e.g., created by fan_vote)
+    for (const [sKey, rawSheet] of Object.entries(store.match_sheets || {})) {
+      if (rawSheet && typeof rawSheet === 'object' && (!rawSheet.timer || typeof rawSheet.timer !== 'object')) {
+        const healedSheet: Record<string, unknown> = {
+          ...rawSheet,
+          timer: {
+            currentPeriod: 1,
+            totalPeriods: 2,
+            periodLabel: '1º Período',
+            remainingSeconds: 1200,
+            initialPeriodSeconds: 1200,
+            elapsedSeconds: 0,
+            isRunning: false,
+            lifecycle: 'not_started',
+            lastTickTimestamp: null,
+          },
+          revision: Number(rawSheet.revision || 0) + 1,
+          lastUpdatedIso: new Date().toISOString(),
+        };
+        store.match_sheets[sKey] = healedSheet;
+        saveCloudStore(store);
+        void MirrorDocumentToFirestoreRest('match_sheets', sKey, healedSheet);
+      }
+    }
+
     if (isDeltaPoll) {
       const deltaMatches = Object.values(store.matches).map((m) =>
         sanitizeMatchForPublic(m, false)
@@ -776,12 +801,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const nowIso = new Date().toISOString();
+      const defaultTimer = {
+        currentPeriod: 1,
+        totalPeriods: 2,
+        periodLabel: '1º Período',
+        remainingSeconds: 1200,
+        initialPeriodSeconds: 1200,
+        elapsedSeconds: 0,
+        isRunning: false,
+        lifecycle: 'not_started',
+        lastTickTimestamp: null,
+      };
       const existingSheet = store.match_sheets[matchId] || {
         id: matchId,
         matchId,
         modalityId: String(store.matches[matchId]?.modalityId || 'futsal'),
         scoringModel: 'timed_goals',
         isTestMode: false,
+        timer: defaultTimer,
         homeLineup: [],
         awayLineup: [],
         periodScores: [],
@@ -807,6 +844,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const updatedSheet: Record<string, unknown> = {
         ...existingSheet,
+        timer:
+          existingSheet.timer && typeof existingSheet.timer === 'object'
+            ? existingSheet.timer
+            : defaultTimer,
         id: matchId,
         matchId,
         fanVotes: prevVotes,
