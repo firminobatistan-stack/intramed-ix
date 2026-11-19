@@ -336,32 +336,32 @@ export const OFFICIAL_MATCH_SCHEDULE_MAP: Record<
   // =========================================================================
   // DOMINGO, 22/11/2026 — FUTSAL (Escola Bayma, 07h-12h) & SEMIFINAIS HANDEBOL (Antenor Viana, 16h-19h)
   // =========================================================================
-  'match_futsal-masc_qf': {
+  'match_futsal-fem_qf': {
     scheduledDate: '22/11 (Dom)',
     scheduledTime: '07:00',
     venue: 'Escola Bayma',
   },
-  'match_futsal-fem_qf': {
+  'match_futsal-masc_qf': {
     scheduledDate: '22/11 (Dom)',
     scheduledTime: '08:00',
     venue: 'Escola Bayma',
   },
-  'match_futsal-masc_sf2': {
+  'match_futsal-fem_sf2': {
     scheduledDate: '22/11 (Dom)',
     scheduledTime: '09:00',
     venue: 'Escola Bayma',
   },
-  'match_futsal-fem_sf2': {
+  'match_futsal-masc_sf2': {
     scheduledDate: '22/11 (Dom)',
     scheduledTime: '10:00',
     venue: 'Escola Bayma',
   },
-  'match_futsal-masc_sf1': {
+  'match_futsal-fem_sf1': {
     scheduledDate: '22/11 (Dom)',
     scheduledTime: '11:00',
     venue: 'Escola Bayma',
   },
-  'match_futsal-fem_sf1': {
+  'match_futsal-masc_sf1': {
     scheduledDate: '22/11 (Dom)',
     scheduledTime: '12:00',
     venue: 'Escola Bayma',
@@ -428,90 +428,90 @@ export const OFFICIAL_MATCH_SCHEDULE_MAP: Record<
   'match_tenis-mesa-fem_final': {
     scheduledDate: '28/11 (Sáb)',
     scheduledTime: '13:00',
-    venue: 'Arena Tênis de Mesa',
+    venue: 'Shopping de Caxias',
   },
 
-  // Sinuca — Arena AMK Sports (Inscrição das duplas até sexta-feira 27/11/2026)
-  'match_sinuca-masc_qf': {
-    scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '16:00',
-    venue: 'Arena AMK Sports',
-  },
+  // Sinuca — Arena AMK Sports (15:00 às 16:45 conforme tabela e Chaveamento Sinuca)
   'match_sinuca-fem_qf': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '16:30',
+    scheduledTime: '15:00',
     venue: 'Arena AMK Sports',
   },
-  'match_sinuca-masc_sf2': {
+  'match_sinuca-masc_qf': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '17:00',
+    scheduledTime: '15:15',
     venue: 'Arena AMK Sports',
   },
   'match_sinuca-fem_sf2': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '17:30',
+    scheduledTime: '15:30',
     venue: 'Arena AMK Sports',
   },
-  'match_sinuca-masc_sf1': {
+  'match_sinuca-masc_sf2': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '18:00',
+    scheduledTime: '15:45',
     venue: 'Arena AMK Sports',
   },
   'match_sinuca-fem_sf1': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '18:30',
+    scheduledTime: '16:00',
     venue: 'Arena AMK Sports',
   },
-  'match_sinuca-masc_final': {
+  'match_sinuca-masc_sf1': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '19:30',
+    scheduledTime: '16:15',
     venue: 'Arena AMK Sports',
   },
   'match_sinuca-fem_final': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '20:00',
-    venue: 'Arena AMK Sports',
-  },
-
-  // Vôlei de Praia (VP) & Happy Hour — Arena AMK Sports (16h às 21h)
-  'match_volei-praia-masc_qf': {
-    scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '16:00',
-    venue: 'Arena AMK Sports',
-  },
-  'match_volei-praia-fem_qf': {
-    scheduledDate: '28/11 (Sáb)',
     scheduledTime: '16:30',
     venue: 'Arena AMK Sports',
   },
-  'match_volei-praia-masc_sf2': {
+  'match_sinuca-masc_final': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '17:30',
+    scheduledTime: '16:45',
     venue: 'Arena AMK Sports',
   },
-  'match_volei-praia-fem_sf2': {
+
+  // Vôlei de Praia (VP) & Happy Hour — Arena AMK Sports (17h às 23h)
+  'match_volei-praia-fem_qf': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '17:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-masc_qf': {
     scheduledDate: '28/11 (Sáb)',
     scheduledTime: '18:00',
     venue: 'Arena AMK Sports',
   },
-  'match_volei-praia-masc_sf1': {
+  'match_volei-praia-fem_sf2': {
     scheduledDate: '28/11 (Sáb)',
     scheduledTime: '19:00',
     venue: 'Arena AMK Sports',
   },
-  'match_volei-praia-fem_sf1': {
+  'match_volei-praia-masc_sf2': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '19:30',
+    scheduledTime: '20:00',
     venue: 'Arena AMK Sports',
   },
-  'match_volei-praia-masc_final': {
+  'match_volei-praia-fem_sf1': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '20:15',
+    scheduledTime: '21:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-masc_sf1': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '22:00',
     venue: 'Arena AMK Sports',
   },
   'match_volei-praia-fem_final': {
     scheduledDate: '28/11 (Sáb)',
-    scheduledTime: '20:45',
+    scheduledTime: '23:00',
+    venue: 'Arena AMK Sports',
+  },
+  'match_volei-praia-masc_final': {
+    scheduledDate: '28/11 (Sáb)',
+    scheduledTime: '23:00',
     venue: 'Arena AMK Sports',
   },
 
@@ -558,47 +558,47 @@ export const OFFICIAL_MATCH_SCHEDULE_MAP: Record<
   },
 
   // =========================================================================
-  // DOMINGO, 29/11/2026 — GRANDES FINAIS COLETIVAS & PREMIAÇÕES (20h-22h)
+  // DOMINGO, 29/11/2026 — FINAIS E PREMIAÇÕES NO IPEM (20h-22h)
   // =========================================================================
-  'match_basquete-masc_final': {
-    scheduledDate: '29/11 (Dom)',
-    scheduledTime: '09:00',
-    venue: 'Escola Antenor Viana',
-  },
   'match_basquete-fem_final': {
     scheduledDate: '29/11 (Dom)',
+    scheduledTime: '09:00',
+    venue: 'IPEM',
+  },
+  'match_basquete-masc_final': {
+    scheduledDate: '29/11 (Dom)',
     scheduledTime: '10:00',
-    venue: 'Escola Antenor Viana',
+    venue: 'IPEM',
   },
   'match_volei-fem_final': {
     scheduledDate: '29/11 (Dom)',
     scheduledTime: '11:00',
-    venue: 'Bayma',
+    venue: 'IPEM',
   },
   'match_volei-masc_final': {
     scheduledDate: '29/11 (Dom)',
     scheduledTime: '12:00',
-    venue: 'Bayma',
+    venue: 'IPEM',
   },
   'match_handebol-fem_final': {
     scheduledDate: '29/11 (Dom)',
     scheduledTime: '16:00',
-    venue: 'Escola Antenor Viana',
+    venue: 'IPEM',
   },
   'match_handebol-masc_final': {
     scheduledDate: '29/11 (Dom)',
     scheduledTime: '17:00',
-    venue: 'Escola Antenor Viana',
+    venue: 'IPEM',
   },
   'match_futsal-fem_final': {
     scheduledDate: '29/11 (Dom)',
     scheduledTime: '18:00',
-    venue: 'Quadra Oficial',
+    venue: 'IPEM',
   },
   'match_futsal-masc_final': {
     scheduledDate: '29/11 (Dom)',
     scheduledTime: '19:00',
-    venue: 'Quadra Oficial',
+    venue: 'IPEM',
   },
 };
 

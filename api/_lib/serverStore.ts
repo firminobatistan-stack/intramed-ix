@@ -1040,6 +1040,33 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
     mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', luanRegId, luanReg));
   }
 
+  // 0b. Sincroniza tabela oficial de horários e locais (PDF oficial 2026-11-19) no banco em nuvem (idempotente)
+  const OFFICIAL_SCHEDULE_VERSION = '2026-11-19-pdf-v2';
+  if (!store.matches) store.matches = {};
+  for (const defMatch of OFFICIAL_TOURNAMENT_MATCHES) {
+    const mId = String(defMatch.id || '');
+    if (!mId) continue;
+    const exMatch = store.matches[mId];
+    if (!exMatch) {
+      store.matches[mId] = {
+        ...defMatch,
+        scheduleSyncVersion: OFFICIAL_SCHEDULE_VERSION,
+        revision: 1,
+        updatedAtIso: nowIso,
+      };
+      mutationPromises.push(MirrorDocumentToFirestoreRest('matches', mId, store.matches[mId]));
+    } else if (exMatch.scheduleSyncVersion !== OFFICIAL_SCHEDULE_VERSION) {
+      exMatch.scheduledDate = defMatch.scheduledDate;
+      exMatch.scheduledTime = defMatch.scheduledTime;
+      exMatch.venue = defMatch.venue;
+      exMatch.scheduleSyncVersion = OFFICIAL_SCHEDULE_VERSION;
+      exMatch.revision = Number(exMatch.revision || 1) + 1;
+      exMatch.updatedAtIso = nowIso;
+      store.matches[mId] = exMatch;
+      mutationPromises.push(MirrorDocumentToFirestoreRest('matches', mId, exMatch));
+    }
+  }
+
   // 0. Reconstrói campos ausentes de registrations (ex: quando o webhook do Mercado Pago confirmou pagamento antes do doc completo da inscrição chegar) a partir do athlete/profile/user vinculado
   for (const [regId, reg] of Object.entries(store.registrations)) {
     if (!reg || isPurgedTestRecord(reg)) continue;

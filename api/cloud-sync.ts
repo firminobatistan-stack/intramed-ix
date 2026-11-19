@@ -583,6 +583,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const needsEntityHeal =
       Boolean(req.query.heal) ||
+      Object.values(store.matches || {}).some(
+        (m) => m && !m.isTestOnly && m.scheduleSyncVersion !== '2026-11-19-pdf-v2'
+      ) ||
       Object.values(store.registrations || {}).some(
         (r) =>
           r &&
