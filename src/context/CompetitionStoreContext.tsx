@@ -648,16 +648,63 @@ function buildDefaultOfficialSheetForMatch(
   return ensureModalitySpecificSheetFields(baseSheet, match);
 }
 
+function sanitizeMatchSheet(
+  sheet: MatchSheet,
+  fallbackTimer?: MatchSheet['timer']
+): MatchSheet {
+  const safeTimer: MatchSheet['timer'] =
+    sheet && sheet.timer && typeof sheet.timer === 'object'
+      ? {
+          currentPeriod: sheet.timer.currentPeriod ?? 1,
+          totalPeriods: sheet.timer.totalPeriods ?? 2,
+          periodLabel: sheet.timer.periodLabel || '1º Período',
+          remainingSeconds: sheet.timer.remainingSeconds ?? 1200,
+          initialPeriodSeconds: sheet.timer.initialPeriodSeconds ?? 1200,
+          elapsedSeconds: sheet.timer.elapsedSeconds ?? 0,
+          isRunning: Boolean(sheet.timer.isRunning),
+          lifecycle: sheet.timer.lifecycle || 'not_started',
+          lastTickTimestamp: sheet.timer.lastTickTimestamp ?? null,
+        }
+      : fallbackTimer && typeof fallbackTimer === 'object'
+      ? { ...fallbackTimer }
+      : {
+          currentPeriod: 1,
+          totalPeriods: 2,
+          periodLabel: '1º Período',
+          remainingSeconds: 1200,
+          initialPeriodSeconds: 1200,
+          elapsedSeconds: 0,
+          isRunning: false,
+          lifecycle: 'not_started',
+          lastTickTimestamp: null,
+        };
+
+  return {
+    ...sheet,
+    timer: safeTimer,
+    events: Array.isArray(sheet.events) ? sheet.events : [],
+    homeLineup: Array.isArray(sheet.homeLineup) ? sheet.homeLineup : [],
+    awayLineup: Array.isArray(sheet.awayLineup) ? sheet.awayLineup : [],
+    periodScores: Array.isArray(sheet.periodScores) ? sheet.periodScores : [],
+    activeSuspensions: Array.isArray(sheet.activeSuspensions) ? sheet.activeSuspensions : [],
+  };
+}
+
 function hydrateOfficialSheetsWithDefaults(
   savedSheets: Record<string, MatchSheet> | undefined,
   matches: Match[],
   athletesPool: Athlete[]
 ): Record<string, MatchSheet> {
-  const result: Record<string, MatchSheet> = { ...(savedSheets || {}) };
+  const result: Record<string, MatchSheet> = {};
+  for (const [k, v] of Object.entries(savedSheets || {})) {
+    if (v && typeof v === 'object') {
+      result[k] = sanitizeMatchSheet(v);
+    }
+  }
   for (const m of matches) {
     if (m && m.id) {
       result[m.id] = result[m.id]
-        ? ensureModalitySpecificSheetFields(result[m.id], m)
+        ? sanitizeMatchSheet(ensureModalitySpecificSheetFields(result[m.id], m))
         : buildDefaultOfficialSheetForMatch(m, athletesPool);
     }
   }
@@ -1061,9 +1108,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                 rsRev > exRev ||
                 (!isOperatorHere && rsRev > 0 && hasContentDiff) ||
                 (!isOperatorHere && rsRev >= exRev && isStrictlyNewerTime) ||
-                (rsRev >= exRev && isStrictlyNewerTime && !ex.timer.isRunning)
+                (rsRev >= exRev && isStrictlyNewerTime && !ex.timer?.isRunning)
               ) {
-                copySheets[rs.matchId] = rs;
+                copySheets[rs.matchId] = sanitizeMatchSheet(rs, ex?.timer);
                 sheetChanged = true;
                 changed = true;
               }
@@ -1502,7 +1549,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                   (!isOperatorHere && rsRev >= exRev && isNewerIso) ||
                   (rsRev === exRev && isNewerIso)
                 ) {
-                  nextSheets[rs.matchId] = rs;
+                  nextSheets[rs.matchId] = sanitizeMatchSheet(rs, ex?.timer);
                   changed = true;
                 }
               }
@@ -1568,11 +1615,15 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         const checkCollectionHasRunning = (sheetsMap: Record<string, MatchSheet>) =>
           Object.values(sheetsMap).some(
             (s) =>
-              s.timer.isRunning ||
-              (s.activeTimeout && s.activeTimeout.isActive) ||
-              s.activeSuspensions.some(
-                (susp) => !susp.isReleased && susp.remainingSeconds > 0 && s.timer.isRunning
-              )
+              Boolean(s?.timer?.isRunning) ||
+              (s?.activeTimeout && s.activeTimeout.isActive) ||
+              (Array.isArray(s?.activeSuspensions) &&
+                s.activeSuspensions.some(
+                  (susp) =>
+                    !susp.isReleased &&
+                    susp.remainingSeconds > 0 &&
+                    Boolean(s?.timer?.isRunning)
+                ))
           );
 
         const officialRunning = checkCollectionHasRunning(prev.officialSheets);
@@ -2080,11 +2131,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         return false;
       }
       return (
-        s.timer.isRunning ||
-        s.timer.lifecycle === 'running' ||
-        s.timer.lifecycle === 'paused' ||
-        s.timer.lifecycle === 'interval' ||
-        s.timer.lifecycle === 'overtime' ||
+        Boolean(s.timer?.isRunning) ||
+        s.timer?.lifecycle === 'running' ||
+        s.timer?.lifecycle === 'paused' ||
+        s.timer?.lifecycle === 'interval' ||
+        s.timer?.lifecycle === 'overtime' ||
         (s.events && s.events.some((ev) => !ev.isDeleted)) ||
         (s.subMatches &&
           s.subMatches.some(
