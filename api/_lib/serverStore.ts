@@ -1023,6 +1023,33 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
     mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', andreRegId, andreReg));
   }
 
+  // - Franco Vieira: pagamento externo de não sócio confirmado (R$ 60,00)
+  const francoRegId = 'reg-b6d5c1e8-1777-4602-b3d4-14c05b3aa78f';
+  const francoReg = store.registrations[francoRegId];
+  if (
+    francoReg &&
+    (francoReg.paymentStatus !== 'pago' ||
+      Number(francoReg.authorizedPrice) !== 60 ||
+      Number(francoReg.paidAmount) !== 60)
+  ) {
+    francoReg.paymentStatus = 'pago';
+    francoReg.paymentMethod = 'pix';
+    francoReg.mpPaymentId = 'EXTERNO-PIX-60-FRANCO-VIEIRA';
+    francoReg.authorizedPrice = 60;
+    francoReg.paidAmount = 60;
+    francoReg.paidAtIso = francoReg.paidAtIso || nowIso;
+    francoReg.qrValidationToken = `INTRAMED-IX-${francoRegId.toUpperCase()}-VERIFIED`;
+    francoReg.memberNotes =
+      'Pagamento externo de não sócio (R$ 60,00) confirmado diretamente com a comissão.';
+    francoReg.validatedByAdminId = 'usr_master_cangaceira';
+    francoReg.validatedByAdminName = 'Atlética Cangaceira';
+    francoReg.validatedAtIso = francoReg.validatedAtIso || nowIso;
+    francoReg.revision = Number(francoReg.revision || 1) + 1;
+    francoReg.updatedAtIso = nowIso;
+    store.registrations[francoRegId] = francoReg;
+    mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', francoRegId, francoReg));
+  }
+
   // - Luan Kildare: correção de equipe de Sanguinária (T21) para Tormenta (T23)
   const luanRegId = 'reg-b5bba181-6468-49c7-b66f-574beb9eae89';
   const luanReg = store.registrations[luanRegId];

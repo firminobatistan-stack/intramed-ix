@@ -595,6 +595,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             r.categoryName === 'Geral' ||
             (r.id === 'reg-3cb1367e-7075-4d4e-816a-e088793b5c66' &&
               (r.paymentStatus !== 'pago' || Number(r.authorizedPrice) !== 65)) ||
+            (r.id === 'reg-b6d5c1e8-1777-4602-b3d4-14c05b3aa78f' &&
+              r.paymentStatus !== 'pago') ||
             (r.id === 'reg-b5bba181-6468-49c7-b66f-574beb9eae89' &&
               r.teamId !== 'tormenta') ||
             (r.paymentStatus !== 'pago' && r.paymentStatus !== 'cancelado' && Boolean(r.paidAtIso) && Number(r.paidAmount) > 0))
