@@ -330,12 +330,18 @@ function canClientWriteDocument(
     if (isAdmin) {
       const nextMemberStatus = String(incoming.memberStatus || existing.memberStatus || 'nao_solicitado');
       const isGuest = Boolean(incoming.isGuestAthlete ?? existing.isGuestAthlete);
-      const serverPrice = computeAuthorizedServerPrice(
-        String(incoming.lotId || existing.lotId || 'lote-1-cangaceira'),
-        nextMemberStatus,
-        Boolean(incoming.requestedMemberDiscount ?? existing.requestedMemberDiscount),
-        isGuest
-      );
+      const isExplicitExternal65 =
+        (String(incoming.mpPaymentId || existing.mpPaymentId || '').startsWith('EXTERNO-') &&
+          Number(incoming.paidAmount ?? incoming.authorizedPrice ?? existing.authorizedPrice) === 65) ||
+        (Number(incoming.authorizedPrice) === 65 && Number(incoming.paidAmount) === 65);
+      const serverPrice = isExplicitExternal65
+        ? 65
+        : computeAuthorizedServerPrice(
+            String(incoming.lotId || existing.lotId || 'lote-1-cangaceira'),
+            nextMemberStatus,
+            Boolean(incoming.requestedMemberDiscount ?? existing.requestedMemberDiscount),
+            isGuest
+          );
 
       // Nunca permite que um sync de navegador Admin desatualizado rebaixe uma inscrição já paga ('pago' ou com paidAtIso + paidAmount > 0) de volta para 'pendente'
       const wasAlreadyPaid =
@@ -582,6 +588,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           r &&
           (/^atleta(\s+intramed)?$/i.test(String(r.athleteName || '').trim()) ||
             r.categoryName === 'Geral' ||
+            (r.id === 'reg-3cb1367e-7075-4d4e-816a-e088793b5c66' &&
+              (r.paymentStatus !== 'pago' || Number(r.authorizedPrice) !== 65)) ||
+            (r.id === 'reg-b5bba181-6468-49c7-b66f-574beb9eae89' &&
+              r.teamId !== 'tormenta') ||
             (r.paymentStatus !== 'pago' && r.paymentStatus !== 'cancelado' && Boolean(r.paidAtIso) && Number(r.paidAmount) > 0))
       );
     if (needsEntityHeal) {

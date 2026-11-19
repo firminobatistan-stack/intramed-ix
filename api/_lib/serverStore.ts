@@ -995,6 +995,51 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
 
   const mutationPromises: Array<Promise<unknown>> = [];
 
+  // 0a. Ajustes administrativos solicitados e idempotentes em produção:
+  // - André Cardoso: pagamento externo confirmado (R$ 65,00)
+  const andreRegId = 'reg-3cb1367e-7075-4d4e-816a-e088793b5c66';
+  const andreReg = store.registrations[andreRegId];
+  if (
+    andreReg &&
+    (andreReg.paymentStatus !== 'pago' ||
+      Number(andreReg.authorizedPrice) !== 65 ||
+      Number(andreReg.paidAmount) !== 65)
+  ) {
+    andreReg.paymentStatus = 'pago';
+    andreReg.paymentMethod = 'pix';
+    andreReg.mpPaymentId = 'EXTERNO-PIX-65-ANDRE-CARDOSO';
+    andreReg.authorizedPrice = 65;
+    andreReg.paidAmount = 65;
+    andreReg.paidAtIso = andreReg.paidAtIso || nowIso;
+    andreReg.qrValidationToken = `INTRAMED-IX-${andreRegId.toUpperCase()}-VERIFIED`;
+    andreReg.memberNotes =
+      'Pagamento externo (R$ 65,00) confirmado diretamente com a comissão.';
+    andreReg.validatedByAdminId = 'usr_master_cangaceira';
+    andreReg.validatedByAdminName = 'Atlética Cangaceira';
+    andreReg.validatedAtIso = andreReg.validatedAtIso || nowIso;
+    andreReg.revision = Number(andreReg.revision || 1) + 1;
+    andreReg.updatedAtIso = nowIso;
+    store.registrations[andreRegId] = andreReg;
+    mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', andreRegId, andreReg));
+  }
+
+  // - Luan Kildare: correção de equipe de Sanguinária (T21) para Tormenta (T23)
+  const luanRegId = 'reg-b5bba181-6468-49c7-b66f-574beb9eae89';
+  const luanReg = store.registrations[luanRegId];
+  if (
+    luanReg &&
+    (luanReg.teamId !== 'tormenta' || String(luanReg.turma || '') !== '23')
+  ) {
+    luanReg.teamId = 'tormenta';
+    luanReg.teamName = 'Tormenta';
+    luanReg.turma = '23';
+    luanReg.turmaLabel = 'Tormenta • T23';
+    luanReg.revision = Number(luanReg.revision || 1) + 1;
+    luanReg.updatedAtIso = nowIso;
+    store.registrations[luanRegId] = luanReg;
+    mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', luanRegId, luanReg));
+  }
+
   // 0. Reconstrói campos ausentes de registrations (ex: quando o webhook do Mercado Pago confirmou pagamento antes do doc completo da inscrição chegar) a partir do athlete/profile/user vinculado
   for (const [regId, reg] of Object.entries(store.registrations)) {
     if (!reg || isPurgedTestRecord(reg)) continue;
@@ -1410,6 +1455,18 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         primaryAth.gender = matchingReg.categoryName;
         athChanged = true;
       }
+      if (matchingReg.teamId && primaryAth.teamId !== matchingReg.teamId) {
+        primaryAth.teamId = matchingReg.teamId;
+        athChanged = true;
+      }
+      if (matchingReg.turma && primaryAth.turma !== matchingReg.turma) {
+        primaryAth.turma = matchingReg.turma;
+        athChanged = true;
+      }
+      if (matchingReg.turmaLabel && primaryAth.turmaLabel !== matchingReg.turmaLabel) {
+        primaryAth.turmaLabel = matchingReg.turmaLabel;
+        athChanged = true;
+      }
     }
 
     for (let i = 1; i < group.length; i++) {
@@ -1589,20 +1646,24 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
         prof.isAthlete = isPaid;
         profChanged = true;
       }
-      if (!prof.turma && matchingReg.turma) {
+      if (matchingReg.turma && prof.turma !== matchingReg.turma) {
         prof.turma = matchingReg.turma;
         profChanged = true;
       }
-      if (!prof.turmaLabel && matchingReg.turmaLabel) {
+      if (matchingReg.turmaLabel && prof.turmaLabel !== matchingReg.turmaLabel) {
         prof.turmaLabel = matchingReg.turmaLabel;
         profChanged = true;
       }
-      if (!prof.teamId && matchingReg.teamId) {
+      if (matchingReg.teamId && prof.teamId !== matchingReg.teamId) {
         prof.teamId = matchingReg.teamId;
         profChanged = true;
       }
-      if (!prof.teamName && matchingReg.teamName) {
+      if (matchingReg.teamName && prof.teamName !== matchingReg.teamName) {
         prof.teamName = matchingReg.teamName;
+        profChanged = true;
+      }
+      if (isPaid && prof.role !== 'atleta') {
+        prof.role = 'atleta';
         profChanged = true;
       }
       const linkedAth = store.athletes[expectedAthId];
