@@ -608,6 +608,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               (r.paymentStatus !== 'pago' || Number(r.authorizedPrice) !== 65)) ||
             (r.id === 'reg-b6d5c1e8-1777-4602-b3d4-14c05b3aa78f' &&
               r.paymentStatus !== 'pago') ||
+            (r.id === 'reg-0696d4b7-d79d-44d7-92af-ce2b9a2d1dd0' &&
+              r.paymentStatus !== 'pago') ||
+            (r.id === 'reg-ded2e9d6-5994-4e18-9abf-5b140dc57f06' &&
+              r.paymentStatus !== 'pago') ||
             (r.id === 'reg-b5bba181-6468-49c7-b66f-574beb9eae89' &&
               (r.teamId !== 'tormenta' || r.paymentStatus !== 'pago')) ||
             (r.paymentStatus !== 'pago' && r.paymentStatus !== 'cancelado' && Boolean(r.paidAtIso) && Number(r.paidAmount) > 0))

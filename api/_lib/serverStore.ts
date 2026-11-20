@@ -1092,6 +1092,46 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
     mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', luanRegId, luanReg));
   }
 
+  // - Yasmim Heloísa de Oliveira Soares (R$ 60,00) & Clara Batista (R$ 50,00): pagamentos confirmados + acesso padrão de atleta
+  const manualPaidTargets: Array<{ regId: string; price: number; ref: string }> = [
+    {
+      regId: 'reg-0696d4b7-d79d-44d7-92af-ce2b9a2d1dd0',
+      price: 60,
+      ref: 'EXTERNO-PIX-60-YASMIM-HELOISA',
+    },
+    {
+      regId: 'reg-ded2e9d6-5994-4e18-9abf-5b140dc57f06',
+      price: 50,
+      ref: 'EXTERNO-PIX-50-CLARA-BATISTA',
+    },
+  ];
+  for (const target of manualPaidTargets) {
+    const tReg = store.registrations[target.regId];
+    if (
+      tReg &&
+      (tReg.paymentStatus !== 'pago' ||
+        Number(tReg.authorizedPrice) !== target.price ||
+        Number(tReg.paidAmount) !== target.price ||
+        !tReg.qrValidationToken)
+    ) {
+      tReg.paymentStatus = 'pago';
+      tReg.paymentMethod = tReg.paymentMethod || 'pix';
+      tReg.mpPaymentId = tReg.mpPaymentId || target.ref;
+      tReg.authorizedPrice = target.price;
+      tReg.paidAmount = target.price;
+      tReg.paidAtIso = tReg.paidAtIso || nowIso;
+      tReg.qrValidationToken =
+        tReg.qrValidationToken || `INTRAMED-IX-${target.regId.toUpperCase()}-VERIFIED`;
+      tReg.validatedByAdminId = tReg.validatedByAdminId || 'usr_master_cangaceira';
+      tReg.validatedByAdminName = tReg.validatedByAdminName || 'Atlética Cangaceira';
+      tReg.validatedAtIso = tReg.validatedAtIso || nowIso;
+      tReg.revision = Number(tReg.revision || 1) + 1;
+      tReg.updatedAtIso = nowIso;
+      store.registrations[target.regId] = tReg;
+      mutationPromises.push(MirrorDocumentToFirestoreRest('registrations', target.regId, tReg));
+    }
+  }
+
   // 0b. Sincroniza tabela oficial de horários e locais (PDF oficial 2026-11-19) no banco em nuvem (idempotente)
   const OFFICIAL_SCHEDULE_VERSION = '2026-11-19-pdf-v2';
   if (!store.matches) store.matches = {};
