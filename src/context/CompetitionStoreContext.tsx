@@ -421,6 +421,30 @@ export function setStoredOperatorToken(token: string | null): void {
   }
 }
 
+function hasValidOperatorJwtForMatch(matchId: string): boolean {
+  const token = getStoredOperatorToken();
+  if (!token || !token.includes('.')) return false;
+  try {
+    const [b64] = token.split('.');
+    const decoded = JSON.parse(atob(b64.replace(/-/g, '+').replace(/_/g, '/')));
+    const exp = Number(decoded?.exp || 0);
+    if (exp && exp < Math.floor(Date.now() / 1000)) return false;
+    const role = String(decoded?.role || '').toLowerCase();
+    if (
+      role === 'admin' ||
+      role === 'administrador' ||
+      role === 'organizacao' ||
+      role === 'moderador' ||
+      role === 'moderador_master'
+    ) {
+      return true;
+    }
+    return role === 'mesario' && String(decoded?.matchId || '') === matchId;
+  } catch {
+    return false;
+  }
+}
+
 interface PersistedEngineState {
   isTestMode: boolean;
   officialTeams: Team[];
@@ -855,11 +879,12 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   const [unlockedMatchIds, setUnlockedMatchIds] = useState<string[]>(() => {
     try {
+      localStorage.removeItem('intramed_unlocked_match_ids');
       const savedSession = sessionStorage.getItem('intramed_unlocked_match_ids');
-      const savedLocal = localStorage.getItem('intramed_unlocked_match_ids');
       const parsedSession = savedSession ? JSON.parse(savedSession) : [];
-      const parsedLocal = savedLocal ? JSON.parse(savedLocal) : [];
-      return Array.from(new Set([...(Array.isArray(parsedSession) ? parsedSession : []), ...(Array.isArray(parsedLocal) ? parsedLocal : [])]));
+      return Array.isArray(parsedSession)
+        ? parsedSession.filter((id: string) => hasValidOperatorJwtForMatch(id))
+        : [];
     } catch {
       return [];
     }
@@ -1841,7 +1866,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       setState((prev) => {
         const hasMatchUnlock =
           Boolean(prev.currentUser?.id) &&
-          unlockedMatchIdsRef.current.includes(matchId);
+          unlockedMatchIdsRef.current.includes(matchId) &&
+          hasValidOperatorJwtForMatch(matchId);
         if (!isUserAdmin(prev.currentUser) && !hasMatchUnlock) return prev;
         const isTest = matchId.startsWith('test-');
         const matchesList = isTest ? [...prev.testMatches] : [...prev.officialMatches];
@@ -4220,7 +4246,7 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     (matchId?: string): boolean => {
       if (canOperateOfficialData()) return true;
       if (!matchId || !state.currentUser?.id) return false;
-      return unlockedMatchIds.includes(matchId);
+      return unlockedMatchIds.includes(matchId) && hasValidOperatorJwtForMatch(matchId);
     },
     [canOperateOfficialData, state.currentUser?.id, unlockedMatchIds]
   );
@@ -4362,10 +4388,6 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         unlockedMatchIdsRef.current = next;
         if (typeof window !== 'undefined') {
           sessionStorage.setItem(
-            'intramed_unlocked_match_ids',
-            JSON.stringify(next)
-          );
-          localStorage.setItem(
             'intramed_unlocked_match_ids',
             JSON.stringify(next)
           );
