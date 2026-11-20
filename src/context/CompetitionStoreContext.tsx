@@ -2076,6 +2076,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
       if (matchIdx === undefined && normName && (a.teamId || a.turma)) {
         const foundIdx = deduplicated.findIndex((ex) => {
+          const exEmail = ex.email?.trim().toLowerCase() || '';
+          const exReg = ex.registrationId?.trim() || '';
+          if (emailKey && exEmail && emailKey !== exEmail) return false;
+          if (regKey && exReg && regKey !== exReg) return false;
           const exNorm = normalizeName(ex.name);
           if (!exNorm) return false;
           const sameTeamOrTurma =
