@@ -216,7 +216,7 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* BANNER: CONTA DE TORCEDOR (DESLOGADO) OU INSCRIÇÃO DE ATLETA (LOGADO) */}
-      {!hasCompletedRegistration ? (
+      {!hasCompletedRegistration && !regCountdown.isPaymentClosed ? (
         <section className="bg-gradient-to-r from-amber-500 via-brand-yellow to-yellow-400 rounded-3xl p-4 sm:p-5 shadow-lg border border-amber-300 text-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 relative overflow-hidden">
           <div className="space-y-1 z-10 text-center sm:text-left">
             <h2 className="text-lg sm:text-xl font-display font-black tracking-tight text-slate-950">

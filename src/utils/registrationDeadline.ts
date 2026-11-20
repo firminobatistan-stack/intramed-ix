@@ -8,8 +8,16 @@ export const REGISTRATION_HARD_CUTOFF_MS = new Date(
   '2026-11-19T18:10:00-03:00'
 ).getTime();
 
+export const PAYMENT_DEADLINE_MS = new Date(
+  '2026-11-19T22:00:00-03:00'
+).getTime();
+
 export function isRegistrationHardClosed(nowMs = Date.now()): boolean {
   return nowMs >= REGISTRATION_HARD_CUTOFF_MS;
+}
+
+export function isPaymentDeadlineClosed(nowMs = Date.now()): boolean {
+  return nowMs >= PAYMENT_DEADLINE_MS;
 }
 
 export function formatRemainingCountdown(ms: number): string {
@@ -38,10 +46,16 @@ export function useRegistrationCountdown() {
   const isDisplayClosed = nowMs >= REGISTRATION_DISPLAY_DEADLINE_MS;
   const isHardClosed = nowMs >= REGISTRATION_HARD_CUTOFF_MS;
 
+  const paymentRemainingMs = Math.max(0, PAYMENT_DEADLINE_MS - nowMs);
+  const isPaymentClosed = nowMs >= PAYMENT_DEADLINE_MS;
+
   return {
     remainingMs,
     isDisplayClosed,
     isHardClosed,
     formatted: formatRemainingCountdown(remainingMs),
+    paymentRemainingMs,
+    isPaymentClosed,
+    paymentFormatted: formatRemainingCountdown(paymentRemainingMs),
   };
 }

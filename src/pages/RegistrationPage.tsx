@@ -1693,9 +1693,18 @@ export const RegistrationPage: React.FC = () => {
                               variant="accent"
                               size="sm"
                               leftIcon={<CreditCard className="w-4 h-4" />}
-                              onClick={() => setPayingRegistration(reg)}
+                              disabled={regCountdown.isPaymentClosed && !isAdmin}
+                              onClick={() => {
+                                if (regCountdown.isPaymentClosed && !isAdmin) {
+                                  alert('O prazo para pagamentos de inscritos encerrou às 22:00.');
+                                  return;
+                                }
+                                setPayingRegistration(reg);
+                              }}
                             >
-                              Pagar Inscrição
+                              {regCountdown.isPaymentClosed && !isAdmin
+                                ? 'Pagamentos encerrados às 22:00'
+                                : 'Pagar Inscrição'}
                             </Button>
                           )}
                         </div>

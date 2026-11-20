@@ -56,6 +56,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'A área de pagamentos do IntraMed ainda está sendo preparada. Em breve, você poderá realizar sua inscrição e efetuar o pagamento diretamente pela plataforma.',
     });
   }
+  if (Date.now() >= new Date('2026-11-19T22:00:00-03:00').getTime()) {
+    return res.status(403).json({
+      ok: false,
+      error: 'O prazo para pagamentos de inscritos encerrou às 22:00.',
+    });
+  }
   const storedReg = store.registrations[String(registrationId)];
 
   // Status de sócio e pagamento validados contra o registro armazenado no servidor
