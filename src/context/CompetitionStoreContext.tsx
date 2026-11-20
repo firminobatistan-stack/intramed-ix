@@ -1839,7 +1839,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
       ) => { match: Match; sheet: MatchSheet }
     ) => {
       setState((prev) => {
-        const hasMatchUnlock = unlockedMatchIdsRef.current.includes(matchId);
+        const hasMatchUnlock =
+          Boolean(prev.currentUser?.id) &&
+          unlockedMatchIdsRef.current.includes(matchId);
         if (!isUserAdmin(prev.currentUser) && !hasMatchUnlock) return prev;
         const isTest = matchId.startsWith('test-');
         const matchesList = isTest ? [...prev.testMatches] : [...prev.officialMatches];
@@ -4130,8 +4132,13 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         sessionStorage.setItem('intramed_admin_session', 'true');
       } else {
         sessionStorage.removeItem('intramed_admin_session');
-        if (!user)
-        setStoredOperatorToken(null);
+        if (!user) {
+          setStoredOperatorToken(null);
+          sessionStorage.removeItem('intramed_unlocked_match_ids');
+          localStorage.removeItem('intramed_unlocked_match_ids');
+          setUnlockedMatchIds([]);
+          unlockedMatchIdsRef.current = [];
+        }
       }
     }
 
@@ -4212,10 +4219,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
   const canOperateMatch = useCallback(
     (matchId?: string): boolean => {
       if (canOperateOfficialData()) return true;
-      if (!matchId) return false;
+      if (!matchId || !state.currentUser?.id) return false;
       return unlockedMatchIds.includes(matchId);
     },
-    [canOperateOfficialData, unlockedMatchIds]
+    [canOperateOfficialData, state.currentUser?.id, unlockedMatchIds]
   );
 
   const unlockMatchAsTableOfficial = useCallback(
