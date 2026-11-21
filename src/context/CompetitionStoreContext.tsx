@@ -713,12 +713,30 @@ function reconcileMatchWithSheet(match: Match, sheet?: MatchSheet): Match {
       sumHome += p.homeScore ?? 0;
       sumAway += p.awayScore ?? 0;
     }
-    if ((sumHome > 0 || sumAway > 0) && (homeScore ?? 0) === 0 && (awayScore ?? 0) === 0) {
+    const currentTotal = (homeScore ?? 0) + (awayScore ?? 0);
+    if ((sumHome > 0 || sumAway > 0) && (currentTotal === 0 || sumHome + sumAway > currentTotal)) {
       homeScore = sumHome;
       awayScore = sumAway;
     } else if (sheet.isClosed && homeScore == null && awayScore == null) {
       homeScore = sumHome;
       awayScore = sumAway;
+    }
+  } else if (sheet.scoringModel === 'team_submatches' && Array.isArray(sheet.subMatches)) {
+    let subHome = 0;
+    let subAway = 0;
+    for (const sub of sheet.subMatches) {
+      if (sub.status === 'finished') {
+        if (sub.winnerSide === 'home') subHome += 1;
+        else if (sub.winnerSide === 'away') subAway += 1;
+      }
+    }
+    const currentTotal = (homeScore ?? 0) + (awayScore ?? 0);
+    if ((subHome > 0 || subAway > 0) && (currentTotal === 0 || subHome + subAway > currentTotal)) {
+      homeScore = subHome;
+      awayScore = subAway;
+    } else if (sheet.isClosed && homeScore == null && awayScore == null) {
+      homeScore = subHome;
+      awayScore = subAway;
     }
   }
 
