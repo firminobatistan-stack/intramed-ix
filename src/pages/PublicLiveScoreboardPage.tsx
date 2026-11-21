@@ -26,6 +26,7 @@ import { StandingsTable } from '../components/sports/StandingsTable';
 import { StoryShareButton } from '../components/social/StoryShareModal';
 import { MatchEventType } from '../types/domain';
 import { computeLiveVolleyballRotation } from '../utils/volleyballRotation';
+import { computeLiveWinProbability } from '../utils/winProbability';
 import {
   isCollectiveOrBeachVolley,
   ModalityCourtVisualizer,
@@ -204,6 +205,7 @@ export const PublicLiveScoreboardPage: React.FC = () => {
   const awayScore = resolvedMatch?.awayTeam.score ?? 0;
   const homeCurrentSetPoints = currentSetObj?.homeScore ?? 0;
   const awayCurrentSetPoints = currentSetObj?.awayScore ?? 0;
+  const winProb = computeLiveWinProbability(resolvedMatch, sheet);
 
   // Barras reais de ritmo de jogo: baseadas exclusivamente nos lances reais registrados (sem ondas fictícias)
   const chronologicalScoringAndPlays = [...events].reverse();
@@ -753,6 +755,74 @@ export const PublicLiveScoreboardPage: React.FC = () => {
         {/* ABA 1: DETALHES */}
         {activeTab === 'details' && (
           <>
+            {/* 2.9. CARD "CHANCES DE VITÓRIA (TEMPO REAL)" */}
+            {resolvedMatch && (
+              <section className="all-sports-card p-5 sm:p-6 space-y-3">
+                <div className="all-sports-section-pill flex items-center justify-between gap-2 px-4">
+                  <span>Chances de Vitória</span>
+                  <span className="text-[10px] font-mono font-bold text-[#0B218A]">
+                    {resolvedMatch.status === 'finished'
+                      ? 'Resultado Final'
+                      : resolvedMatch.status === 'live' || resolvedMatch.status === 'halftime'
+                      ? 'Ao Vivo'
+                      : 'Pré-jogo'}
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="h-3.5 rounded-full bg-slate-100 overflow-hidden flex shadow-inner">
+                    {winProb.homePct > 0 && (
+                      <div
+                        className="h-full bg-[#1D63FF] transition-all duration-500"
+                        style={{ width: `${winProb.homePct}%` }}
+                      />
+                    )}
+                    {winProb.drawPct > 0 && (
+                      <div
+                        className="h-full bg-slate-400 transition-all duration-500"
+                        style={{ width: `${winProb.drawPct}%` }}
+                      />
+                    )}
+                    {winProb.awayPct > 0 && (
+                      <div
+                        className="h-full bg-[#10B981] transition-all duration-500"
+                        style={{ width: `${winProb.awayPct}%` }}
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#1D63FF] shrink-0" />
+                      <span className="text-slate-700 truncate">{homeName}</span>
+                      <span className="font-mono font-extrabold text-[#1D63FF]">
+                        {winProb.homePct}%
+                      </span>
+                    </div>
+
+                    {winProb.drawPct > 0 && (
+                      <div className="flex items-center gap-1 shrink-0 text-slate-500">
+                        <span>Empate</span>
+                        <span className="font-mono font-extrabold">{winProb.drawPct}%</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end gap-1.5 min-w-0">
+                      <span className="font-mono font-extrabold text-[#10B981]">
+                        {winProb.awayPct}%
+                      </span>
+                      <span className="text-slate-700 truncate">{awayName}</span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#10B981] shrink-0" />
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-center text-slate-400 font-medium">
+                  Estimativa calculada automaticamente conforme o placar e o andamento do jogo.
+                </p>
+              </section>
+            )}
+
             {/* 3. CARD "RITMO DE JOGO & ARTILHEIROS/DESTAQUES REAIS" */}
             <section className="all-sports-card p-5 sm:p-6 space-y-4">
               <div className="all-sports-section-pill">
