@@ -336,25 +336,37 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
     name: string;
   } | null>(null);
 
-  // Verifica se o mesário realmente registrou escalação oficial na súmula desta partida
+  // Verifica se o mesário registrou escalação oficial na súmula desta partida (visível para operador e público)
   const hasOfficialSheetLineup = Boolean(
-    (editable || match.status === 'live' || match.status === 'halftime' || match.status === 'finished') &&
-      sheet &&
+    sheet &&
       ((sheet.homeLineup && sheet.homeLineup.length > 0) ||
         (sheet.awayLineup && sheet.awayLineup.length > 0))
   );
 
   const [focusMode, setFocusMode] = useState<CourtFocusMode>(
-    editable && hasOfficialSheetLineup ? 'lineup' : 'overview'
+    hasOfficialSheetLineup ? 'lineup' : 'overview'
   );
+  const prevHasLineupRef = useRef<boolean>(hasOfficialSheetLineup);
 
   useEffect(() => {
-    if ((activePageTab === 'lineups' || editable) && hasOfficialSheetLineup) {
-      setFocusMode('lineup');
-    } else if (focusMode === 'lineup' && !hasOfficialSheetLineup) {
-      setFocusMode('overview');
+    setSelectedSwapNode(null);
+    setFocusMode(hasOfficialSheetLineup ? 'lineup' : 'overview');
+  }, [match.id]);
+
+  useEffect(() => {
+    if (!hasOfficialSheetLineup) {
+      prevHasLineupRef.current = false;
+      setFocusMode((prev) => (prev === 'lineup' ? 'overview' : prev));
+      return;
     }
-  }, [activePageTab, editable, hasOfficialSheetLineup, match.id, focusMode]);
+    if (
+      activePageTab === 'lineups' ||
+      !prevHasLineupRef.current
+    ) {
+      setFocusMode('lineup');
+    }
+    prevHasLineupRef.current = true;
+  }, [activePageTab, hasOfficialSheetLineup, match.id]);
 
   const homeTheme = useMemo(
     () =>
@@ -975,7 +987,7 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
 
                   return (
                     <button
-                      key={`${node.id}_${idx}`}
+                      key={`${node.side}_${node.id}`}
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1011,7 +1023,7 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
                         transition: 'all 280ms cubic-bezier(0.34, 1.56, 0.64, 1)',
                         transitionDelay: `${(idx % 6) * 20}ms`,
                       }}
-                      className="group absolute z-20 flex flex-col items-center focus:outline-none cursor-pointer touch-manipulation"
+                      className="group absolute z-20 flex flex-col items-center focus:outline-none cursor-pointer touch-manipulation select-none"
                     >
                       <div
                         style={{

@@ -2993,9 +2993,50 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
         const idxB = list.findIndex((i) => i.athleteId === athleteIdB);
         if (idxA === -1 || idxB === -1) return { match, sheet };
 
-        const temp = { ...list[idxA] };
-        list[idxA] = { ...list[idxB], courtX: undefined, courtY: undefined };
-        list[idxB] = { ...temp, courtX: undefined, courtY: undefined };
+        const { courtX: _ax, courtY: _ay, ...itemA } = list[idxA];
+        const { courtX: _bx, courtY: _by, ...itemB } = list[idxB];
+        list[idxA] = itemB;
+        list[idxB] = itemA;
+
+        let nextVolleyballSetConfigs = sheet.volleyballSetConfigs;
+        if (match.modalityId === 'volei') {
+          const setNum = sheet.timer.currentPeriod || 1;
+          const prevConfigs = sheet.volleyballSetConfigs || {};
+          const existingSetConfig = prevConfigs[setNum];
+          const baseOrder = resolveSixStartingIds(
+            teamSide === 'home'
+              ? existingSetConfig?.homeInitialOrder
+              : existingSetConfig?.awayInitialOrder,
+            list
+          );
+          const posA = baseOrder.indexOf(athleteIdA);
+          const posB = baseOrder.indexOf(athleteIdB);
+          if (posA !== -1 && posB !== -1) {
+            const swappedOrder = [...baseOrder];
+            swappedOrder[posA] = athleteIdB;
+            swappedOrder[posB] = athleteIdA;
+            nextVolleyballSetConfigs = {
+              ...prevConfigs,
+              [setNum]: {
+                ...(existingSetConfig || {}),
+                setNumber: setNum,
+                initialServingSide:
+                  existingSetConfig?.initialServingSide ||
+                  (setNum % 2 === 1 ? 'home' : 'away'),
+                homeInitialOrder:
+                  teamSide === 'home'
+                    ? swappedOrder
+                    : existingSetConfig?.homeInitialOrder ||
+                      resolveSixStartingIds(undefined, sheet.homeLineup),
+                awayInitialOrder:
+                  teamSide === 'away'
+                    ? swappedOrder
+                    : existingSetConfig?.awayInitialOrder ||
+                      resolveSixStartingIds(undefined, sheet.awayLineup),
+              },
+            };
+          }
+        }
 
         return {
           match,
@@ -3004,6 +3045,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             ...(teamSide === 'home'
               ? { homeLineup: list }
               : { awayLineup: list }),
+            ...(nextVolleyballSetConfigs
+              ? { volleyballSetConfigs: nextVolleyballSetConfigs }
+              : {}),
           },
         };
       });
