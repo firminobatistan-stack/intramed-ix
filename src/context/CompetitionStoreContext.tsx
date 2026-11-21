@@ -1384,6 +1384,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     }
   }, []);
 
+  const isUserMaster = (user: UserProfile | null): boolean => {
+    return Boolean(user && (user.role as string) === 'moderador_master');
+  };
+
   const isUserAdmin = (user: UserProfile | null): boolean => {
     if (!user) return false;
     return (
@@ -1993,6 +1997,11 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
           rawCurrentSheet,
           matchesList[matchIdx]
         );
+
+        // Após encerrada a súmula oficial (isClosed), somente a conta Master pode alterar, reabrir ou resetar
+        if (!isTest && currentSheet.isClosed && !isUserMaster(prev.currentUser)) {
+          return prev;
+        }
 
         const { match: nextMatch, sheet: nextSheetRaw } = updater(
           matchesList[matchIdx],
@@ -4058,30 +4067,35 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
   const reopenMatchForCorrection = useCallback(
     (matchId: string) => {
-      updateMatchAndSheet(matchId, (match, sheet) => ({
-        match: {
-          ...match,
-          status: 'live',
-          homeTeam: {
-            ...match.homeTeam,
-            isWinner: false,
+      updateMatchAndSheet(matchId, (match, sheet, prevState) => {
+        if (sheet.isClosed && !matchId.startsWith('test-') && !isUserMaster(prevState.currentUser)) {
+          return { match, sheet };
+        }
+        return {
+          match: {
+            ...match,
+            status: 'live',
+            homeTeam: {
+              ...match.homeTeam,
+              isWinner: false,
+            },
+            awayTeam: {
+              ...match.awayTeam,
+              isWinner: false,
+            },
           },
-          awayTeam: {
-            ...match.awayTeam,
-            isWinner: false,
+          sheet: {
+            ...sheet,
+            isClosed: false,
+            closedAtIso: null,
+            timer: {
+              ...sheet.timer,
+              lifecycle: 'paused',
+              lastTickTimestamp: null,
+            },
           },
-        },
-        sheet: {
-          ...sheet,
-          isClosed: false,
-          closedAtIso: null,
-          timer: {
-            ...sheet.timer,
-            lifecycle: 'paused',
-            lastTickTimestamp: null,
-          },
-        },
-      }));
+        };
+      });
     },
     [updateMatchAndSheet]
   );
@@ -4091,6 +4105,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
     (matchId: string, options?: { keepLineups?: boolean }) => {
       updateMatchAndSheet(matchId, (match, sheet, prevState) => {
         const isTest = matchId.startsWith('test-');
+        if (sheet.isClosed && !isTest && !isUserMaster(prevState.currentUser)) {
+          return { match, sheet };
+        }
         const resetMatch: Match = {
           ...match,
           status: 'scheduled',

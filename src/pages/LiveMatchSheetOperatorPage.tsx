@@ -106,7 +106,9 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
     setMatchSheetOfficialReleased,
     isOnline,
     pendingSyncCount,
+    currentUser,
   } = useCompetitionStore();
+  const isMasterAccount = (currentUser?.role as string) === 'moderador_master';
 
   // Proteção contra duplo clique / toque acidental (Item 31)
   const lastActionTimestampRef = useRef<number>(0);
@@ -796,7 +798,7 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
                 <Flag className="w-3.5 h-3.5" />
                 <span>Encerrar Partida</span>
               </button>
-            ) : (
+            ) : isMasterAccount || match.id.startsWith('test-') ? (
               <button
                 type="button"
                 onClick={() => {
@@ -812,6 +814,10 @@ export const LiveMatchSheetOperatorPage: React.FC = () => {
               >
                 <span>Reabrir Súmula</span>
               </button>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/10 text-xs font-bold text-white/80 min-h-[38px]">
+                <span>Súmula Encerrada (Somente Master)</span>
+              </span>
             )}
           </div>
         </div>
