@@ -121,8 +121,13 @@ export const MatchCard: React.FC<MatchCardProps> = ({
     );
   }
 
-  const isLive = match.status === 'live' || match.status === 'halftime';
-  const isFinished = match.status === 'finished';
+  const isFinished =
+    match.status === 'finished' ||
+    Boolean(sheet?.isClosed) ||
+    Boolean(match.homeTeam.isWinner) ||
+    Boolean(match.awayTeam.isWinner);
+  const isLive =
+    !isFinished && (match.status === 'live' || match.status === 'halftime');
   const hasInteractiveCourt = isCollectiveOrBeachVolley(match.modalityId);
 
   const headerTitle = `${match.modalityName}${

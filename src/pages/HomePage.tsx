@@ -51,6 +51,7 @@ export const HomePage: React.FC = () => {
     visibleMatches,
     visibleTeams,
     getModalityStandings,
+    getSheetByMatchId,
     isTestMode,
     setTestMode,
     canOperateOfficialData,
@@ -59,6 +60,12 @@ export const HomePage: React.FC = () => {
     hasActiveLiveMatch,
     activeLiveMatches,
   } = useCompetitionStore();
+
+  const isMatchDone = (m: typeof visibleMatches[number]) =>
+    m.status === 'finished' ||
+    Boolean(getSheetByMatchId(m.id)?.isClosed) ||
+    Boolean(m.homeTeam.isWinner) ||
+    Boolean(m.awayTeam.isWinner);
   const { hasCompletedRegistration, myRegistrations } = useRegistrationStore();
   const regCountdown = useRegistrationCountdown();
   const isAdmin = canOperateOfficialData();
@@ -86,9 +93,10 @@ export const HomePage: React.FC = () => {
         const dStr = (m.scheduledDate || '').toLowerCase();
         if (!dStr.includes(currentDay.id.toLowerCase())) return false;
       }
-      if (timeFilter === 'live') return m.status === 'live' || m.status === 'halftime';
-      if (timeFilter === 'upcoming') return m.status === 'scheduled';
-      if (timeFilter === 'finished') return m.status === 'finished';
+      const done = isMatchDone(m);
+      if (timeFilter === 'live') return !done && (m.status === 'live' || m.status === 'halftime');
+      if (timeFilter === 'upcoming') return !done && m.status === 'scheduled';
+      if (timeFilter === 'finished') return done;
       return true;
     })
     .sort((a, b) => {
@@ -108,10 +116,10 @@ export const HomePage: React.FC = () => {
     });
 
   const liveMatches = filteredMatches.filter(
-    (m) => m.status === 'live' || m.status === 'halftime'
+    (m) => !isMatchDone(m) && (m.status === 'live' || m.status === 'halftime')
   );
-  const upcomingMatches = filteredMatches.filter((m) => m.status === 'scheduled');
-  const finishedMatches = filteredMatches.filter((m) => m.status === 'finished');
+  const upcomingMatches = filteredMatches.filter((m) => !isMatchDone(m) && m.status === 'scheduled');
+  const finishedMatches = filteredMatches.filter((m) => isMatchDone(m));
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">

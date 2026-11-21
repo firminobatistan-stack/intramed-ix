@@ -32,9 +32,20 @@ const TOURNAMENT_DAYS = [
  */
 export const MatchesPage: React.FC = () => {
   const navigate = useNavigate();
-  const { visibleMatches, isTestMode, setTestMode, canOperateOfficialData } =
-    useCompetitionStore();
+  const {
+    visibleMatches,
+    getSheetByMatchId,
+    isTestMode,
+    setTestMode,
+    canOperateOfficialData,
+  } = useCompetitionStore();
   const isAdmin = canOperateOfficialData();
+
+  const isMatchDone = (m: typeof visibleMatches[number]) =>
+    m.status === 'finished' ||
+    Boolean(getSheetByMatchId(m.id)?.isClosed) ||
+    Boolean(m.homeTeam.isWinner) ||
+    Boolean(m.awayTeam.isWinner);
 
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('todos');
   const [dayIdx, setDayIdx] = useState<number>(0);
@@ -49,16 +60,16 @@ export const MatchesPage: React.FC = () => {
     if (selectedModality !== 'todas' && match.modalityId !== selectedModality) {
       return false;
     }
-    if (periodFilter === 'proximos' && match.status !== 'scheduled') {
+    const done = isMatchDone(match);
+    if (periodFilter === 'proximos' && (done || match.status !== 'scheduled')) {
       return false;
     }
-    if (periodFilter === 'finalizados' && match.status !== 'finished') {
+    if (periodFilter === 'finalizados' && !done) {
       return false;
     }
     if (
       periodFilter === 'hoje' &&
-      match.status !== 'live' &&
-      match.status !== 'halftime'
+      (done || (match.status !== 'live' && match.status !== 'halftime'))
     ) {
       return false;
     }
