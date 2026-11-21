@@ -773,6 +773,61 @@ function reconcileMatchWithSheet(match: Match, sheet?: MatchSheet): Match {
   };
 }
 
+function isPlaceholderTeamSlot(slot?: { teamId?: string | null; teamName?: string | null }): boolean {
+  if (!slot) return true;
+  if (!slot.teamId) return true;
+  const name = String(slot.teamName || '').trim().toLowerCase();
+  return name.startsWith('vencedor') || name.startsWith('venc.') || name.includes('a definir');
+}
+
+function reconcileAllMatchesAndBrackets(
+  matches: Match[],
+  sheets: Record<string, MatchSheet>
+): Match[] {
+  const reconciled = matches.map((m) => reconcileMatchWithSheet(m, sheets[m.id]));
+  const byId = new Map<string, number>();
+  reconciled.forEach((m, idx) => byId.set(m.id, idx));
+
+  const promoteWinner = (source: Match, targetId: string, targetSide: 'homeTeam' | 'awayTeam') => {
+    if (source.status !== 'finished') return;
+    const winner = source.homeTeam.isWinner
+      ? source.homeTeam
+      : source.awayTeam.isWinner
+      ? source.awayTeam
+      : null;
+    if (!winner || !winner.teamId) return;
+    const targetIdx = byId.get(targetId);
+    if (targetIdx === undefined) return;
+    const target = reconciled[targetIdx];
+    const currentSlot = target[targetSide];
+    if (!isPlaceholderTeamSlot(currentSlot)) return;
+    reconciled[targetIdx] = {
+      ...target,
+      [targetSide]: {
+        ...currentSlot,
+        teamId: winner.teamId,
+        teamName: winner.teamName,
+        crestUrl: winner.crestUrl ?? currentSlot.crestUrl ?? null,
+      },
+    };
+  };
+
+  for (const m of reconciled) {
+    if (m.id.endsWith('_qf')) {
+      promoteWinner(m, m.id.replace(/_qf$/, '_sf1'), 'awayTeam');
+    }
+  }
+  for (const m of reconciled) {
+    if (m.id.endsWith('_sf1')) {
+      promoteWinner(m, m.id.replace(/_sf1$/, '_final'), 'homeTeam');
+    } else if (m.id.endsWith('_sf2')) {
+      promoteWinner(m, m.id.replace(/_sf2$/, '_final'), 'awayTeam');
+    }
+  }
+
+  return reconciled;
+}
+
 function sanitizeMatchSheet(
   sheet: MatchSheet,
   fallbackTimer?: MatchSheet['timer']
@@ -1283,12 +1338,14 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
 
         if (!changed) return prev;
 
+        const fullyReconciledMatches = reconcileAllMatchesAndBrackets(nextMatches, nextSheets);
+
         isApplyingRemoteUpdate.current = true;
         return {
           ...prev,
           officialAthletes: nextAthletes,
           officialTeams: nextTeams,
-          officialMatches: nextMatches,
+          officialMatches: fullyReconciledMatches,
           officialSheets: nextSheets,
           publicProfiles: nextProfiles,
           launchConfig: nextLaunchConfig,
@@ -1636,7 +1693,10 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
             isApplyingRemoteUpdate.current = true;
             return {
               ...prev,
-              officialMatches: Array.from(byId.values()),
+              officialMatches: reconcileAllMatchesAndBrackets(
+                Array.from(byId.values()),
+                prev.officialSheets
+              ),
             };
           });
         },
@@ -1686,8 +1746,9 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               }
             });
             if (!changed) return prev;
-            const reconciledMatches = prev.officialMatches.map((m) =>
-              reconcileMatchWithSheet(m, nextSheets[m.id])
+            const reconciledMatches = reconcileAllMatchesAndBrackets(
+              prev.officialMatches,
+              nextSheets
             );
             isApplyingRemoteUpdate.current = true;
             return {

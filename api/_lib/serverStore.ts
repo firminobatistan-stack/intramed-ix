@@ -1132,38 +1132,19 @@ export async function deduplicateAndLinkCloudEntities(store: CloudCollectionMap)
     }
   }
 
-  // 0b. Sincroniza tabela oficial de horários e locais (PDF oficial 2026-11-19) apenas se o store já foi hidratado do Firestore e a partida ainda não possui essa versão nem foi operada
+  // 0b. Garante em memória que todas as partidas oficiais existam sem jamais sobrescrever partidas no Firestore
   const OFFICIAL_SCHEDULE_VERSION = '2026-11-19-pdf-v2';
   if (!store.matches) store.matches = {};
-  if (store.hydratedFromFirestoreAtIso) {
-    for (const defMatch of OFFICIAL_TOURNAMENT_MATCHES) {
-      const mId = String(defMatch.id || '');
-      if (!mId) continue;
-      const exMatch = store.matches[mId];
-      if (!exMatch) {
-        store.matches[mId] = {
-          ...defMatch,
-          scheduleSyncVersion: OFFICIAL_SCHEDULE_VERSION,
-          revision: 1,
-          updatedAtIso: nowIso,
-        };
-        mutationPromises.push(MirrorDocumentToFirestoreRest('matches', mId, store.matches[mId]));
-      } else if (
-        exMatch.scheduleSyncVersion !== OFFICIAL_SCHEDULE_VERSION &&
-        exMatch.status === 'scheduled' &&
-        Number(exMatch.revision || 0) < 2 &&
-        exMatch.homeTeam?.score == null &&
-        exMatch.awayTeam?.score == null
-      ) {
-        exMatch.scheduledDate = defMatch.scheduledDate;
-        exMatch.scheduledTime = defMatch.scheduledTime;
-        exMatch.venue = defMatch.venue;
-        exMatch.scheduleSyncVersion = OFFICIAL_SCHEDULE_VERSION;
-        exMatch.revision = Number(exMatch.revision || 1) + 1;
-        exMatch.updatedAtIso = nowIso;
-        store.matches[mId] = exMatch;
-        mutationPromises.push(MirrorDocumentToFirestoreRest('matches', mId, exMatch));
-      }
+  for (const defMatch of OFFICIAL_TOURNAMENT_MATCHES) {
+    const mId = String(defMatch.id || '');
+    if (!mId) continue;
+    if (!store.matches[mId]) {
+      store.matches[mId] = {
+        ...defMatch,
+        scheduleSyncVersion: OFFICIAL_SCHEDULE_VERSION,
+        revision: 1,
+        updatedAtIso: nowIso,
+      };
     }
   }
 
