@@ -302,11 +302,52 @@ export const GeneratedMatchSheetPage: React.FC = () => {
   const p4Home = p4 ? p4.homeScore : 0;
   const p4Away = p4 ? p4.awayScore : 0;
 
-  const finalHome = match.homeTeam.score ?? 0;
-  const finalAway = match.awayTeam.score ?? 0;
+  const derivedSetsHome = sheet.periodScores.filter(
+    (p) => p.isFinished && (p.homeScore ?? 0) > (p.awayScore ?? 0)
+  ).length;
+  const derivedSetsAway = sheet.periodScores.filter(
+    (p) => p.isFinished && (p.awayScore ?? 0) > (p.homeScore ?? 0)
+  ).length;
 
-  const ot1 = sheet.periodScores[4] || sheet.periodScores[2];
-  const ot2 = sheet.periodScores[5] || sheet.periodScores[3];
+  const homeSetsWon =
+    derivedSetsHome + derivedSetsAway > 0
+      ? derivedSetsHome
+      : (match.homeTeam.setsWon ?? match.homeTeam.score ?? 0);
+  const awaySetsWon =
+    derivedSetsHome + derivedSetsAway > 0
+      ? derivedSetsAway
+      : (match.awayTeam.setsWon ?? match.awayTeam.score ?? 0);
+
+  const sumPeriodHome = sheet.periodScores.reduce(
+    (acc, p) => acc + (p.homeScore ?? 0),
+    0
+  );
+  const sumPeriodAway = sheet.periodScores.reduce(
+    (acc, p) => acc + (p.awayScore ?? 0),
+    0
+  );
+
+  const finalHome =
+    sheet.scoringModel === 'sets_points'
+      ? homeSetsWon
+      : (match.homeTeam.score ?? 0) > 0 || (match.awayTeam.score ?? 0) > 0
+      ? (match.homeTeam.score ?? 0)
+      : sumPeriodHome;
+  const finalAway =
+    sheet.scoringModel === 'sets_points'
+      ? awaySetsWon
+      : (match.homeTeam.score ?? 0) > 0 || (match.awayTeam.score ?? 0) > 0
+      ? (match.awayTeam.score ?? 0)
+      : sumPeriodAway;
+
+  const ot1 =
+    sheet.scoringModel === 'points_quarters'
+      ? sheet.periodScores[4]
+      : sheet.periodScores[2];
+  const ot2 =
+    sheet.scoringModel === 'points_quarters'
+      ? sheet.periodScores[5]
+      : sheet.periodScores[3];
 
   const home7mOrPenalties = chronologicalEvents.filter(
     (e) =>
@@ -892,7 +933,7 @@ export const GeneratedMatchSheetPage: React.FC = () => {
             LOCAL: {match.venue || 'Ginásio'} | DATA: {match.scheduledDate || 'Hoje'} | JOGO Nº: {match.id.slice(0, 8)}
           </div>
           <span className="text-[10px] font-mono font-bold bg-[#E8EEF5] px-2 py-0.5 border border-black inline-block mt-0.5">
-            Sets: {match.homeTeam.setsWon ?? 0} × {match.awayTeam.setsWon ?? 0}
+            Sets: {homeSetsWon} × {awaySetsWon}
           </span>
         </div>
       </div>
@@ -1027,8 +1068,21 @@ export const GeneratedMatchSheetPage: React.FC = () => {
           <div>Juiz de Linha: <strong className="bg-[#E8EEF5] px-1">{sheet.timekeeperName || 'Linha / Mesa'}</strong></div>
         </div>
         <div className="flex justify-between font-extrabold text-xs pt-0.5">
-          <span>RESULTADO FINAL: {match.homeTeam.teamName} ({match.homeTeam.setsWon ?? 0}) × ({match.awayTeam.setsWon ?? 0}) {match.awayTeam.teamName}</span>
-          <span>VENCEDOR: <strong className="text-[#0B218A] uppercase">{(match.homeTeam.setsWon ?? 0) > (match.awayTeam.setsWon ?? 0) ? match.homeTeam.teamName : match.awayTeam.teamName}</strong></span>
+          <span>RESULTADO FINAL: {match.homeTeam.teamName} ({homeSetsWon}) × ({awaySetsWon}) {match.awayTeam.teamName}</span>
+          <span>
+            VENCEDOR:{' '}
+            <strong className="text-[#0B218A] uppercase">
+              {homeSetsWon > awaySetsWon
+                ? match.homeTeam.teamName
+                : awaySetsWon > homeSetsWon
+                ? match.awayTeam.teamName
+                : match.homeTeam.isWinner
+                ? match.homeTeam.teamName
+                : match.awayTeam.isWinner
+                ? match.awayTeam.teamName
+                : 'A definir'}
+            </strong>
+          </span>
         </div>
       </div>
     </section>

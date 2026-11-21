@@ -678,6 +678,8 @@ function reconcileMatchWithSheet(match: Match, sheet?: MatchSheet): Match {
 
   let homeScore = match.homeTeam.score;
   let awayScore = match.awayTeam.score;
+  let homeSetsWon = match.homeTeam.setsWon;
+  let awaySetsWon = match.awayTeam.setsWon;
   let nextStatus = match.status;
 
   if (sheet.scoringModel === 'sets_points' && Array.isArray(sheet.periodScores)) {
@@ -696,6 +698,10 @@ function reconcileMatchWithSheet(match: Match, sheet?: MatchSheet): Match {
     } else if (sheet.isClosed && homeScore == null && awayScore == null) {
       homeScore = setsHome;
       awayScore = setsAway;
+    }
+    if (setsHome > 0 || setsAway > 0 || homeSetsWon == null || awaySetsWon == null) {
+      homeSetsWon = typeof homeScore === 'number' ? homeScore : setsHome;
+      awaySetsWon = typeof awayScore === 'number' ? awayScore : setsAway;
     }
   } else if (
     (sheet.scoringModel === 'goals_timed' || sheet.scoringModel === 'points_quarters') &&
@@ -741,6 +747,8 @@ function reconcileMatchWithSheet(match: Match, sheet?: MatchSheet): Match {
     nextStatus === match.status &&
     homeScore === match.homeTeam.score &&
     awayScore === match.awayTeam.score &&
+    homeSetsWon === match.homeTeam.setsWon &&
+    awaySetsWon === match.awayTeam.setsWon &&
     nextHomeWinner === match.homeTeam.isWinner &&
     nextAwayWinner === match.awayTeam.isWinner
   ) {
@@ -753,11 +761,13 @@ function reconcileMatchWithSheet(match: Match, sheet?: MatchSheet): Match {
     homeTeam: {
       ...match.homeTeam,
       score: homeScore,
+      ...(homeSetsWon !== undefined ? { setsWon: homeSetsWon } : {}),
       isWinner: nextHomeWinner,
     },
     awayTeam: {
       ...match.awayTeam,
       score: awayScore,
+      ...(awaySetsWon !== undefined ? { setsWon: awaySetsWon } : {}),
       isWinner: nextAwayWinner,
     },
   };
