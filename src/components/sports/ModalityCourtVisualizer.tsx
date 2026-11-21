@@ -9,7 +9,7 @@ import {
 } from '../../types/domain';
 import { DerivedVolleyballRotationState } from '../../utils/volleyballRotation';
 
-export type CourtFocusMode = 'overview' | 'home' | 'away' | 'lineup';
+export type CourtFocusMode = 'overview' | 'home' | 'away';
 
 interface ModalityCourtVisualizerProps {
   match: Match;
@@ -343,30 +343,18 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
         (sheet.awayLineup && sheet.awayLineup.length > 0))
   );
 
-  const [focusMode, setFocusMode] = useState<CourtFocusMode>(
-    hasOfficialSheetLineup ? 'lineup' : 'overview'
-  );
-  const prevHasLineupRef = useRef<boolean>(hasOfficialSheetLineup);
+  const [focusMode, setFocusMode] = useState<CourtFocusMode>('overview');
 
   useEffect(() => {
     setSelectedSwapNode(null);
-    setFocusMode(hasOfficialSheetLineup ? 'lineup' : 'overview');
+    setFocusMode('overview');
   }, [match.id]);
 
   useEffect(() => {
-    if (!hasOfficialSheetLineup) {
-      prevHasLineupRef.current = false;
-      setFocusMode((prev) => (prev === 'lineup' ? 'overview' : prev));
-      return;
+    if (activePageTab === 'lineups') {
+      setFocusMode('overview');
     }
-    if (
-      activePageTab === 'lineups' ||
-      !prevHasLineupRef.current
-    ) {
-      setFocusMode('lineup');
-    }
-    prevHasLineupRef.current = true;
-  }, [activePageTab, hasOfficialSheetLineup, match.id]);
+  }, [activePageTab]);
 
   const homeTheme = useMemo(
     () =>
@@ -471,25 +459,19 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
 
   // Transformação 3D da quadra com física de mola (60fps out-expo spring: cubic-bezier(0.16, 1, 0.3, 1))
   const getCourtTransform = (): string => {
-    if (focusMode === 'lineup') {
-      return 'perspective(1100px) rotateX(8deg) rotateY(0deg) scale(1) translate3d(0, 0, 0)';
-    }
     if (focusMode === 'home') {
-      return 'perspective(1100px) rotateX(18deg) rotateY(7deg) scale(1.03) translate3d(5%, 0, 0)';
+      return 'perspective(1100px) rotateX(16deg) rotateY(7deg) scale(1.03) translate3d(5%, 0, 0)';
     }
     if (focusMode === 'away') {
-      return 'perspective(1100px) rotateX(18deg) rotateY(-7deg) scale(1.03) translate3d(-5%, 0, 0)';
+      return 'perspective(1100px) rotateX(16deg) rotateY(-7deg) scale(1.03) translate3d(-5%, 0, 0)';
     }
-    return 'perspective(1100px) rotateX(22deg) rotateY(0deg) scale(0.99) translate3d(0, 0, 0)';
+    return 'perspective(1100px) rotateX(12deg) rotateY(0deg) scale(1) translate3d(0, 0, 0)';
   };
 
   const focusTabs: Array<{ id: CourtFocusMode; label: string }> = [
     { id: 'overview', label: 'Quadra 3D' },
     { id: 'home', label: homeTheme.shortName },
     { id: 'away', label: awayTheme.shortName },
-    ...(hasOfficialSheetLineup
-      ? [{ id: 'lineup' as CourtFocusMode, label: 'Em Quadra' }]
-      : []),
   ];
   const activeFocusIdx = Math.max(
     0,
@@ -975,10 +957,18 @@ export const ModalityCourtVisualizer: React.FC<ModalityCourtVisualizerProps> = (
               )}
             </svg>
 
-            {/* 5. ESCALAÇÃO OFICIAL DA SÚMULA (Exibida EXCLUSIVAMENTE quando o mesário escalou atletas reais e a aba "Em Quadra" está ativa) */}
-            {focusMode === 'lineup' && hasOfficialSheetLineup && (
+            {/* 5. ESCALAÇÃO OFICIAL DA SÚMULA (Sempre visível quando escalada; na aba de uma equipe, mostra só os atletas daquela equipe) */}
+            {hasOfficialSheetLineup && (
               <div className="absolute inset-0">
-                {officialLineupNodes.map((node, idx) => {
+                {officialLineupNodes
+                  .filter((node) =>
+                    focusMode === 'home'
+                      ? node.side === 'home'
+                      : focusMode === 'away'
+                      ? node.side === 'away'
+                      : true
+                  )
+                  .map((node, idx) => {
                   const isHome = node.side === 'home';
                   const theme = isHome ? homeTheme : awayTheme;
                   const isSelectedForSwap =
