@@ -673,6 +673,96 @@ function buildDefaultOfficialSheetForMatch(
   return ensureModalitySpecificSheetFields(baseSheet, match);
 }
 
+function reconcileMatchWithSheet(match: Match, sheet?: MatchSheet): Match {
+  if (!sheet || sheet.isTestMode || match.isTestData) return match;
+
+  let homeScore = match.homeTeam.score;
+  let awayScore = match.awayTeam.score;
+  let nextStatus = match.status;
+
+  if (sheet.scoringModel === 'sets_points' && Array.isArray(sheet.periodScores)) {
+    let setsHome = 0;
+    let setsAway = 0;
+    for (const p of sheet.periodScores) {
+      if (p.isFinished && (p.homeScore ?? 0) !== (p.awayScore ?? 0)) {
+        if ((p.homeScore ?? 0) > (p.awayScore ?? 0)) setsHome += 1;
+        else setsAway += 1;
+      }
+    }
+    const currentTotal = (homeScore ?? 0) + (awayScore ?? 0);
+    if ((setsHome > 0 || setsAway > 0) && (currentTotal === 0 || setsHome + setsAway > currentTotal)) {
+      homeScore = setsHome;
+      awayScore = setsAway;
+    } else if (sheet.isClosed && homeScore == null && awayScore == null) {
+      homeScore = setsHome;
+      awayScore = setsAway;
+    }
+  } else if (
+    (sheet.scoringModel === 'goals_timed' || sheet.scoringModel === 'points_quarters') &&
+    Array.isArray(sheet.periodScores)
+  ) {
+    let sumHome = 0;
+    let sumAway = 0;
+    for (const p of sheet.periodScores) {
+      sumHome += p.homeScore ?? 0;
+      sumAway += p.awayScore ?? 0;
+    }
+    if ((sumHome > 0 || sumAway > 0) && (homeScore ?? 0) === 0 && (awayScore ?? 0) === 0) {
+      homeScore = sumHome;
+      awayScore = sumAway;
+    } else if (sheet.isClosed && homeScore == null && awayScore == null) {
+      homeScore = sumHome;
+      awayScore = sumAway;
+    }
+  }
+
+  if (sheet.isClosed) {
+    nextStatus = 'finished';
+  } else if (nextStatus === 'scheduled') {
+    const hasActivity =
+      Boolean(sheet.timer?.isRunning) ||
+      Boolean(sheet.events?.some((e) => !e.isDeleted)) ||
+      Boolean(sheet.periodScores?.some((p) => (p.homeScore ?? 0) > 0 || (p.awayScore ?? 0) > 0));
+    if (hasActivity) {
+      nextStatus = 'live';
+    }
+  }
+
+  const nextHomeWinner =
+    nextStatus === 'finished' && typeof homeScore === 'number' && typeof awayScore === 'number'
+      ? homeScore > awayScore
+      : match.homeTeam.isWinner;
+  const nextAwayWinner =
+    nextStatus === 'finished' && typeof homeScore === 'number' && typeof awayScore === 'number'
+      ? awayScore > homeScore
+      : match.awayTeam.isWinner;
+
+  if (
+    nextStatus === match.status &&
+    homeScore === match.homeTeam.score &&
+    awayScore === match.awayTeam.score &&
+    nextHomeWinner === match.homeTeam.isWinner &&
+    nextAwayWinner === match.awayTeam.isWinner
+  ) {
+    return match;
+  }
+
+  return {
+    ...match,
+    status: nextStatus,
+    homeTeam: {
+      ...match.homeTeam,
+      score: homeScore,
+      isWinner: nextHomeWinner,
+    },
+    awayTeam: {
+      ...match.awayTeam,
+      score: awayScore,
+      isWinner: nextAwayWinner,
+    },
+  };
+}
+
 function sanitizeMatchSheet(
   sheet: MatchSheet,
   fallbackTimer?: MatchSheet['timer']
@@ -1522,7 +1612,8 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
                   rmRev >= exRev ||
                   (!isOperatorHere && matchFieldsDiffer && rmRev > 0)
                 ) {
-                  byId.set(rm.id, ex ? { ...ex, ...rm } : rm);
+                  const merged = ex ? { ...ex, ...rm } : rm;
+                  byId.set(rm.id, reconcileMatchWithSheet(merged, prev.officialSheets[rm.id]));
                   changed = true;
                 }
               }
@@ -1581,9 +1672,13 @@ export const CompetitionStoreProvider: React.FC<{ children: React.ReactNode }> =
               }
             });
             if (!changed) return prev;
+            const reconciledMatches = prev.officialMatches.map((m) =>
+              reconcileMatchWithSheet(m, nextSheets[m.id])
+            );
             isApplyingRemoteUpdate.current = true;
             return {
               ...prev,
+              officialMatches: reconciledMatches,
               officialSheets: nextSheets,
             };
           });
