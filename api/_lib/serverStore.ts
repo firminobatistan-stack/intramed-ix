@@ -11,8 +11,12 @@ let OFFICIAL_TOURNAMENT_MATCHES: Array<Record<string, unknown>> = [];
 let OFFICIAL_UNIVERSAL_BRACKETS: Record<string, Record<string, unknown>> = {};
 
 try {
-  const jsonPath = path.join(__dirname, 'officialBracketsData.json');
-  if (fs.existsSync(jsonPath)) {
+  const candidates = [
+    path.join(__dirname, 'officialBracketsData.json'),
+    path.join(process.cwd(), 'api', '_lib', 'officialBracketsData.json'),
+  ];
+  const jsonPath = candidates.find((p) => fs.existsSync(p));
+  if (jsonPath) {
     const raw = fs.readFileSync(jsonPath, 'utf-8');
     const parsed = JSON.parse(raw);
     OFFICIAL_TOURNAMENT_MATCHES = parsed.matches || [];

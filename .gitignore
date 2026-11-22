@@ -34,3 +34,5 @@ pnpm-debug.log*
 lerna-debug.log*
 .DS_Store
 Thumbs.db
+
+dist-server
