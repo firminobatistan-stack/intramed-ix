@@ -11,15 +11,3 @@ services:
         value: production
       - key: PORT
         value: "10000"
-      - key: MERCADOPAGO_ACCESS_TOKEN
-        sync: false
-      - key: MERCADOPAGO_WEBHOOK_SECRET
-        sync: false
-      - key: INTRAMED_AUTH_SECRET
-        sync: false
-      - key: INTRAMED_ADMIN_PASSWORD
-        sync: false
-      - key: INTRAMED_MASTER_INITIAL_PASSWORD
-        sync: false
-      - key: APP_BASE_URL
-        sync: false
