@@ -44,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isProxied = req.headers['x-intramed-proxy'] === '1';
 
   if (!mpAccessToken) {
-    if (!host.includes('cngintramed.vercel.app') && !isProxied) {
+    if (!host.includes('intramed-ix.onrender.com') && !isProxied) {
       try {
         const queryParams = new URLSearchParams();
         if (rawPaymentId) queryParams.set('paymentId', rawPaymentId);

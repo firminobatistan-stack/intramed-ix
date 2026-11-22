@@ -466,7 +466,7 @@ export async function parseJsonSafe(
   }
 }
 
-export const PRIMARY_GATEWAY_ORIGIN = 'https://cngintramed.vercel.app';
+export const PRIMARY_GATEWAY_ORIGIN = 'https://intramed-ix.onrender.com';
 
 export function computeAuthorizedServerPrice(
   lotId?: string,

@@ -472,11 +472,11 @@ export const RegistrationPage: React.FC = () => {
 
       if (
         typeof window !== 'undefined' &&
-        !window.location.hostname.includes('cngintramed.vercel.app') &&
+        !window.location.hostname.includes('intramed-ix.onrender.com') &&
         !window.location.hostname.includes('localhost')
       ) {
         const fallbackRes = await parseRes(
-          await fetch(`https://cngintramed.vercel.app${path}`, options)
+          await fetch(`https://intramed-ix.onrender.com${path}`, options)
         );
         if (fallbackRes.parsed) {
           return {
@@ -498,12 +498,12 @@ export const RegistrationPage: React.FC = () => {
     } catch {
       if (
         typeof window !== 'undefined' &&
-        !window.location.hostname.includes('cngintramed.vercel.app') &&
+        !window.location.hostname.includes('intramed-ix.onrender.com') &&
         !window.location.hostname.includes('localhost')
       ) {
         try {
           const fallbackRes = await parseRes(
-            await fetch(`https://cngintramed.vercel.app${path}`, options)
+            await fetch(`https://intramed-ix.onrender.com${path}`, options)
           );
           if (fallbackRes.parsed) {
             return {
