@@ -16,6 +16,7 @@ import {
   TeamRecentMatchCapsule,
 } from '../types/domain';
 import { formatMsToSwimmingTime } from '../data/sportRulesConfig';
+import { SWIMMING_TEAM_TOTALS } from '../data/swimmingResultsData';
 
 /**
  * Gera um ID único criptograficamente seguro (com fallback para ambientes legados).
@@ -780,10 +781,21 @@ export function computeModalityStandings(
     }
 
     const distinctModalities = Array.from(
-      new Set(matches.map((m) => m.modalityId))
+      new Set([...matches.map((m) => m.modalityId), 'natacao' as ModalitySlug])
     );
 
     for (const modSlug of distinctModalities) {
+      if (modSlug === 'natacao') {
+        for (const swTeam of SWIMMING_TEAM_TOTALS) {
+          const teamRow = teamStandings.get(swTeam.teamId);
+          if (!teamRow) continue;
+          teamRow.played += 1;
+          if (swTeam.position === 1) teamRow.won += 1;
+          teamRow.points += swTeam.generalChampionshipPts;
+        }
+        continue;
+      }
+
       const modMatches = matches.filter((m) => m.modalityId === modSlug);
       const singleModStandings = computeModalityStandings(modSlug, teams, modMatches);
       const isCollective = COLLECTIVE_MODALITIES.has(modSlug);
@@ -819,6 +831,26 @@ export function computeModalityStandings(
     });
 
     return rows.map((r, i) => ({ ...r, position: i + 1 }));
+  }
+
+  if (modalityId === 'natacao') {
+    return SWIMMING_TEAM_TOTALS.map((sw) => {
+      const teamObj = teams.find((t) => t.id === sw.teamId);
+      return {
+        teamId: sw.teamId,
+        teamName: teamObj?.name || sw.teamName,
+        crestUrl: teamObj?.crestUrl || null,
+        position: sw.position,
+        points: sw.totalSwimmingPts,
+        played: 12,
+        won: sw.goldMedals,
+        drawn: sw.silverMedals,
+        lost: sw.bronzeMedals,
+        scoreFor: sw.femTotalPts,
+        scoreAgainst: sw.mascTotalPts,
+        scoreDifference: sw.generalChampionshipPts,
+      };
+    });
   }
 
   const filteredMatches = matches.filter((m) => m.modalityId === modalityId);

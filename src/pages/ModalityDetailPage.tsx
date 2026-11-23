@@ -21,6 +21,7 @@ import { Tabs, TabItem } from '../components/ui/Tabs';
 import { EmptyState } from '../components/ui/EmptyState';
 import { BracketView } from '../components/sports/BracketView';
 import { StandingsTable } from '../components/sports/StandingsTable';
+import { SwimmingResultsPanel } from '../components/sports/SwimmingResultsPanel';
 import { MatchCard } from '../components/sports/MatchCard';
 import { ResultCard } from '../components/sports/ResultCard';
 import { StatusBadge } from '../components/ui/StatusBadge';
@@ -97,7 +98,13 @@ export const ModalityDetailPage: React.FC = () => {
   const isSwimming = modality.id === 'natacao';
 
   const visibleTabs = isSwimming
-    ? MODALITY_TABS.filter((t) => t.id === 'classificacao' || t.id === 'estatisticas')
+    ? MODALITY_TABS.filter(
+        (t) => t.id === 'classificacao' || t.id === 'estatisticas'
+      ).map((t) =>
+        t.id === 'estatisticas'
+          ? { ...t, label: 'Tempos & Rankings' }
+          : { ...t, label: 'Equipes (1º ao 5º)' }
+      )
     : MODALITY_TABS;
 
   const effectiveTab: ModalityTabId =
@@ -170,9 +177,11 @@ export const ModalityDetailPage: React.FC = () => {
             </Button>
           )}
           <StatusBadge
-            status={modalityMatches.length > 0 ? 'live' : 'pending'}
+            status={isSwimming ? 'finished' : modalityMatches.length > 0 ? 'live' : 'pending'}
             label={
-              modalityMatches.length > 0
+              isSwimming
+                ? 'Resultados Oficiais'
+                : modalityMatches.length > 0
                 ? `${modalityMatches.length} jogo(s) ativo(s)`
                 : 'Categorias Oficiais'
             }
@@ -184,13 +193,13 @@ export const ModalityDetailPage: React.FC = () => {
         <div className="all-sports-card p-5 bg-gradient-to-r from-sky-50 to-blue-50 border-sky-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-[11px] font-display font-extrabold uppercase tracking-wider text-sky-700">
-              Disputa Simultânea • 5 Atléticas
+              Resultados Oficiais • 12 Provas (Masc. &amp; Fem.)
             </span>
             <h3 className="text-base font-display font-extrabold text-slate-900">
-              Baterias Oficiais de Natação (Masculino &amp; Feminino)
+              Natação — IX INTRAMED (Encerrada)
             </h3>
             <p className="text-xs text-slate-600">
-              Sexta-feira, 20/11 • 07:00 às 11:00 • Escola José Castro — Todas as 5 turmas competem por tempo nas raias.
+              Sexta-feira, 20/11 • Escola José Castro — Confira a classificação final das 5 equipes, os rankings pessoais e os tempos de todas as provas.
             </p>
           </div>
           {isAdmin && (
@@ -259,16 +268,22 @@ export const ModalityDetailPage: React.FC = () => {
           />
         )}
 
-        {effectiveTab === 'classificacao' && (
-          <StandingsTable
-            standings={modalityStandings}
-            modalityId={modality.id}
-            modalityName={modality.name}
-          />
-        )}
+        {effectiveTab === 'classificacao' &&
+          (isSwimming ? (
+            <SwimmingResultsPanel view="standings" />
+          ) : (
+            <StandingsTable
+              standings={modalityStandings}
+              modalityId={modality.id}
+              modalityName={modality.name}
+            />
+          ))}
 
-        {effectiveTab === 'estatisticas' && (
-          <div className="space-y-5">
+        {effectiveTab === 'estatisticas' &&
+          (isSwimming ? (
+            <SwimmingResultsPanel view="rankings" />
+          ) : (
+            <div className="space-y-5">
             {isVolley && (
               <div className="all-sports-card p-5 flex items-center gap-3 bg-blue-50/70 border-blue-200 text-xs text-[#0B218A]">
                 <Info className="w-5 h-5 text-[#1D63FF] shrink-0" />
@@ -395,7 +410,7 @@ export const ModalityDetailPage: React.FC = () => {
               </div>
             )}
           </div>
-        )}
+          ))}
       </div>
     </div>
   );
