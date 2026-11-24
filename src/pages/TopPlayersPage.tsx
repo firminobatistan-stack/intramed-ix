@@ -7,6 +7,12 @@ import { SportIcon } from '../components/sports/SportIcon';
 import { StoryShareButton } from '../components/social/StoryShareModal';
 import { EmptyState } from '../components/ui/EmptyState';
 import { IntramedWarpShowcase } from '../components/sports/IntramedWarpShowcase';
+import {
+  computeSwimmingIndividualRankings,
+  SWIMMING_EVENTS,
+  SWIMMING_TEAM_META,
+  SwimmingTeamId,
+} from '../data/swimmingResultsData';
 
 type RankingTab =
   | 'geral'
@@ -14,12 +20,21 @@ type RankingTab =
   | 'handebol'
   | 'basquete'
   | 'volei'
-  | 'volei-de-praia';
+  | 'volei-de-praia'
+  | 'natacao';
+
+type SwimSubFilter =
+  | 'geral'
+  | '25m-livre'
+  | '25m-peito'
+  | '25m-costas'
+  | '25m-borboleta';
 
 type GenderFilter = 'Masculino' | 'Feminino';
 
 interface RankedPlayer {
   athleteId: string;
+  hasProfileLink?: boolean;
   name: string;
   avatarUrl?: string | null;
   jerseyNumber?: number | null;
@@ -27,6 +42,8 @@ interface RankedPlayer {
   teamName: string;
   teamCrestUrl?: string | null;
   value: number;
+  displayValue?: string;
+  metricOverride?: string;
   secondaryLabel?: string;
   matchesPlayed: number;
   rank: number;
@@ -44,7 +61,24 @@ const RANKING_TABS: Array<{
   { id: 'basquete', label: 'Basquete', iconKey: 'basquete', metricLabel: 'Pontos' },
   { id: 'volei', label: 'Vôlei', iconKey: 'volei', metricLabel: 'Vitórias' },
   { id: 'volei-de-praia', label: 'Vôlei de Praia', iconKey: 'volei-de-praia', metricLabel: 'Vitórias' },
+  { id: 'natacao', label: 'Natação', iconKey: 'natacao', metricLabel: 'Pontos' },
 ];
+
+const SWIM_SUB_FILTERS: Array<{ id: SwimSubFilter; label: string }> = [
+  { id: 'geral', label: 'Ranking Geral (Pts)' },
+  { id: '25m-livre', label: '25m Livre' },
+  { id: '25m-peito', label: '25m Peito' },
+  { id: '25m-costas', label: '25m Costas' },
+  { id: '25m-borboleta', label: '25m Borboleta' },
+];
+
+function normalizeSwimName(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
 function assignTiedRanks(items: Omit<RankedPlayer, 'rank'>[]): RankedPlayer[] {
   const sorted = [...items].sort((a, b) => b.value - a.value);
@@ -64,11 +98,98 @@ export const TopPlayersPage: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<RankingTab>('futsal');
   const [genderFilter, setGenderFilter] = useState<GenderFilter>('Masculino');
+  const [swimSubFilter, setSwimSubFilter] = useState<SwimSubFilter>('geral');
 
   const activeTabMeta =
     RANKING_TABS.find((t) => t.id === activeTab) || RANKING_TABS[0];
 
   const rankedPlayers = useMemo<RankedPlayer[]>(() => {
+    if (activeTab === 'natacao') {
+      const targetGender = genderFilter === 'Feminino' ? 'feminino' : 'masculino';
+      const findMatchingAthlete = (shortName: string, teamId: SwimmingTeamId) => {
+        const cleanQuery = normalizeSwimName(shortName).replace(/\./g, '');
+        const tokens = cleanQuery.split(/\s+/).filter(Boolean);
+        return visibleAthletes.find((a) => {
+          if (a.teamId !== teamId) return false;
+          const athGender = String(a.gender || '').toLowerCase();
+          if (athGender && athGender !== 'geral') {
+            const isFem = athGender === 'feminino' || athGender === 'f';
+            if (targetGender === 'feminino' && !isFem) return false;
+            if (targetGender === 'masculino' && isFem) return false;
+          }
+          const fullNorm = normalizeSwimName(a.name);
+          if (fullNorm.startsWith(cleanQuery)) return true;
+          return tokens.every((tk) => fullNorm.includes(tk));
+        });
+      };
+
+      if (swimSubFilter === 'geral') {
+        const swRankings = computeSwimmingIndividualRankings(targetGender);
+        return swRankings.map((row) => {
+          const matchedAth = findMatchingAthlete(row.name, row.teamId);
+          const meta = SWIMMING_TEAM_META[row.teamId];
+          const medals = [
+            row.gold > 0 ? `${row.gold}🥇` : '',
+            row.silver > 0 ? `${row.silver}🥈` : '',
+            row.bronze > 0 ? `${row.bronze}🥉` : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+          const timesResume = row.eventsSummary
+            .slice(0, 2)
+            .map((ev) =>
+              ev.disqualified
+                ? `${ev.eventTitle.replace(/ Feminino| Masculino/, '')} DSQ`
+                : `${ev.eventTitle.replace(/ Feminino| Masculino/, '')} ${ev.timeDisplay}s`
+            )
+            .join(' • ');
+
+          return {
+            athleteId: matchedAth?.id || `swim_${row.teamId}_${normalizeSwimName(row.name)}`,
+            hasProfileLink: Boolean(matchedAth?.id),
+            name: matchedAth?.name || row.name,
+            avatarUrl: matchedAth?.avatarUrl || null,
+            jerseyNumber: matchedAth?.jerseyNumber || null,
+            teamId: row.teamId,
+            teamName: meta.name,
+            teamCrestUrl: meta.crestUrl,
+            value: row.totalPoints,
+            metricOverride: 'Pontos',
+            secondaryLabel: [medals, timesResume].filter(Boolean).join(' • '),
+            matchesPlayed: row.eventsCount,
+            rank: row.rank,
+          };
+        });
+      }
+
+      const eventId = `${swimSubFilter}-${targetGender === 'feminino' ? 'fem' : 'masc'}`;
+      const swEvent = SWIMMING_EVENTS.find((ev) => ev.id === eventId);
+      if (!swEvent) return [];
+
+      return swEvent.results.map((r, idx) => {
+        const matchedAth = findMatchingAthlete(r.name, r.teamId);
+        const meta = SWIMMING_TEAM_META[r.teamId];
+        return {
+          athleteId: matchedAth?.id || `swim_${eventId}_${idx}`,
+          hasProfileLink: Boolean(matchedAth?.id),
+          name: matchedAth?.name || r.name,
+          avatarUrl: matchedAth?.avatarUrl || null,
+          jerseyNumber: matchedAth?.jerseyNumber || null,
+          teamId: r.teamId,
+          teamName: meta.name,
+          teamCrestUrl: meta.crestUrl,
+          value: r.disqualified ? -1 : 100 - r.placement,
+          displayValue: r.disqualified ? 'DSQ' : `${r.timeDisplay}s`,
+          metricOverride: r.disqualified ? 'Desclassificado' : `${r.points} pts`,
+          secondaryLabel: r.disqualified
+            ? 'Desclassificado(a)'
+            : `${r.placement}º lugar • ${r.points} pts`,
+          matchesPlayed: 1,
+          rank: r.placement,
+        };
+      });
+    }
+
     const acc = new Map<
       string,
       {
@@ -195,7 +316,7 @@ export const TopPlayersPage: React.FC = () => {
     }
 
     return assignTiedRanks(list);
-  }, [visibleMatches, visibleAthletes, activeTab, genderFilter, getSheetByMatchId, getTeamById]);
+  }, [visibleMatches, visibleAthletes, activeTab, genderFilter, swimSubFilter, getSheetByMatchId, getTeamById]);
 
   const podiumPlayers = rankedPlayers.slice(0, 3);
   const restPlayers = rankedPlayers.slice(3);
@@ -277,6 +398,29 @@ export const TopPlayersPage: React.FC = () => {
         })}
       </div>
 
+      {/* Sub-filtro orgânico de Provas quando Natação está ativa */}
+      {activeTab === 'natacao' && (
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
+          {SWIM_SUB_FILTERS.map((sub) => {
+            const active = swimSubFilter === sub.id;
+            return (
+              <button
+                key={sub.id}
+                type="button"
+                onClick={() => setSwimSubFilter(sub.id)}
+                className={`px-3.5 py-1.5 rounded-full text-[11px] font-display font-bold whitespace-nowrap transition-all shrink-0 ${
+                  active
+                    ? 'bg-brand-yellow text-[#0B218A] shadow-sm'
+                    : 'bg-white/90 text-slate-600 border border-slate-200 hover:border-[#0B218A]/30'
+                }`}
+              >
+                {sub.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Conteúdo */}
       {rankedPlayers.length === 0 ? (
         <div className="bg-white rounded-3xl border border-slate-200/80 p-8 shadow-card">
@@ -306,8 +450,14 @@ export const TopPlayersPage: React.FC = () => {
               return (
                 <div
                   key={player.athleteId}
-                  onClick={() => navigate(`/atleta/${player.athleteId}`)}
-                  className={`cursor-pointer group relative bg-white rounded-3xl border border-slate-200/90 shadow-card hover:shadow-lg transition-all p-3 sm:p-5 text-center flex flex-col items-center ${
+                  onClick={() => {
+                    if (player.hasProfileLink !== false) {
+                      navigate(`/atleta/${player.athleteId}`);
+                    }
+                  }}
+                  className={`${
+                    player.hasProfileLink !== false ? 'cursor-pointer' : 'cursor-default'
+                  } group relative bg-white rounded-3xl border border-slate-200/90 shadow-card hover:shadow-lg transition-all p-3 sm:p-5 text-center flex flex-col items-center ${
                     isFirst ? 'sm:-mt-4 ring-2 ring-brand-yellow py-5 sm:py-6' : ''
                   }`}
                 >
@@ -356,12 +506,17 @@ export const TopPlayersPage: React.FC = () => {
                   {/* Número em Destaque */}
                   <div className="mt-2.5 px-3 py-1 rounded-2xl bg-[#0B218A]/5 border border-[#0B218A]/10">
                     <span className="text-lg sm:text-2xl font-display font-black text-[#0B218A] block leading-none">
-                      {player.value}
+                      {player.displayValue ?? player.value}
                     </span>
                     <span className="text-[9px] sm:text-[10px] font-bold uppercase text-slate-500">
-                      {activeTabMeta.metricLabel}
+                      {player.metricOverride ?? activeTabMeta.metricLabel}
                     </span>
                   </div>
+                  {activeTab === 'natacao' && player.secondaryLabel && (
+                    <p className="mt-1.5 text-[10px] text-slate-500 line-clamp-2 leading-tight">
+                      {player.secondaryLabel}
+                    </p>
+                  )}
 
                   {isFirst && (
                     <div
@@ -378,7 +533,11 @@ export const TopPlayersPage: React.FC = () => {
                           turmaName: player.teamName,
                           turmaShort: '',
                           jerseyNumber: player.jerseyNumber,
-                          positionLabel: `${player.rank}º LUGAR • ${player.value} ${activeTabMeta.metricLabel.toUpperCase()}`,
+                          positionLabel: `${player.rank}º LUGAR • ${
+                            player.displayValue ?? player.value
+                          } ${(
+                            player.metricOverride ?? activeTabMeta.metricLabel
+                          ).toUpperCase()}`,
                           avatarUrl: player.avatarUrl || player.teamCrestUrl,
                         }}
                       />
@@ -406,8 +565,14 @@ export const TopPlayersPage: React.FC = () => {
                 {restPlayers.map((player) => (
                   <div
                     key={player.athleteId}
-                    onClick={() => navigate(`/atleta/${player.athleteId}`)}
-                    className="cursor-pointer px-5 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3"
+                    onClick={() => {
+                      if (player.hasProfileLink !== false) {
+                        navigate(`/atleta/${player.athleteId}`);
+                      }
+                    }}
+                    className={`${
+                      player.hasProfileLink !== false ? 'cursor-pointer' : 'cursor-default'
+                    } px-5 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="w-7 text-center font-display font-black text-sm text-slate-400">
@@ -436,10 +601,10 @@ export const TopPlayersPage: React.FC = () => {
 
                     <div className="text-right shrink-0">
                       <span className="text-base font-display font-black text-[#0B218A] block leading-none">
-                        {player.value}
+                        {player.displayValue ?? player.value}
                       </span>
                       <span className="text-[10px] font-bold uppercase text-slate-400">
-                        {activeTabMeta.metricLabel}
+                        {player.metricOverride ?? activeTabMeta.metricLabel}
                       </span>
                     </div>
                   </div>
