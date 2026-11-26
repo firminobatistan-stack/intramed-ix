@@ -2,29 +2,12 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import officialBracketsData from './officialBracketsData.json';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-let OFFICIAL_TOURNAMENT_MATCHES: Array<Record<string, unknown>> = [];
-let OFFICIAL_UNIVERSAL_BRACKETS: Record<string, Record<string, unknown>> = {};
-
-try {
-  const candidates = [
-    path.join(__dirname, 'officialBracketsData.json'),
-    path.join(process.cwd(), 'api', '_lib', 'officialBracketsData.json'),
-  ];
-  const jsonPath = candidates.find((p) => fs.existsSync(p));
-  if (jsonPath) {
-    const raw = fs.readFileSync(jsonPath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    OFFICIAL_TOURNAMENT_MATCHES = parsed.matches || [];
-    OFFICIAL_UNIVERSAL_BRACKETS = parsed.brackets || {};
-  }
-} catch {
-  // Non-blocking best-effort
-}
+const OFFICIAL_TOURNAMENT_MATCHES: Array<Record<string, unknown>> =
+  (officialBracketsData as any)?.matches || [];
+const OFFICIAL_UNIVERSAL_BRACKETS: Record<string, Record<string, unknown>> =
+  (officialBracketsData as any)?.brackets || {};
 
 const CLOUD_STATE_FILE = path.join(os.tmpdir(), 'intramed_ix_cloud_sync_v2.json');
 
@@ -466,7 +449,7 @@ export async function parseJsonSafe(
   }
 }
 
-export const PRIMARY_GATEWAY_ORIGIN = 'https://intramed-ix.onrender.com';
+export const PRIMARY_GATEWAY_ORIGIN = 'https://intramed-ix.pages.dev';
 
 export function computeAuthorizedServerPrice(
   lotId?: string,

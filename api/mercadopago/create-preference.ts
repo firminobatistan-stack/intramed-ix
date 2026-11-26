@@ -107,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   );
 
   if (!mpAccessToken) {
-    if (!host.includes('intramed-ix.onrender.com') && !isProxied) {
+    if (!host.includes('intramed-ix.pages.dev') && !isProxied) {
       try {
         const proxyRes = await fetch(
           `${PRIMARY_GATEWAY_ORIGIN}/api/mercadopago/create-preference`,

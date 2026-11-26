@@ -111,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Se este domínio na Vercel (ex: intramedcng.vercel.app ou intramed-ix.vercel.app) não tiver a variável MERCADOPAGO_ACCESS_TOKEN,
   // encaminha de forma transparente para a instância principal onde o token está configurado.
   if (!mpAccessToken) {
-    if (!host.includes('intramed-ix.onrender.com') && !isProxied) {
+    if (!host.includes('intramed-ix.pages.dev') && !isProxied) {
       try {
         const proxyRes = await fetch(
           `${PRIMARY_GATEWAY_ORIGIN}/api/mercadopago/create-pix`,
